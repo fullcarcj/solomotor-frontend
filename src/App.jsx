@@ -1,7 +1,12 @@
 import { createEffect, createMemo, createResource, createSignal, For, Show } from 'solid-js'
 import './App.css'
 
-const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '')
+function normalizeApiBaseUrl(value) {
+  const raw = String(value || '').trim().replace(/\/+$/, '')
+  return raw.replace(/\/api\/v1(?:\/catalog)?$/i, '')
+}
+
+const API_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_URL || '')
 const API_KEY = import.meta.env.VITE_FRONTEND_API_KEY || ''
 const IMG_BASE_URL = import.meta.env.VITE_IMG_BASE_URL || ''
 const PAGE_SIZE = 24
