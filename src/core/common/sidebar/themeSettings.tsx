@@ -14,6 +14,29 @@ type Color = Extract<
   string | { cleared: any }
 >;
 
+/** Valores iniciales idénticos en servidor y cliente (sin leer cookies en el primer render). */
+const THEME_DEFAULTS = {
+  dataLayout: "default",
+  dataWidth: "fluid",
+  dataTopBar: "white",
+  dataTopBarColor: "white",
+  dataTheme: "light",
+  dataSidebarAll: "",
+  dataColorAll: "",
+  dataTopBarColorAll: "",
+  dataTopbarAll: "",
+  dataSidebar: "light",
+  dataSidebarBg: "",
+  dataTopbarBg: "",
+  dataColor: "primary",
+};
+
+function rgbFromCookieTriplet(triplet: string): Color {
+  const t = (triplet || "").trim();
+  if (!t) return "rgb(255, 255, 255)";
+  return `rgb(${t})`;
+}
+
 const ThemeSettings = () => {
   const buyNow = () => {
     window.open(
@@ -39,36 +62,68 @@ const ThemeSettings = () => {
     dataColor: Cookies.get("dataColor") || "primary",
   });
 
-  // Local state for theme settings
-  const [dataLayout, setDataLayout] = useState(getInitialState().dataLayout);
-  const [dataWidth, setDataWidth] = useState(getInitialState().dataWidth);
-  const [dataTopBar, setDataTopBar] = useState(getInitialState().dataTopBar);
+  // Local state for theme settings (primer render sin cookies → evita mismatch de hidratación)
+  const [dataLayout, setDataLayout] = useState(THEME_DEFAULTS.dataLayout);
+  const [dataWidth, setDataWidth] = useState(THEME_DEFAULTS.dataWidth);
+  const [dataTopBar, setDataTopBar] = useState(THEME_DEFAULTS.dataTopBar);
   const [dataTopBarColor, setDataTopBarColor] = useState(
-    getInitialState().dataTopBarColor
+    THEME_DEFAULTS.dataTopBarColor
   );
-  const [dataTheme, setDataTheme] = useState(getInitialState().dataTheme);
+  const [dataTheme, setDataTheme] = useState(THEME_DEFAULTS.dataTheme);
   const [dataSidebarAll, setDataSidebarAll] = useState(
-    getInitialState().dataSidebarAll
+    THEME_DEFAULTS.dataSidebarAll
   );
-  const [dataColorAll, setDataColorAll] = useState(
-    getInitialState().dataColorAll
-  );
+  const [dataColorAll, setDataColorAll] = useState(THEME_DEFAULTS.dataColorAll);
   const [dataTopBarColorAll, setDataTopBarColorAll] = useState(
-    getInitialState().dataTopBarColorAll
+    THEME_DEFAULTS.dataTopBarColorAll
   );
-  const [dataTopbarAll, setDataTopbarAll] = useState(
-    getInitialState().dataTopbarAll
-  );
-  const [dataSidebar, setDataSidebar] = useState(getInitialState().dataSidebar);
+  const [dataTopbarAll, setDataTopbarAll] = useState(THEME_DEFAULTS.dataTopbarAll);
+  const [dataSidebar, setDataSidebar] = useState(THEME_DEFAULTS.dataSidebar);
   const [dataSidebarBg, setDataSidebarBg] = useState(
-    getInitialState().dataSidebarBg
+    THEME_DEFAULTS.dataSidebarBg
   );
-  const [dataTopbarBg, setDataTopbarBg] = useState(
-    getInitialState().dataTopbarBg
+  const [dataTopbarBg, setDataTopbarBg] = useState(THEME_DEFAULTS.dataTopbarBg);
+  const [dataColor, setDataColor] = useState(THEME_DEFAULTS.dataColor);
+  const [themeHydrated, setThemeHydrated] = useState(false);
+
+  const [colorRgb, setColorRgb] = useState<Color>(() =>
+    rgbFromCookieTriplet(THEME_DEFAULTS.dataSidebarAll)
   );
-  const [dataColor, setDataColor] = useState(getInitialState().dataColor);
+  const [colorRgb2, setColorRgb2] = useState<Color>(() =>
+    rgbFromCookieTriplet(THEME_DEFAULTS.dataTopbarAll)
+  );
+  const [colorRgb3, setColorRgb3] = useState<Color>(() =>
+    rgbFromCookieTriplet(THEME_DEFAULTS.dataTopBarColorAll)
+  );
+  const [colorRgb4, setColorRgb4] = useState<Color>(() =>
+    rgbFromCookieTriplet(THEME_DEFAULTS.dataColorAll)
+  );
+  const [formatRgb, setFormatRgb] = useState<ColorPickerProps["format"]>("rgb");
 
   useEffect(() => {
+    const s = getInitialState();
+    setDataLayout(s.dataLayout);
+    setDataWidth(s.dataWidth);
+    setDataTopBar(s.dataTopBar);
+    setDataTopBarColor(s.dataTopBarColor);
+    setDataTheme(s.dataTheme);
+    setDataSidebarAll(s.dataSidebarAll);
+    setDataColorAll(s.dataColorAll);
+    setDataTopBarColorAll(s.dataTopBarColorAll);
+    setDataTopbarAll(s.dataTopbarAll);
+    setDataSidebar(s.dataSidebar);
+    setDataSidebarBg(s.dataSidebarBg);
+    setDataTopbarBg(s.dataTopbarBg);
+    setDataColor(s.dataColor);
+    setColorRgb(rgbFromCookieTriplet(s.dataSidebarAll));
+    setColorRgb2(rgbFromCookieTriplet(s.dataTopbarAll));
+    setColorRgb3(rgbFromCookieTriplet(s.dataTopBarColorAll));
+    setColorRgb4(rgbFromCookieTriplet(s.dataColorAll));
+    setThemeHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!themeHydrated) return;
     Cookies.set("dataLayout", dataLayout);
     Cookies.set("dataWidth", dataWidth);
     Cookies.set("dataTopBar", dataTopBar);
@@ -96,6 +151,7 @@ const ThemeSettings = () => {
     dataSidebarBg,
     dataTopbarBg,
     dataColor,
+    themeHydrated,
   ]);
 
   const handleReset = () => {
@@ -146,15 +202,6 @@ const ThemeSettings = () => {
       }
     }
   };
-
-  // State for RGB colors
-  const [colorRgb, setColorRgb] = useState<Color>(`rgb(${dataSidebarAll})`);
-  const [colorRgb2, setColorRgb2] = useState<Color>(`rgb(${dataTopbarAll})`);
-  const [colorRgb3, setColorRgb3] = useState<Color>(
-    `rgb(${dataTopBarColorAll})`
-  );
-  const [colorRgb4, setColorRgb4] = useState<Color>(`rgb(${dataColorAll})`);
-  const [formatRgb, setFormatRgb] = useState<ColorPickerProps["format"]>("rgb");
 
   const rgbString = React.useMemo(
     () => (typeof colorRgb === "string" ? colorRgb : colorRgb?.toRgbString()),
@@ -223,10 +270,10 @@ const ThemeSettings = () => {
     document.documentElement.setAttribute("data-color", dataColor);
     document.body.setAttribute("data-sidebarbg", dataSidebarBg); // Apply dataSidebarBg to the body
     document.body.setAttribute("data-topbarbg", dataTopbarBg);
-    setColorRgb(`rgb(${dataSidebarAll})`);
-    setColorRgb2(`rgb(${dataTopbarAll})`);
-    setColorRgb3(`rgb(${dataTopBarColorAll})`);
-    setColorRgb4(`rgb(${dataColorAll})`);
+    setColorRgb(rgbFromCookieTriplet(dataSidebarAll));
+    setColorRgb2(rgbFromCookieTriplet(dataTopbarAll));
+    setColorRgb3(rgbFromCookieTriplet(dataTopBarColorAll));
+    setColorRgb4(rgbFromCookieTriplet(dataColorAll));
 
     // Add or remove `layout-box-mode mini-sidebar` classes based on layout
     if (dataWidth === "box") {

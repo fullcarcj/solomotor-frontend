@@ -1,4 +1,5 @@
 "use client";
+import "@ant-design/v5-patch-for-react-19";
 /* eslint-disable @next/next/no-img-element */
 import Table from "@/core/common/pagination/datatable";
 import CollapesIcon from "@/core/common/tooltip-content/collapes";
@@ -9,12 +10,9 @@ import { all_routes } from "@/data/all_routes";
 import { Download, Edit, Eye, Trash2 } from "react-feather";
 import Link from "next/link";
 import CommonFooter from "@/core/common/footer/commonFooter";
-import { Alert, Spin } from "antd";
+import { Alert, Spin, message } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  firebaseProductImageUrl,
-  productImageBaseUrl,
-} from "@/lib/productImageUrl";
+import { ProductThumb } from "@/components/Inventory/ProductThumb";
 
 type InventoryApiProduct = {
   id: number;
@@ -33,21 +31,18 @@ type InventoryListPayload = {
   summary?: { total_products?: number; alerts_count?: number; stockout_count?: number };
 };
 
-function mapApiProductToRow(p: InventoryApiProduct, imageBase: string) {
+function mapApiProductToRow(p: InventoryApiProduct) {
   const thumbN = String((Number(p.id) % 18) + 1).padStart(2, "0");
   const priceNum = Number(p.unit_price_usd);
   const price =
     p.unit_price_usd == null || Number.isNaN(priceNum)
       ? "—"
       : `$${priceNum.toFixed(2)}`;
-  const fromFirebase = firebaseProductImageUrl(p.sku ?? "", imageBase);
   return {
     id: p.id,
     sku: p.sku ?? "",
     product: p.name ?? "",
-    productImage:
-      fromFirebase ??
-      `/assets/img/products/pos-product-${thumbN}.svg`,
+    productImageFallback: `/assets/img/products/pos-product-${thumbN}.svg`,
     category: p.category ?? "—",
     brand: p.brand ?? "—",
     price,
@@ -64,6 +59,28 @@ export default function ProductListComponent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [summaryLine, setSummaryLine] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const hideDeleteModal = useCallback(() => {
+    const el = document.getElementById("delete-modal");
+    if (el) {
+      void import("bootstrap").then(({ Modal }) => {
+        Modal.getInstance(el)?.hide();
+      });
+    }
+    setPendingDeleteId(null);
+  }, []);
+
+  const openDeleteModal = useCallback((productId: number) => {
+    setPendingDeleteId(productId);
+    const el = document.getElementById("delete-modal");
+    if (el) {
+      void import("bootstrap").then(({ Modal }) => {
+        Modal.getOrCreateInstance(el).show();
+      });
+    }
+  }, []);
 
   const loadProducts = useCallback(async () => {
     setLoading(true);
@@ -88,8 +105,7 @@ export default function ProductListComponent() {
       }
       const payload = (body as { data?: InventoryListPayload }).data;
       const products = payload?.products ?? [];
-      const imageBase = productImageBaseUrl();
-      setDataSource(products.map((row) => mapApiProductToRow(row, imageBase)));
+      setDataSource(products.map((row) => mapApiProductToRow(row)));
       const s = payload?.summary;
       const pg = payload?.pagination;
       if (s && pg) {
@@ -108,6 +124,50 @@ export default function ProductListComponent() {
     }
   }, []);
 
+  const confirmDelete = useCallback(async () => {
+    if (pendingDeleteId == null) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(
+        `/api/inventory/products/${pendingDeleteId}/deactivate`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+          cache: "no-store",
+        }
+      );
+      let body: unknown;
+      try {
+        body = await res.json();
+      } catch {
+        throw new Error("Respuesta no JSON del servidor");
+      }
+      if (!res.ok) {
+        const msg =
+          (body as { error?: { message?: string; code?: string } })?.error
+            ?.message ||
+          (body as { error?: { code?: string } })?.error?.code ||
+          res.statusText;
+        throw new Error(msg);
+      }
+      const data = (body as { data?: { already_inactive?: boolean } }).data;
+      hideDeleteModal();
+      message.success(
+        data?.already_inactive
+          ? "El producto ya estaba inactivo."
+          : "Producto dado de baja correctamente."
+      );
+      await loadProducts();
+    } catch (e) {
+      message.error(
+        e instanceof Error ? e.message : "No se pudo eliminar el producto"
+      );
+    } finally {
+      setDeleting(false);
+    }
+  }, [pendingDeleteId, hideDeleteModal, loadProducts]);
+
   useEffect(() => {
     loadProducts();
   }, [loadProducts]);
@@ -125,7 +185,10 @@ export default function ProductListComponent() {
         render: (text: any, record: any) => (
           <div className="d-flex align-items-center">
             <Link href="#" className="avatar avatar-md me-2">
-              <img alt="" src={record.productImage} />
+              <ProductThumb
+                sku={record.sku}
+                fallback={record.productImageFallback}
+              />
             </Link>
             <Link href="#">{text}</Link>
           </div>
@@ -183,20 +246,28 @@ export default function ProductListComponent() {
       {
         title: "Action",
         dataIndex: "action",
-        render: () => (
+        render: (_: unknown, record: { id: number }) => (
           <div className="action-table-data">
             <div className="edit-delete-action">
-              <Link className="me-2 p-2" href={route.productdetails}>
+              <Link
+                className="me-2 p-2"
+                href={`${route.productdetails}?id=${record.id}`}
+              >
                 <Eye className="feather-view" />
               </Link>
-              <Link className="me-2 p-2" href={route.editproduct}>
+              <Link
+                className="me-2 p-2"
+                href={`${route.editproduct}?id=${record.id}`}
+              >
                 <Edit className="feather-edit" />
               </Link>
               <Link
                 className="confirm-text p-2"
                 href="#"
-                data-bs-toggle="modal"
-                data-bs-target="#delete-modal"
+                onClick={(e) => {
+                  e.preventDefault();
+                  openDeleteModal(record.id);
+                }}
               >
                 <Trash2 className="feather-trash-2" />
               </Link>
@@ -205,7 +276,7 @@ export default function ProductListComponent() {
         ),
       },
     ],
-    [route.productdetails, route.editproduct]
+    [route.productdetails, route.editproduct, openDeleteModal]
   );
 
   return (
@@ -579,15 +650,17 @@ export default function ProductListComponent() {
                       type="button"
                       className="btn me-2 btn-secondary fs-13 fw-medium p-2 px-3 shadow-none"
                       data-bs-dismiss="modal"
+                      onClick={() => setPendingDeleteId(null)}
                     >
                       Cancel
                     </button>
                     <button
                       type="button"
                       className="btn btn-primary fs-13 fw-medium p-2 px-3"
-                      data-bs-dismiss="modal"
+                      disabled={deleting || pendingDeleteId == null}
+                      onClick={() => void confirmDelete()}
                     >
-                      Yes Delete
+                      {deleting ? "Eliminando…" : "Yes Delete"}
                     </button>
                   </div>
                 </div>

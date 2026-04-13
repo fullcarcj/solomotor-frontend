@@ -191,12 +191,9 @@ const TwoColumnSidebar = () => {
                                             <span>MAIN</span>
                                         </li>
                                         <li>
-                                            <Link href={route.dashboard} className="active">
+                                            <Link href={route.newdashboard} className="active">
                                                 Admin Dashboard
                                             </Link>
-                                        </li>
-                                        <li>
-                                            <Link href={route.newdashboard}>Admin Dashboard 2</Link>
                                         </li>
                                         <li>
                                             <Link href={route.salesdashboard}>Sales Dashboard</Link>

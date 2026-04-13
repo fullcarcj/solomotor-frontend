@@ -9,6 +9,16 @@ const nextConfig = {
       "",
   },
 
+  async redirects() {
+    return [
+      {
+        source: "/admin-dashboard-two",
+        destination: "/admin-dashboard",
+        permanent: false,
+      },
+    ];
+  },
+
    async rewrites() {
     return [
       {

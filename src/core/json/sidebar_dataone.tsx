@@ -20,13 +20,6 @@ export const SidebarData1 = [
             tittle: 'Admin Dashboard',
             hasSubRoute: false,
             showSubRoute: false,
-            route: "/index",
-            subRoutes: [],
-          },
-          {
-            tittle: 'Admin Dashboard 2',
-            hasSubRoute: false,
-            showSubRoute: false,
             route: "/admin-dashboard",
             subRoutes: [],
           },

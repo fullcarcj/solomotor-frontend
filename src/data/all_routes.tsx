@@ -1,7 +1,9 @@
 
 export const all_routes = {
   newdashboard: "/admin-dashboard",
-  dashboard: "/admin-dashboard-two",
+  /** Home tras login / logos: mismo que Admin Dashboard (evitar admin-dashboard-two). */
+  dashboard: "/admin-dashboard",
+  admindashboardtwo: "/admin-dashboard-two",
   productlist: "/product-list",
   addproduct: "/add-product",
   salesdashboard: "/sales-dashboard",

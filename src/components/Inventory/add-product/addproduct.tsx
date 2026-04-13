@@ -12,7 +12,7 @@ import Addunits from "@/core/modals/inventory/addunits";
 import AddVariant from "@/core/modals/inventory/addvariant";
 import AddVarientNew from "@/core/modals/inventory/addVarientNew";
 import { all_routes } from "@/data/all_routes";
-import { DatePicker } from "antd";
+import { Alert, DatePicker } from "antd";
 import {
   ArrowLeft,
   Calendar,
@@ -25,12 +25,124 @@ import {
   Image,
 } from "react-feather";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Select from "react-select";
 import TagInput from "@/core/common/Taginput";
+export type InventoryProductDetail = {
+  id: number;
+  sku: string;
+  name: string;
+  description?: string | null;
+  category?: string | null;
+  brand?: string | null;
+  unit_price_usd?: string | number | null;
+  stock_qty?: string | number | null;
+  stock_min?: string | number | null;
+  stock_max?: string | number | null;
+};
 
-export default function AddProductComponent() {
+type SelectOption = { value: string; label: string };
+
+function slugify(s: string) {
+  return s
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "");
+}
+
+function mergeSelectOption(
+  base: SelectOption[],
+  extra?: string | null
+): SelectOption[] {
+  const v = (extra ?? "").trim();
+  if (!v || v === "choose") return [...base];
+  const lower = v.toLowerCase();
+  if (
+    base.some(
+      (o) =>
+        String(o.value).toLowerCase() === lower ||
+        String(o.label).toLowerCase() === lower
+    )
+  ) {
+    return [...base];
+  }
+  return [{ value: v, label: v }, ...base];
+}
+
+const CATEGORY_OPTIONS_BASE: SelectOption[] = [
+  { value: "choose", label: "Choose" },
+  { value: "lenovo", label: "Lenovo" },
+  { value: "electronics", label: "Electronics" },
+];
+
+const BRAND_OPTIONS_BASE: SelectOption[] = [
+  { value: "choose", label: "Choose" },
+  { value: "nike", label: "Nike" },
+  { value: "bolt", label: "Bolt" },
+];
+
+export type AddProductComponentProps = {
+  mode?: "create" | "edit";
+  initialProduct?: InventoryProductDetail | null;
+  loadError?: string | null;
+};
+
+export default function AddProductComponent({
+  mode = "create",
+  initialProduct = null,
+  loadError = null,
+}: AddProductComponentProps = {}) {
   const route = all_routes;
+  const isEdit = mode === "edit";
+
+  const [productName, setProductName] = useState("");
+  const [slug, setSlug] = useState("");
+  const [sku, setSku] = useState("");
+  const [description, setDescription] = useState("");
+  const [stockQty, setStockQty] = useState("");
+  const [unitPrice, setUnitPrice] = useState("");
+  const [stockMin, setStockMin] = useState("");
+  const [categoryVal, setCategoryVal] = useState<SelectOption | null>(null);
+  const [brandVal, setBrandVal] = useState<SelectOption | null>(null);
+
+  useEffect(() => {
+    if (!initialProduct) return;
+    const name = initialProduct.name ?? "";
+    setProductName(name);
+    setSlug(slugify(name));
+    setSku(initialProduct.sku ?? "");
+    setDescription(initialProduct.description ?? "");
+    setStockQty(
+      initialProduct.stock_qty != null ? String(initialProduct.stock_qty) : ""
+    );
+    setUnitPrice(
+      initialProduct.unit_price_usd != null &&
+        !Number.isNaN(Number(initialProduct.unit_price_usd))
+        ? String(Number(initialProduct.unit_price_usd))
+        : ""
+    );
+    setStockMin(
+      initialProduct.stock_min != null ? String(initialProduct.stock_min) : ""
+    );
+    const c = initialProduct.category?.trim();
+    setCategoryVal(c ? { value: c, label: c } : null);
+    const b = initialProduct.brand?.trim();
+    setBrandVal(b ? { value: b, label: b } : null);
+  }, [initialProduct]);
+
+  const categoryOptions = useMemo(
+    () =>
+      mergeSelectOption(
+        CATEGORY_OPTIONS_BASE,
+        initialProduct?.category ?? null
+      ),
+    [initialProduct]
+  );
+  const brandOptions = useMemo(
+    () => mergeSelectOption(BRAND_OPTIONS_BASE, initialProduct?.brand ?? null),
+    [initialProduct]
+  );
   const [tags, setTags] = useState(["Red", "Black"]);
   const handleTagsChange = (newTags: string[]) => {
     setTags(newTags);
@@ -51,22 +163,12 @@ export default function AddProductComponent() {
     { value: "determined", label: "Determined" },
     { value: "sincere", label: "Sincere" },
   ];
-  const category = [
-    { value: "choose", label: "Choose" },
-    { value: "lenovo", label: "Lenovo" },
-    { value: "electronics", label: "Electronics" },
-  ];
   const subcategory = [
     { value: "choose", label: "Choose" },
     { value: "lenovo", label: "Lenovo" },
     { value: "electronics", label: "Electronics" },
   ];
 
-  const brand = [
-    { value: "choose", label: "Choose" },
-    { value: "nike", label: "Nike" },
-    { value: "bolt", label: "Bolt" },
-  ];
   const unit = [
     { value: "choose", label: "Choose" },
     { value: "kg", label: "Kg" },
@@ -119,8 +221,12 @@ export default function AddProductComponent() {
           <div className="page-header">
             <div className="add-item d-flex">
               <div className="page-title">
-                <h4>Create Product</h4>
-                <h6>Create new product</h6>
+                <h4>{isEdit ? "Edit Product" : "Create Product"}</h4>
+                <h6>
+                  {isEdit
+                    ? "Update product details"
+                    : "Create new product"}
+                </h6>
               </div>
             </div>
             <ul className="table-top-head">
@@ -136,6 +242,9 @@ export default function AddProductComponent() {
               </li>
             </ul>
           </div>
+          {loadError ? (
+            <Alert type="error" message={loadError} className="mb-3" showIcon />
+          ) : null}
           {/* /add */}
           <form className="add-product-form">
             <div className="add-product">
@@ -200,7 +309,16 @@ export default function AddProductComponent() {
                               Product Name
                               <span className="text-danger ms-1">*</span>
                             </label>
-                            <input type="text" className="form-control" />
+                            <input
+                              type="text"
+                              className="form-control"
+                              value={productName}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setProductName(v);
+                                if (!isEdit) setSlug(slugify(v));
+                              }}
+                            />
                           </div>
                         </div>
                         <div className="col-sm-6 col-12">
@@ -208,7 +326,12 @@ export default function AddProductComponent() {
                             <label className="form-label">
                               Slug<span className="text-danger ms-1">*</span>
                             </label>
-                            <input type="text" className="form-control" />
+                            <input
+                              type="text"
+                              className="form-control"
+                              value={slug}
+                              onChange={(e) => setSlug(e.target.value)}
+                            />
                           </div>
                         </div>
                       </div>
@@ -218,7 +341,13 @@ export default function AddProductComponent() {
                             <label className="form-label">
                               SKU<span className="text-danger ms-1">*</span>
                             </label>
-                            <input type="text" className="form-control list" />
+                            <input
+                              type="text"
+                              className="form-control list"
+                              value={sku}
+                              onChange={(e) => setSku(e.target.value)}
+                              readOnly={isEdit}
+                            />
                             <button
                               type="button"
                               className="btn btn-primaryadd"
@@ -265,8 +394,14 @@ export default function AddProductComponent() {
                               </div>
                               <Select
                                 className="react-select"
-                                options={category}
+                                options={categoryOptions}
                                 placeholder="Choose"
+                                value={categoryVal}
+                                onChange={(opt) =>
+                                  setCategoryVal(
+                                    opt as SelectOption | null
+                                  )
+                                }
                               />
                             </div>
                           </div>
@@ -297,8 +432,12 @@ export default function AddProductComponent() {
                               </div>
                               <Select
                                 className="react-select"
-                                options={brand}
+                                options={brandOptions}
                                 placeholder="Choose"
+                                value={brandVal}
+                                onChange={(opt) =>
+                                  setBrandVal(opt as SelectOption | null)
+                                }
                               />
                             </div>
                           </div>
@@ -353,7 +492,16 @@ export default function AddProductComponent() {
                       <div className="col-lg-12">
                         <div className="summer-description-box">
                           <label className="form-label">Description</label>
-                          <TextEditor />
+                          {isEdit ? (
+                            <textarea
+                              className="form-control"
+                              rows={5}
+                              value={description}
+                              onChange={(e) => setDescription(e.target.value)}
+                            />
+                          ) : (
+                            <TextEditor />
+                          )}
                           <p className="fs-14 mt-1">Maximum 60 Words</p>
                         </div>
                       </div>
@@ -452,7 +600,14 @@ export default function AddProductComponent() {
                                     Quantity
                                     <span className="text-danger ms-1">*</span>
                                   </label>
-                                  <input type="text" className="form-control" />
+                                  <input
+                                    type="text"
+                                    className="form-control"
+                                    value={stockQty}
+                                    onChange={(e) =>
+                                      setStockQty(e.target.value)
+                                    }
+                                  />
                                 </div>
                               </div>
                               <div className="col-lg-4 col-sm-6 col-12">
@@ -461,7 +616,14 @@ export default function AddProductComponent() {
                                     Price
                                     <span className="text-danger ms-1">*</span>
                                   </label>
-                                  <input type="text" className="form-control" />
+                                  <input
+                                    type="text"
+                                    className="form-control"
+                                    value={unitPrice}
+                                    onChange={(e) =>
+                                      setUnitPrice(e.target.value)
+                                    }
+                                  />
                                 </div>
                               </div>
                               <div className="col-lg-4 col-sm-6 col-12">
@@ -505,7 +667,14 @@ export default function AddProductComponent() {
                                     Quantity Alert
                                     <span className="text-danger ms-1">*</span>
                                   </label>
-                                  <input type="text" className="form-control" />
+                                  <input
+                                    type="text"
+                                    className="form-control"
+                                    value={stockMin}
+                                    onChange={(e) =>
+                                      setStockMin(e.target.value)
+                                    }
+                                  />
                                 </div>
                               </div>
                             </div>

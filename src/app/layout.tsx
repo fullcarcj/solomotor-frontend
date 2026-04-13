@@ -6,6 +6,7 @@ import "../style/icons/tabler-icons/webfont/tabler-icons.css";
 import "../style/icons/fontawesome/css/fontawesome.min.css";
 import "../style/icons/fontawesome/css/all.min.css";
 import "../style/fonts/feather/css/iconfont.css";
+import AntdReact19Patch from "../components/AntdReact19Patch";
 import BootstrapJs from "../components/bootstrap-js/bootstrapjs";
 
 export const metadata = {
@@ -31,6 +32,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <>
+          <AntdReact19Patch />
           <>{children}</>
           <BootstrapJs />
         </>

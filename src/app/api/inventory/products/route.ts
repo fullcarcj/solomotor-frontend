@@ -5,16 +5,28 @@ import { NextRequest, NextResponse } from "next/server";
  * Requiere auth admin en el backend; el secreto solo vive en el servidor (env).
  */
 export async function GET(req: NextRequest) {
-  const base = process.env.WEBHOOK_RECEIVER_BASE_URL?.replace(/\/$/, "");
-  const secret = process.env.WEBHOOK_ADMIN_SECRET;
+  const base = process.env.WEBHOOK_RECEIVER_BASE_URL?.trim().replace(/\/$/, "");
+  const secret = process.env.WEBHOOK_ADMIN_SECRET?.trim();
 
-  if (!base || !secret) {
+  if (!base) {
     return NextResponse.json(
       {
         error: {
           code: "CONFIG",
           message:
-            "Faltan WEBHOOK_RECEIVER_BASE_URL o WEBHOOK_ADMIN_SECRET en el entorno del servidor.",
+            "Falta WEBHOOK_RECEIVER_BASE_URL (URL base del webhook-receiver, sin barra final). Añádela en .env o .env.local y reinicia `next dev`.",
+        },
+      },
+      { status: 503 }
+    );
+  }
+  if (!secret) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "CONFIG",
+          message:
+            "Falta WEBHOOK_ADMIN_SECRET. Debe ser el mismo valor que ADMIN_SECRET del backend. Añádelo en .env o .env.local y reinicia `next dev`.",
         },
       },
       { status: 503 }

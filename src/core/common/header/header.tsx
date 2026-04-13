@@ -15,8 +15,6 @@ export default function Header() {
   const [expandMenus, setExpandMenus] = useState(false); // Local state for expandMenus
   const [dataLayout, setDataLayout] = useState("default"); // Local state for dataLayout
 
-
-
   const handlesidebar = (): void => {
     document.body.classList.toggle("mini-sidebar");
     SetToggle((current: boolean) => !current);

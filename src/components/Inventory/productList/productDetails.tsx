@@ -1,167 +1,311 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
+
 import Link from "next/link";
-import { useRef } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
+import { Alert, Spin } from "antd";
+import { ArrowLeft, Edit } from "react-feather";
+import { all_routes } from "@/data/all_routes";
+import type { InventoryProductDetail } from "@/components/Inventory/add-product/addproduct";
+import { ProductThumb } from "@/components/Inventory/ProductThumb";
 
-const ProductDetailsComponent = () => {
-const sliderRef = useRef<Slider | null>(null);
+type ProductDetailApi = InventoryProductDetail & {
+  is_active?: boolean;
+  source?: string | null;
+};
 
-  const settings = {
-    dots: false,
-    arrows: false, // hide built-in arrows
-    infinite: true,
-    speed: 500,
-    slidesToShow: 1,
-    slidesToScroll: 1,
-    responsive: [
-      { breakpoint: 1170, settings: { slidesToShow: 1 } },
-      { breakpoint: 800, settings: { slidesToShow: 1 } },
-      { breakpoint: 0, settings: { slidesToShow: 1 } },
-    ],
-  };
-  return (
-    <div className="page-wrapper">
-  <div className="content">
-    <div className="page-header">
-      <div className="page-title">
-        <h4>Product Details</h4>
-        <h6>Full details of a product</h6>
-      </div>
-    </div>
-    {/* /add */}
-    <div className="row">
-      <div className="col-lg-8 col-sm-12">
-        <div className="card">
-          <div className="card-body">
-            <div className="bar-code-view">
-              <div className="product-details-barcode">
-                <img
-                  src="/assets/img/barcode/barcode1.png"
-                  className="barcode"
-                  alt="barcode"
-                />
-                <img
-                  src="/assets/img/barcode/barcode1-white.png"
-                  className="barcode-white"
-                  alt="barcode"
-                />
-              </div>
-              <Link href="#" className="printimg">
-                <i className="ti ti-printer fs-24 text-dark" />
-              </Link>
-            </div>
-            <div className="productdetails">
-              <ul className="product-bar">
-                <li>
-                  <h4>Product</h4>
-                  <h6>Macbook pro </h6>
-                </li>
-                <li>
-                  <h4>Category</h4>
-                  <h6>Computers</h6>
-                </li>
-                <li>
-                  <h4>Sub Category</h4>
-                  <h6>None</h6>
-                </li>
-                <li>
-                  <h4>Brand</h4>
-                  <h6>None</h6>
-                </li>
-                <li>
-                  <h4>Unit</h4>
-                  <h6>Piece</h6>
-                </li>
-                <li>
-                  <h4>SKU</h4>
-                  <h6>PT0001</h6>
-                </li>
-                <li>
-                  <h4>Minimum Qty</h4>
-                  <h6>5</h6>
-                </li>
-                <li>
-                  <h4>Quantity</h4>
-                  <h6>50</h6>
-                </li>
-                <li>
-                  <h4>Tax</h4>
-                  <h6>0.00 %</h6>
-                </li>
-                <li>
-                  <h4>Discount Type</h4>
-                  <h6>Percentage</h6>
-                </li>
-                <li>
-                  <h4>Price</h4>
-                  <h6>1500.00</h6>
-                </li>
-                <li>
-                  <h4>Status</h4>
-                  <h6>Active</h6>
-                </li>
-                <li>
-                  <h4>Description</h4>
-                  <h6>
-                    Designed for professionals, it offers smooth multitasking
-                    and high-end graphics capability.
-                  </h6>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="col-lg-4 col-sm-12">
-        <div className="card">
-          <div className="card-body">
-           <div className="slider-product-details">
-
-      {/* Slider */}
-      <Slider ref={sliderRef} {...settings} className="product-slide">
-        <div className="slider-product">
-          <img src="assets/img/products/product69.jpg" alt="img" />
-          <h4 className="text-dark">macbookpro.jpg</h4>
-          <h6 className="text-dark">581kb</h6>
-        </div>
-
-        <div className="slider-product">
-          <img src="assets/img/products/product69.jpg" alt="img" />
-          <h4 className="text-dark">macbookpro.jpg</h4>
-          <h6 className="text-dark">581kb</h6>
-        </div>
-      </Slider>
-
-      {/* External Buttons */}
-      <div className="product-nav-controls d-flex align-items-center justify-content-between">
-        <button
-          className="product-prev"
-          onClick={() => sliderRef.current?.slickPrev()}
-        >
-          <i className="fa fa-chevron-left" />
-        </button>
-
-        <button
-          className="product-next"
-          onClick={() => sliderRef.current?.slickNext()}
-        >
-          <i className="fa fa-chevron-right" />
-        </button>
-      </div>
-
-    </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    {/* /add */}
-  </div>
-</div>
-
-  )
+function dash(v: unknown): string {
+  if (v == null) return "—";
+  const s = String(v).trim();
+  return s || "—";
 }
 
-export default ProductDetailsComponent
+function formatPrice(v: string | number | null | undefined): string {
+  const n = Number(v);
+  if (v == null || Number.isNaN(n)) return "—";
+  return `$${n.toFixed(2)}`;
+}
+
+function statusLabel(p: ProductDetailApi): string {
+  if (typeof p.is_active === "boolean") {
+    return p.is_active ? "Activo" : "Inactivo";
+  }
+  return "—";
+}
+
+const ProductDetailsComponent = () => {
+  const searchParams = useSearchParams();
+  const id = searchParams.get("id");
+  const sliderRef = useRef<Slider | null>(null);
+  const route = all_routes;
+
+  const [product, setProduct] = useState<ProductDetailApi | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!id || !/^\d+$/.test(id)) {
+      setLoadError(
+        "Falta un id válido. Abre el detalle desde la lista de productos (icono ojo) o usa /product-details?id=123."
+      );
+      setProduct(null);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setLoadError(null);
+      try {
+        const res = await fetch(`/api/inventory/products/${id}`, {
+          cache: "no-store",
+        });
+        const body = (await res.json()) as {
+          data?: ProductDetailApi;
+          error?: { message?: string; code?: string };
+        };
+        if (cancelled) return;
+        if (!res.ok) {
+          throw new Error(
+            body?.error?.message ||
+              body?.error?.code ||
+              `Error ${res.status}`
+          );
+        }
+        if (!body.data) throw new Error("Respuesta sin datos del producto");
+        setProduct(body.data);
+      } catch (e) {
+        if (!cancelled) {
+          setProduct(null);
+          setLoadError(
+            e instanceof Error ? e.message : "No se pudo cargar el producto"
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  const settings = useMemo(
+    () => ({
+      dots: false,
+      arrows: false,
+      infinite: true,
+      speed: 500,
+      slidesToShow: 1,
+      slidesToScroll: 1,
+      responsive: [
+        { breakpoint: 1170, settings: { slidesToShow: 1 } },
+        { breakpoint: 800, settings: { slidesToShow: 1 } },
+        { breakpoint: 0, settings: { slidesToShow: 1 } },
+      ],
+    }),
+    []
+  );
+
+  const thumbFallback = useMemo(() => {
+    if (!product?.id) return "/assets/img/products/pos-product-01.svg";
+    const n = String((Number(product.id) % 18) + 1).padStart(2, "0");
+    return `/assets/img/products/pos-product-${n}.svg`;
+  }, [product?.id]);
+
+  if (loading) {
+    return (
+      <div className="page-wrapper">
+        <div className="content p-5 d-flex justify-content-center">
+          <Spin size="large" tip="Cargando producto…" />
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError || !product) {
+    return (
+      <div className="page-wrapper">
+        <div className="content">
+          <div className="page-header">
+            <div className="page-title">
+              <h4>Detalle del producto</h4>
+            </div>
+            <div className="page-btn">
+              <Link href={route.productlist} className="btn btn-primary">
+                <ArrowLeft className="me-2" size={16} />
+                Volver al listado
+              </Link>
+            </div>
+          </div>
+          <Alert type="error" message={loadError ?? "Producto no encontrado"} />
+        </div>
+      </div>
+    );
+  }
+
+  const p = product;
+  const editHref = `${route.editproduct}?id=${p.id}`;
+
+  return (
+    <div className="page-wrapper">
+      <div className="content">
+        <div className="page-header">
+          <div className="page-title">
+            <h4>Detalle del producto</h4>
+            <h6>{dash(p.name)}</h6>
+          </div>
+          <div className="page-btn d-flex gap-2">
+            <Link href={route.productlist} className="btn btn-outline-light">
+              <ArrowLeft className="me-2" size={16} />
+              Listado
+            </Link>
+            <Link href={editHref} className="btn btn-primary">
+              <Edit className="me-2" size={16} />
+              Editar
+            </Link>
+          </div>
+        </div>
+
+        <div className="row">
+          <div className="col-lg-8 col-sm-12">
+            <div className="card">
+              <div className="card-body">
+                <div className="bar-code-view">
+                  <div className="product-details-barcode">
+                    <img
+                      src="/assets/img/barcode/barcode1.png"
+                      className="barcode"
+                      alt=""
+                    />
+                    <img
+                      src="/assets/img/barcode/barcode1-white.png"
+                      className="barcode-white"
+                      alt=""
+                    />
+                  </div>
+                  <span className="text-muted small ms-2">SKU: {dash(p.sku)}</span>
+                  <Link href="#" className="printimg">
+                    <i className="ti ti-printer fs-24 text-dark" />
+                  </Link>
+                </div>
+                <div className="productdetails">
+                  <ul className="product-bar">
+                    <li>
+                      <h4>Producto</h4>
+                      <h6>{dash(p.name)}</h6>
+                    </li>
+                    <li>
+                      <h4>Categoría</h4>
+                      <h6>{dash(p.category)}</h6>
+                    </li>
+                    <li>
+                      <h4>Subcategoría</h4>
+                      <h6>—</h6>
+                    </li>
+                    <li>
+                      <h4>Marca</h4>
+                      <h6>{dash(p.brand)}</h6>
+                    </li>
+                    <li>
+                      <h4>Unidad</h4>
+                      <h6>—</h6>
+                    </li>
+                    <li>
+                      <h4>SKU</h4>
+                      <h6>{dash(p.sku)}</h6>
+                    </li>
+                    <li>
+                      <h4>Cantidad mínima</h4>
+                      <h6>{dash(p.stock_min)}</h6>
+                    </li>
+                    <li>
+                      <h4>Cantidad en stock</h4>
+                      <h6>{dash(p.stock_qty)}</h6>
+                    </li>
+                    <li>
+                      <h4>Stock máximo</h4>
+                      <h6>{dash(p.stock_max)}</h6>
+                    </li>
+                    <li>
+                      <h4>Impuesto</h4>
+                      <h6>—</h6>
+                    </li>
+                    <li>
+                      <h4>Descuento</h4>
+                      <h6>—</h6>
+                    </li>
+                    <li>
+                      <h4>Precio (USD)</h4>
+                      <h6>{formatPrice(p.unit_price_usd)}</h6>
+                    </li>
+                    <li>
+                      <h4>Estado</h4>
+                      <h6>{statusLabel(p)}</h6>
+                    </li>
+                    <li>
+                      <h4>Origen</h4>
+                      <h6>{dash(p.source)}</h6>
+                    </li>
+                    <li>
+                      <h4>Descripción</h4>
+                      <h6>{dash(p.description)}</h6>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="col-lg-4 col-sm-12">
+            <div className="card">
+              <div className="card-body">
+                <div className="slider-product-details">
+                  <Slider
+                    ref={sliderRef}
+                    {...settings}
+                    className="product-slide"
+                  >
+                    <div className="slider-product text-center">
+                      <ProductThumb
+                        sku={p.sku ?? ""}
+                        fallback={thumbFallback}
+                        className="img-fluid rounded"
+                        alt={p.name ?? ""}
+                      />
+                      <h4 className="text-dark mt-2">{dash(p.sku)}.jpg</h4>
+                      <h6 className="text-dark text-muted">Vista previa</h6>
+                    </div>
+                  </Slider>
+                  <div className="product-nav-controls d-flex align-items-center justify-content-between">
+                    <button
+                      type="button"
+                      className="product-prev"
+                      onClick={() => sliderRef.current?.slickPrev()}
+                    >
+                      <i className="fa fa-chevron-left" />
+                    </button>
+                    <button
+                      type="button"
+                      className="product-next"
+                      onClick={() => sliderRef.current?.slickNext()}
+                    >
+                      <i className="fa fa-chevron-right" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ProductDetailsComponent;
