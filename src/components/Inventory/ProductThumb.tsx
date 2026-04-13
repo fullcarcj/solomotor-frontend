@@ -2,37 +2,37 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  firebaseProductImageUrl,
+  firebaseProductImageCandidateUrlsForRow,
   productImageBaseUrl,
 } from "@/lib/productImageUrl";
 
 type Props = {
   sku: string;
+  /** Nombre del producto en catálogo: si parece basename de Storage (p. ej. `481H…_F0001_CY`), se prueba además del SKU. */
+  productName?: string | null;
   fallback: string;
   className?: string;
   alt?: string;
 };
 
-/** Prueba Firebase (.jpg → .png → .webp) y cae al placeholder local si la URL falla o no hay base. */
-export function ProductThumb({ sku, fallback, className, alt = "" }: Props) {
+/** Prueba Firebase (raíz del bucket + carpeta; .webp primero) y cae al placeholder si falla. */
+export function ProductThumb({
+  sku,
+  productName,
+  fallback,
+  className,
+  alt = "",
+}: Props) {
   const base = productImageBaseUrl();
   const candidates = useMemo(() => {
-    const list: string[] = [];
-    const b = base.trim();
-    if (b) {
-      for (const ext of ["jpg", "png", "webp"] as const) {
-        const u = firebaseProductImageUrl(sku, b, ext);
-        if (u && !list.includes(u)) list.push(u);
-      }
-    }
-    list.push(fallback);
-    return list;
-  }, [sku, base, fallback]);
+    const urls = firebaseProductImageCandidateUrlsForRow(sku, productName, base);
+    return [...urls, fallback];
+  }, [sku, productName, base, fallback]);
 
   const [idx, setIdx] = useState(0);
   useEffect(() => {
     setIdx(0);
-  }, [sku, base, fallback]);
+  }, [sku, productName, base, fallback]);
 
   const safeIdx = Math.min(idx, Math.max(0, candidates.length - 1));
   const src = candidates[safeIdx] ?? fallback;

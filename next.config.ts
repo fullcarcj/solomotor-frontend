@@ -7,6 +7,20 @@ const nextConfig = {
       process.env.PRODUCT_IMAGE_BASE_URL ||
       process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL ||
       "",
+    // Misma URL en cliente: evita que quede vacío si solo existe PRODUCT_IMAGE_BASE_URL en el deploy.
+    NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL:
+      process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL ||
+      process.env.PRODUCT_IMAGE_BASE_URL ||
+      "",
+    /** Carpeta en el bucket antes del SKU (p.ej. products, o productos si es legado). Vacío en build = default en código "products". */
+    PRODUCT_IMAGE_STORAGE_PREFIX:
+      process.env.PRODUCT_IMAGE_STORAGE_PREFIX ||
+      process.env.NEXT_PUBLIC_PRODUCT_IMAGE_STORAGE_PREFIX ||
+      "",
+    NEXT_PUBLIC_PRODUCT_IMAGE_STORAGE_PREFIX:
+      process.env.NEXT_PUBLIC_PRODUCT_IMAGE_STORAGE_PREFIX ||
+      process.env.PRODUCT_IMAGE_STORAGE_PREFIX ||
+      "",
   },
 
   async redirects() {

@@ -274,6 +274,7 @@ const ProductDetailsComponent = () => {
                     <div className="slider-product text-center">
                       <ProductThumb
                         sku={p.sku ?? ""}
+                        productName={p.name ?? ""}
                         fallback={thumbFallback}
                         className="img-fluid rounded"
                         alt={p.name ?? ""}

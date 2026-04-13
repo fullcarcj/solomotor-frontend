@@ -221,6 +221,7 @@ export default function ProductListComponent() {
             <Link href="#" className="avatar avatar-md me-2">
               <ProductThumb
                 sku={record.sku}
+                productName={record.product}
                 fallback={record.productImageFallback}
               />
             </Link>
