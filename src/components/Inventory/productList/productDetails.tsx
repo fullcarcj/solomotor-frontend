@@ -12,6 +12,7 @@ import { ArrowLeft, Edit } from "react-feather";
 import { all_routes } from "@/data/all_routes";
 import type { InventoryProductDetail } from "@/components/Inventory/add-product/addproduct";
 import { ProductThumb } from "@/components/Inventory/ProductThumb";
+import { inventoryPosProductFallbackPath } from "@/lib/inventoryPosPlaceholderPath";
 
 type ProductDetailApi = InventoryProductDetail & {
   is_active?: boolean;
@@ -115,9 +116,8 @@ const ProductDetailsComponent = () => {
 
   const thumbFallback = useMemo(() => {
     if (!product?.id) return "/assets/img/products/pos-product-01.svg";
-    const n = String((Number(product.id) % 18) + 1).padStart(2, "0");
-    return `/assets/img/products/pos-product-${n}.svg`;
-  }, [product?.id]);
+    return inventoryPosProductFallbackPath(product.id, product.sku);
+  }, [product?.id, product?.sku]);
 
   if (loading) {
     return (
@@ -274,13 +274,14 @@ const ProductDetailsComponent = () => {
                     <div className="slider-product text-center">
                       <ProductThumb
                         sku={p.sku ?? ""}
-                        productName={p.name ?? ""}
                         fallback={thumbFallback}
                         className="img-fluid rounded"
                         alt={p.name ?? ""}
                       />
-                      <h4 className="text-dark mt-2">{dash(p.sku)}.jpg</h4>
-                      <h6 className="text-dark text-muted">Vista previa</h6>
+                      <h4 className="text-dark mt-2">{dash(p.sku)}</h4>
+                      <h6 className="text-dark text-muted">
+                        Vista previa · Firebase (.webp, p. ej. sufijo _1)
+                      </h6>
                     </div>
                   </Slider>
                   <div className="product-nav-controls d-flex align-items-center justify-content-between">

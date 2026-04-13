@@ -1,10 +1,16 @@
+const INVISIBLE_CHARS = /[\u200B-\u200D\uFEFF]/g;
+
+/** Quita espacios raros/BOM en SKU (debe coincidir con el nombre `SKU.webp` en Storage). */
+export function normalizeInventoryImageKey(s: string): string {
+  return String(s ?? "").replace(INVISIBLE_CHARS, "").trim();
+}
+
 /**
  * URL de imagen en Firebase Storage (formato REST).
- * `base` suele terminar en la carpeta codificada, p. ej.
- * `https://firebasestorage.googleapis.com/v0/b/<bucket>/o/products%2F`
+ * Convención del bucket: `productos/{nombre}.webp`. Suele ser `{SKU}.webp` o `{SKU}_1.webp` si el catálogo guarda el SKU sin el índice de foto.
+ * Base típica: `https://.../v0/b/<bucket>/o/productos%2F` → URL `...%2F` + encodeURIComponent(SKU) + `.webp?alt=media`.
  *
- * Objeto con carpeta: `{prefijo}/{SKU}.ext` (ver `productImageStoragePrefix()`).
- * Objeto en la raíz del bucket: `{SKU}.ext` → usa `firebaseProductImageUrlFlatRoot`.
+ * Objeto en la raíz del bucket: `{SKU}.ext` → `firebaseProductImageUrlFlatRoot`.
  */
 export function firebaseProductImageUrl(
   sku: string,
@@ -12,12 +18,13 @@ export function firebaseProductImageUrl(
   ext: "jpg" | "png" | "webp" = "jpg"
 ): string | null {
   const b = (base ?? "").trim().replace(/\/+$/, "");
-  if (!b || !String(sku).trim()) return null;
+  const key = normalizeInventoryImageKey(String(sku));
+  if (!b || !key) return null;
   const pathOnly = b.split("?")[0];
   if (/\/v0\/b\/[^/]+\/o$/i.test(pathOnly.replace(/\/+$/, ""))) {
     return null;
   }
-  const safeSku = encodeURIComponent(String(sku).trim());
+  const safeSku = encodeURIComponent(key);
   const suffix = b.includes("alt=media")
     ? ""
     : (b.includes("?") ? "&" : "?") + "alt=media";
@@ -32,6 +39,7 @@ export function productImageBaseUrl(): string {
   return (
     process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL ||
     process.env.PRODUCT_IMAGE_BASE_URL ||
+    process.env.VITE_IMG_BASE_URL ||
     ""
   ).trim();
 }
@@ -99,8 +107,9 @@ export function firebaseProductImageUrlFlatRoot(
   ext: "jpg" | "png" | "webp" = "jpg"
 ): string | null {
   const root = firebaseStorageORootFromBase(base ?? "");
-  if (!root || !String(sku).trim()) return null;
-  const name = `${String(sku).trim()}.${ext}`;
+  const key = normalizeInventoryImageKey(String(sku));
+  if (!root || !key) return null;
+  const name = `${key}.${ext}`;
   return `${root}/${encodeURIComponent(name)}?alt=media`;
 }
 
@@ -111,9 +120,10 @@ export function firebaseProductImageUrlEncodedFullPath(
   ext: "jpg" | "png" | "webp" = "jpg"
 ): string | null {
   const root = firebaseStorageORootFromBase(base ?? "");
-  if (!root || !String(sku).trim()) return null;
+  const key = normalizeInventoryImageKey(String(sku));
+  if (!root || !key) return null;
   const prefix = productImageStoragePrefix();
-  const path = `${prefix}/${String(sku).trim()}.${ext}`;
+  const path = `${prefix}/${key}.${ext}`;
   const enc = encodeURIComponent(path);
   return `${root}/${enc}?alt=media`;
 }
@@ -121,72 +131,29 @@ export function firebaseProductImageUrlEncodedFullPath(
 /** Extensiones probadas; `.webp` primero (común en catálogos actuales). */
 const IMAGE_EXTS = ["webp", "jpg", "png"] as const;
 
-const INVISIBLE_CHARS = /[\u200B-\u200D\uFEFF]/g;
-
-/** Quita espacios raros/BOM en SKU o nombres pegados desde Excel. */
-export function normalizeInventoryImageKey(s: string): string {
-  return String(s ?? "").replace(INVISIBLE_CHARS, "").trim();
-}
-
 /** `.../o/productos%2F` (carpeta en la misma URL que usa Firebase en consola). */
 function baseUsesEncodedFolderPath(base: string): boolean {
   const path = base.trim().split("?")[0].replace(/\/+$/, "");
   return /\/o\/.+%2F$/i.test(path);
 }
 
-/**
- * Posible nombre de objeto en Storage (sin extensión): una sola “palabra”, a menudo con `_`.
- * Evita usar descripciones largas con espacios; ayuda cuando el catálogo guarda el código de foto en `name` y el SKU es otro.
- */
-export function isLikelyFirebaseImageBasename(s: string): boolean {
-  const t = normalizeInventoryImageKey(s);
-  if (t.length < 4 || t.length > 128) return false;
-  if (/\s/.test(t)) return false;
-  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(t)) return false;
-  return t.includes("_") || t.length >= 14;
-}
-
-/** Claves en orden: SKU; si el nombre del producto parece basename de Storage y difiere del SKU, también. */
-export function inventoryImageSearchKeys(
-  sku: string,
-  productName?: string | null
-): string[] {
-  const keys: string[] = [];
+/** Nombres de objeto sin extensión: SKU, SKU sin espacios, y `SKU_1`…`SKU_9` (p. ej. `01833_F0001_SO_1.webp`). */
+function storageFilenameStemsFromSku(skuTrim: string): string[] {
   const seen = new Set<string>();
-  const add = (raw: string | null | undefined) => {
-    const k = normalizeInventoryImageKey(String(raw ?? ""));
-    if (!k || seen.has(k)) return;
-    seen.add(k);
-    keys.push(k);
+  const out: string[] = [];
+  const add = (raw: string) => {
+    const t = normalizeInventoryImageKey(raw);
+    if (!t || seen.has(t)) return;
+    seen.add(t);
+    out.push(t);
   };
-  add(sku);
-  const name = normalizeInventoryImageKey(String(productName ?? ""));
-  if (
-    name &&
-    name !== normalizeInventoryImageKey(String(sku)) &&
-    isLikelyFirebaseImageBasename(name)
-  ) {
-    add(name);
+  add(skuTrim);
+  add(skuTrim.replace(/\s+/g, ""));
+  const maxPhotoIndex = 9;
+  for (let i = 1; i <= maxPhotoIndex; i++) {
+    add(`${skuTrim}_${i}`);
   }
-  return keys;
-}
-
-/** URLs candidatas probando cada clave (p. ej. SKU y nombre “tipo archivo”). */
-export function firebaseProductImageCandidateUrlsForRow(
-  sku: string,
-  productName: string | null | undefined,
-  base: string
-): string[] {
-  const list: string[] = [];
-  const push = (u: string | null | undefined) => {
-    if (u && !list.includes(u)) list.push(u);
-  };
-  for (const key of inventoryImageSearchKeys(sku, productName)) {
-    for (const u of firebaseProductImageCandidateUrls(key, base)) {
-      push(u);
-    }
-  }
-  return list;
+  return out;
 }
 
 /**
@@ -205,17 +172,12 @@ export function firebaseProductImageCandidateUrls(
   const skuTrim = normalizeInventoryImageKey(String(sku));
   if (!b || !skuTrim) return list;
 
-  const skuVariants = Array.from(
-    new Set(
-      [skuTrim, skuTrim.replace(/\s+/g, ""), skuTrim.toLowerCase()].filter(
-        Boolean
-      )
-    )
-  );
+  /** Stems probados: SKU tal cual, sin espacios, y `SKU_1`…`SKU_9` (fotos numeradas en Storage). */
+  const stems = storageFilenameStemsFromSku(skuTrim);
 
   const folderBase = baseUsesEncodedFolderPath(b);
 
-  for (const s of skuVariants) {
+  for (const s of stems) {
     for (const ext of IMAGE_EXTS) {
       if (folderBase) {
         push(firebaseProductImageUrl(s, b, ext));

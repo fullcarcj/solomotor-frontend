@@ -1,17 +1,21 @@
 import path from "path";
 
+/** Base REST de imágenes Firebase (misma URL en servidor y cliente). Incluye VITE_IMG_BASE_URL por compatibilidad con deploys que solo tenían las vars del Vite antiguo (tienda-repuestos). */
+function productImageBaseFromProcessEnv(): string {
+  return (
+    process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL ||
+    process.env.PRODUCT_IMAGE_BASE_URL ||
+    process.env.VITE_IMG_BASE_URL ||
+    ""
+  ).trim();
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   env: {
-    PRODUCT_IMAGE_BASE_URL:
-      process.env.PRODUCT_IMAGE_BASE_URL ||
-      process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL ||
-      "",
-    // Misma URL en cliente: evita que quede vacío si solo existe PRODUCT_IMAGE_BASE_URL en el deploy.
-    NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL:
-      process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL ||
-      process.env.PRODUCT_IMAGE_BASE_URL ||
-      "",
+    PRODUCT_IMAGE_BASE_URL: productImageBaseFromProcessEnv(),
+    // Misma URL en cliente (inlined en build). next.config no expone import.meta.env.VITE_*; duplicamos aquí.
+    NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL: productImageBaseFromProcessEnv(),
     /** Carpeta en el bucket antes del SKU (p.ej. products, o productos si es legado). Vacío en build = default en código "products". */
     PRODUCT_IMAGE_STORAGE_PREFIX:
       process.env.PRODUCT_IMAGE_STORAGE_PREFIX ||

@@ -13,6 +13,7 @@ import CommonFooter from "@/core/common/footer/commonFooter";
 import { Alert, Spin, message } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProductThumb } from "@/components/Inventory/ProductThumb";
+import { inventoryPosProductFallbackPath } from "@/lib/inventoryPosPlaceholderPath";
 
 type InventoryApiProduct = {
   id: number;
@@ -32,7 +33,6 @@ type InventoryListPayload = {
 };
 
 function mapApiProductToRow(p: InventoryApiProduct) {
-  const thumbN = String((Number(p.id) % 18) + 1).padStart(2, "0");
   const priceNum = Number(p.unit_price_usd);
   const price =
     p.unit_price_usd == null || Number.isNaN(priceNum)
@@ -42,7 +42,7 @@ function mapApiProductToRow(p: InventoryApiProduct) {
     id: p.id,
     sku: p.sku ?? "",
     product: p.name ?? "",
-    productImageFallback: `/assets/img/products/pos-product-${thumbN}.svg`,
+    productImageFallback: inventoryPosProductFallbackPath(p.id, p.sku),
     category: p.category ?? "—",
     brand: p.brand ?? "—",
     price,
@@ -221,7 +221,6 @@ export default function ProductListComponent() {
             <Link href="#" className="avatar avatar-md me-2">
               <ProductThumb
                 sku={record.sku}
-                productName={record.product}
                 fallback={record.productImageFallback}
               />
             </Link>
