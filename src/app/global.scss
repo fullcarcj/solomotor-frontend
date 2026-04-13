@@ -949,6 +949,14 @@ div.rc-slider-handle-dragging.rc-slider-handle-dragging.rc-slider-handle-draggin
     top: 15px;
     left: 20px;
   }
+
+  /* Búsqueda en la cabecera de la tarjeta (flujo normal; no solapar filtros) */
+  .card-header .product-list-card-header-search {
+    position: relative;
+    top: auto;
+    left: auto;
+    z-index: 1;
+  }
 }
 
 .pos-category5 {

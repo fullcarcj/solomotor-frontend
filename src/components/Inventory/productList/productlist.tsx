@@ -61,6 +61,15 @@ export default function ProductListComponent() {
   const [summaryLine, setSummaryLine] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [skuOrNameSearch, setSkuOrNameSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      setDebouncedSearch(skuOrNameSearch.trim());
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, [skuOrNameSearch]);
 
   const hideDeleteModal = useCallback(() => {
     const el = document.getElementById("delete-modal");
@@ -82,47 +91,70 @@ export default function ProductListComponent() {
     }
   }, []);
 
-  const loadProducts = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/inventory/products?limit=200", {
-        cache: "no-store",
-      });
-      let body: unknown;
+  const loadProducts = useCallback(
+    async (opts?: { signal?: AbortSignal }) => {
+      const signal = opts?.signal;
+      setLoading(true);
+      setError(null);
       try {
-        body = await res.json();
-      } catch {
-        throw new Error("Respuesta no JSON del servidor");
+        const params = new URLSearchParams();
+        const q = debouncedSearch;
+        if (q) {
+          params.set("search", q);
+          params.set("limit", "500");
+        } else {
+          params.set("limit", "200");
+        }
+        params.set("offset", "0");
+        const res = await fetch(`/api/inventory/products?${params}`, {
+          cache: "no-store",
+          ...(signal ? { signal } : {}),
+        });
+        let body: unknown;
+        try {
+          body = await res.json();
+        } catch {
+          throw new Error("Respuesta no JSON del servidor");
+        }
+        if (!res.ok) {
+          const msg =
+            (body as { error?: { message?: string; code?: string } })?.error
+              ?.message ||
+            (body as { error?: { code?: string } })?.error?.code ||
+            res.statusText;
+          throw new Error(msg);
+        }
+        const payload = (body as { data?: InventoryListPayload }).data;
+        const products = payload?.products ?? [];
+        setDataSource(products.map((row) => mapApiProductToRow(row)));
+        const s = payload?.summary;
+        const pg = payload?.pagination;
+        if (s && pg) {
+          const base = `Mostrando ${products.length} de ${pg.total}`;
+          const alerts = `· alertas ${s.alerts_count ?? "—"} · quiebres ${s.stockout_count ?? "—"}`;
+          if (q) {
+            const more =
+              pg.has_more === true
+                ? " (límite de resultados en pantalla; acota la búsqueda si no ves el producto)"
+                : "";
+            setSummaryLine(`${base} coincidencias para «${q}»${more}`);
+          } else {
+            setSummaryLine(`${base} ${alerts}`);
+          }
+        } else {
+          setSummaryLine(products.length ? `${products.length} productos` : null);
+        }
+      } catch (e) {
+        if (signal?.aborted) return;
+        setDataSource([]);
+        setSummaryLine(null);
+        setError(e instanceof Error ? e.message : "Error al cargar productos");
+      } finally {
+        if (!signal?.aborted) setLoading(false);
       }
-      if (!res.ok) {
-        const msg =
-          (body as { error?: { message?: string; code?: string } })?.error
-            ?.message ||
-          (body as { error?: { code?: string } })?.error?.code ||
-          res.statusText;
-        throw new Error(msg);
-      }
-      const payload = (body as { data?: InventoryListPayload }).data;
-      const products = payload?.products ?? [];
-      setDataSource(products.map((row) => mapApiProductToRow(row)));
-      const s = payload?.summary;
-      const pg = payload?.pagination;
-      if (s && pg) {
-        setSummaryLine(
-          `Mostrando ${products.length} de ${pg.total} · alertas ${s.alerts_count ?? "—"} · quiebres ${s.stockout_count ?? "—"}`
-        );
-      } else {
-        setSummaryLine(products.length ? `${products.length} productos` : null);
-      }
-    } catch (e) {
-      setDataSource([]);
-      setSummaryLine(null);
-      setError(e instanceof Error ? e.message : "Error al cargar productos");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [debouncedSearch]
+  );
 
   const confirmDelete = useCallback(async () => {
     if (pendingDeleteId == null) return;
@@ -169,7 +201,9 @@ export default function ProductListComponent() {
   }, [pendingDeleteId, hideDeleteModal, loadProducts]);
 
   useEffect(() => {
-    loadProducts();
+    const ac = new AbortController();
+    void loadProducts({ signal: ac.signal });
+    return () => ac.abort();
   }, [loadProducts]);
 
   const columns = useMemo(
@@ -315,9 +349,30 @@ export default function ProductListComponent() {
           </div>
           {/* /product list */}
           <div className="card table-list-card">
-            <div className="card-header d-flex align-items-center justify-content-between flex-wrap row-gap-3">
-              <div className="search-set"></div>
-              <div className="d-flex table-dropdown my-xl-auto right-content align-items-center flex-wrap row-gap-3">
+            <div className="card-header d-flex align-items-center flex-wrap gap-2 gap-md-3 justify-content-between">
+              {/*
+                No usar la clase `table-search-set` aquí: en global.scss queda con
+                position:absolute dentro de .table-list-card y solapa los filtros.
+              */}
+              <div
+                className="search-set product-list-card-header-search flex-shrink-0"
+                style={{ width: "min(100%, 280px)" }}
+              >
+                <div className="search-input">
+                  <span className="btn btn-searchset" aria-hidden="true">
+                    <i className="ti ti-search fs-14" />
+                  </span>
+                  <input
+                    type="search"
+                    className="form-control form-control-sm"
+                    placeholder="Search"
+                    value={skuOrNameSearch}
+                    onChange={(e) => setSkuOrNameSearch(e.target.value)}
+                    aria-label="Search by SKU or product name"
+                  />
+                </div>
+              </div>
+              <div className="d-flex table-dropdown my-xl-auto right-content align-items-center flex-wrap row-gap-2 gap-2 ms-md-auto">
                 <div className="dropdown me-2">
                   <Link
                     href="#"
@@ -619,6 +674,7 @@ export default function ProductListComponent() {
                     props={dataSource.length}
                     columns={columns}
                     dataSource={dataSource}
+                    hideBuiltinSearch
                   />
                 </Spin>
               </div>

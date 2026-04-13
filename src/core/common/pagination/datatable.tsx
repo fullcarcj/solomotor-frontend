@@ -1,29 +1,71 @@
 /* eslint-disable react/prop-types */
 /* eslint-disable no-unused-vars */
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Table } from "antd";
 
-const Datatable = ({ props, columns, dataSource }:any) => {
+function applyFilterToRows(
+  value: string,
+  rows: any[],
+  filterKeys?: string[]
+): any[] {
+  const v = String(value).trim().toLowerCase();
+  if (!v) return rows;
+  const keys =
+    Array.isArray(filterKeys) && filterKeys.length > 0 ? filterKeys : null;
+  return rows.filter((record: any) => {
+    if (keys) {
+      return keys.some((k: string) =>
+        String(record[k] ?? "")
+          .toLowerCase()
+          .includes(v)
+      );
+    }
+    return Object.values(record).some((field) =>
+      String(field).toLowerCase().includes(v)
+    );
+  });
+}
+
+const Datatable = (all: any) => {
+  const {
+    props: tableKey,
+    columns,
+    dataSource = [],
+    filterText,
+    filterKeys,
+    hideBuiltinSearch = false,
+    placeholder = "Search",
+    ...tableRest
+  } = all;
+
   const [searchText, setSearchText] = useState("");
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
-  const [filteredDataSource, setFilteredDataSource] = useState(dataSource);
+  const [filteredDataSource, setFilteredDataSource] = useState<any[]>(
+    dataSource
+  );
+
+  const controlled = Boolean(hideBuiltinSearch);
+  const query = controlled ? (filterText ?? "") : searchText;
+
+  const applyFilter = useCallback(
+    (value: string, rows: any[]) => {
+      setFilteredDataSource(applyFilterToRows(value, rows, filterKeys));
+    },
+    [filterKeys]
+  );
 
   useEffect(() => {
-    setFilteredDataSource(dataSource);
-  }, [dataSource]);
-  const onSelectChange = (newSelectedRowKeys:any) => {
+    applyFilter(query, dataSource);
+  }, [dataSource, query, applyFilter]);
+
+  const onSelectChange = (newSelectedRowKeys: any) => {
     setSelectedRowKeys(newSelectedRowKeys);
   };
 
-  const handleSearch = (value:any) => {
+  const handleSearch = (value: string) => {
     setSearchText(value);
-    const filteredData = dataSource.filter((record:any) =>
-      Object.values(record).some((field) =>
-        String(field).toLowerCase().includes(value.toLowerCase())
-      )
-    );
-    setFilteredDataSource(filteredData);
   };
+
   const rowSelection = {
     selectedRowKeys,
     onChange: onSelectChange,
@@ -31,44 +73,59 @@ const Datatable = ({ props, columns, dataSource }:any) => {
 
   return (
     <>
-      <div className="search-set table-search-set">
-  <div className="search-input">
-    <a href="#" className="btn btn-searchset">
-      <i className="ti ti-search fs-14 feather-search" />
-    </a>
-    <div id="DataTables_Table_0_filter" className="dataTables_filter">
-      <label>
-        {" "}
-        <input
-          type="search"
-          onChange={(e) => handleSearch(e.target.value)}
-          className="form-control form-control-sm"
-          placeholder="Search"
-          aria-controls="DataTables_Table_0"
-        />
-      </label>
-    </div>
-  </div>
-</div>
+      {!hideBuiltinSearch ? (
+        <div className="search-set table-search-set">
+          <div className="search-input">
+            <a
+              href="#"
+              className="btn btn-searchset"
+              onClick={(e) => e.preventDefault()}
+            >
+              <i className="ti ti-search fs-14 feather-search" />
+            </a>
+            <div id="DataTables_Table_0_filter" className="dataTables_filter">
+              <label>
+                {" "}
+                <input
+                  type="search"
+                  value={searchText}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  className="form-control form-control-sm"
+                  placeholder={placeholder}
+                  aria-controls="DataTables_Table_0"
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
-
-    <Table
-      key={props}
-      className="table datanew dataTable no-footer"
-      rowSelection={rowSelection}
-      columns={columns}
-      dataSource={filteredDataSource}
-      rowKey={(record) => record.id}
-      pagination={{
+      <Table
+        key={tableKey}
+        className="table datanew dataTable no-footer"
+        rowSelection={rowSelection}
+        columns={columns}
+        {...tableRest}
+        dataSource={filteredDataSource}
+        rowKey={(record) => record.id}
+        pagination={{
           locale: { items_per_page: "" },
-          nextIcon: <span><i className="fa fa-angle-right" /></span>,
-          prevIcon: <span><i className="fa fa-angle-left" /></span>,
+          nextIcon: (
+            <span>
+              <i className="fa fa-angle-right" />
+            </span>
+          ),
+          prevIcon: (
+            <span>
+              <i className="fa fa-angle-left" />
+            </span>
+          ),
           defaultPageSize: 10,
           showSizeChanger: true,
           pageSizeOptions: ["10", "20", "30"],
         }}
-    />
-        </>
+      />
+    </>
   );
 };
 
