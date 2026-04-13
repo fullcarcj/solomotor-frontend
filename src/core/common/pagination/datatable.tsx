@@ -1,12 +1,16 @@
 /* eslint-disable react/prop-types */
 /* eslint-disable no-unused-vars */
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Table } from "antd";
 
 const Datatable = ({ props, columns, dataSource }:any) => {
   const [searchText, setSearchText] = useState("");
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [filteredDataSource, setFilteredDataSource] = useState(dataSource);
+
+  useEffect(() => {
+    setFilteredDataSource(dataSource);
+  }, [dataSource]);
   const onSelectChange = (newSelectedRowKeys:any) => {
     setSelectedRowKeys(newSelectedRowKeys);
   };

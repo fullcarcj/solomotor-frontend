@@ -4,102 +4,210 @@ import Table from "@/core/common/pagination/datatable";
 import CollapesIcon from "@/core/common/tooltip-content/collapes";
 import RefreshIcon from "@/core/common/tooltip-content/refresh";
 import TooltipIcons from "@/core/common/tooltip-content/tooltipIcons";
-import { productlistdata } from "@/core/json/productlistdata";
 import Brand from "@/core/modals/inventory/brand";
 import { all_routes } from "@/data/all_routes";
 import { Download, Edit, Eye, Trash2 } from "react-feather";
 import Link from "next/link";
 import CommonFooter from "@/core/common/footer/commonFooter";
+import { Alert, Spin } from "antd";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  firebaseProductImageUrl,
+  productImageBaseUrl,
+} from "@/lib/productImageUrl";
+
+type InventoryApiProduct = {
+  id: number;
+  sku: string;
+  name: string;
+  category: string | null;
+  brand: string | null;
+  unit_price_usd: string | number | null;
+  stock_qty: string | number | null;
+  source?: string | null;
+};
+
+type InventoryListPayload = {
+  products: InventoryApiProduct[];
+  pagination?: { total: number; limit: number; offset: number; has_more?: boolean };
+  summary?: { total_products?: number; alerts_count?: number; stockout_count?: number };
+};
+
+function mapApiProductToRow(p: InventoryApiProduct, imageBase: string) {
+  const thumbN = String((Number(p.id) % 18) + 1).padStart(2, "0");
+  const priceNum = Number(p.unit_price_usd);
+  const price =
+    p.unit_price_usd == null || Number.isNaN(priceNum)
+      ? "—"
+      : `$${priceNum.toFixed(2)}`;
+  const fromFirebase = firebaseProductImageUrl(p.sku ?? "", imageBase);
+  return {
+    id: p.id,
+    sku: p.sku ?? "",
+    product: p.name ?? "",
+    productImage:
+      fromFirebase ??
+      `/assets/img/products/pos-product-${thumbN}.svg`,
+    category: p.category ?? "—",
+    brand: p.brand ?? "—",
+    price,
+    unit: "—",
+    qty: String(p.stock_qty ?? ""),
+    createdby: p.source ?? "—",
+    img: "/assets/img/icons/user.svg",
+  };
+}
 
 export default function ProductListComponent() {
-  const dataSource = productlistdata;
   const route = all_routes;
-  const columns = [
-    {
-      title: "SKU",
-      dataIndex: "sku",
-      sorter: (a: any, b: any) => a.sku.length - b.sku.length,
-    },
-    {
-      title: "Product",
-      dataIndex: "product",
-      render: (text: any, record: any) => (
-        <div className="d-flex align-items-center">
-          <Link href="#" className="avatar avatar-md me-2">
-            <img alt="" src={record.productImage} />
-          </Link>
-          <Link href="#">{text}</Link>
-        </div>
-      ),
-      sorter: (a: any, b: any) => a.product.length - b.product.length,
-    },
+  const [dataSource, setDataSource] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [summaryLine, setSummaryLine] = useState<string | null>(null);
 
-    {
-      title: "Category",
-      dataIndex: "category",
-      sorter: (a: any, b: any) => a.category.length - b.category.length,
-    },
+  const loadProducts = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/inventory/products?limit=200", {
+        cache: "no-store",
+      });
+      let body: unknown;
+      try {
+        body = await res.json();
+      } catch {
+        throw new Error("Respuesta no JSON del servidor");
+      }
+      if (!res.ok) {
+        const msg =
+          (body as { error?: { message?: string; code?: string } })?.error
+            ?.message ||
+          (body as { error?: { code?: string } })?.error?.code ||
+          res.statusText;
+        throw new Error(msg);
+      }
+      const payload = (body as { data?: InventoryListPayload }).data;
+      const products = payload?.products ?? [];
+      const imageBase = productImageBaseUrl();
+      setDataSource(products.map((row) => mapApiProductToRow(row, imageBase)));
+      const s = payload?.summary;
+      const pg = payload?.pagination;
+      if (s && pg) {
+        setSummaryLine(
+          `Mostrando ${products.length} de ${pg.total} · alertas ${s.alerts_count ?? "—"} · quiebres ${s.stockout_count ?? "—"}`
+        );
+      } else {
+        setSummaryLine(products.length ? `${products.length} productos` : null);
+      }
+    } catch (e) {
+      setDataSource([]);
+      setSummaryLine(null);
+      setError(e instanceof Error ? e.message : "Error al cargar productos");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-    {
-      title: "Brand",
-      dataIndex: "brand",
-      sorter: (a: any, b: any) => a.brand.length - b.brand.length,
-    },
-    {
-      title: "Price",
-      dataIndex: "price",
-      sorter: (a: any, b: any) => a.price.length - b.price.length,
-    },
-    {
-      title: "Unit",
-      dataIndex: "unit",
-      sorter: (a: any, b: any) => a.unit.length - b.unit.length,
-    },
-    {
-      title: "Qty",
-      dataIndex: "qty",
-      sorter: (a: any, b: any) => a.qty.length - b.qty.length,
-    },
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
 
-    {
-      title: "Created By",
-      dataIndex: "createdby",
-      render: (text: any, record: any) => (
-        <span className="userimgname">
-          <Link href="/profile" className="product-img">
-            <img alt="" src={record.img} />
-          </Link>
-          <Link href="/profile">{text}</Link>
-        </span>
-      ),
-      sorter: (a: any, b: any) => a.createdby.length - b.createdby.length,
-    },
-    {
-      title: "Action",
-      dataIndex: "action",
-      render: () => (
-        <div className="action-table-data">
-          <div className="edit-delete-action">
-            <Link className="me-2 p-2" href={route.productdetails}>
-              <Eye className="feather-view" />
+  const columns = useMemo(
+    () => [
+      {
+        title: "SKU",
+        dataIndex: "sku",
+        sorter: (a: any, b: any) => String(a.sku).localeCompare(String(b.sku)),
+      },
+      {
+        title: "Product",
+        dataIndex: "product",
+        render: (text: any, record: any) => (
+          <div className="d-flex align-items-center">
+            <Link href="#" className="avatar avatar-md me-2">
+              <img alt="" src={record.productImage} />
             </Link>
-            <Link className="me-2 p-2" href={route.editproduct}>
-              <Edit className="feather-edit" />
-            </Link>
-            <Link
-              className="confirm-text p-2"
-              href="#"
-              data-bs-toggle="modal"
-              data-bs-target="#delete-modal"
-            >
-              <Trash2 className="feather-trash-2" />
-            </Link>
+            <Link href="#">{text}</Link>
           </div>
-        </div>
-      ),
-      sorter: (a: any, b: any) => a.createdby.length - b.createdby.length,
-    },
-  ];
+        ),
+        sorter: (a: any, b: any) =>
+          String(a.product).localeCompare(String(b.product)),
+      },
+
+      {
+        title: "Category",
+        dataIndex: "category",
+        sorter: (a: any, b: any) =>
+          String(a.category).localeCompare(String(b.category)),
+      },
+
+      {
+        title: "Brand",
+        dataIndex: "brand",
+        sorter: (a: any, b: any) =>
+          String(a.brand).localeCompare(String(b.brand)),
+      },
+      {
+        title: "Price",
+        dataIndex: "price",
+        sorter: (a: any, b: any) =>
+          String(a.price).localeCompare(String(b.price)),
+      },
+      {
+        title: "Unit",
+        dataIndex: "unit",
+        sorter: (a: any, b: any) =>
+          String(a.unit).localeCompare(String(b.unit)),
+      },
+      {
+        title: "Qty",
+        dataIndex: "qty",
+        sorter: (a: any, b: any) =>
+          Number(a.qty) - Number(b.qty) || String(a.qty).localeCompare(String(b.qty)),
+      },
+
+      {
+        title: "Origen",
+        dataIndex: "createdby",
+        render: (text: any, record: any) => (
+          <span className="userimgname">
+            <Link href="/profile" className="product-img">
+              <img alt="" src={record.img} />
+            </Link>
+            <Link href="/profile">{text}</Link>
+          </span>
+        ),
+        sorter: (a: any, b: any) =>
+          String(a.createdby).localeCompare(String(b.createdby)),
+      },
+      {
+        title: "Action",
+        dataIndex: "action",
+        render: () => (
+          <div className="action-table-data">
+            <div className="edit-delete-action">
+              <Link className="me-2 p-2" href={route.productdetails}>
+                <Eye className="feather-view" />
+              </Link>
+              <Link className="me-2 p-2" href={route.editproduct}>
+                <Edit className="feather-edit" />
+              </Link>
+              <Link
+                className="confirm-text p-2"
+                href="#"
+                data-bs-toggle="modal"
+                data-bs-target="#delete-modal"
+              >
+                <Trash2 className="feather-trash-2" />
+              </Link>
+            </div>
+          </div>
+        ),
+      },
+    ],
+    [route.productdetails, route.editproduct]
+  );
+
   return (
     <>
       <div className="page-wrapper">
@@ -113,7 +221,7 @@ export default function ProductListComponent() {
             </div>
             <ul className="table-top-head">
               <TooltipIcons />
-              <RefreshIcon />
+              <RefreshIcon onRefresh={loadProducts} />
               <CollapesIcon />
             </ul>
             <div className="page-btn">
@@ -428,8 +536,20 @@ export default function ProductListComponent() {
               </div>
             </div> */}
               {/* /Filter */}
-              <div className="table-responsive">
-                <Table columns={columns} dataSource={dataSource} />
+              {error ? (
+                <Alert type="error" message={error} className="mb-3" showIcon />
+              ) : null}
+              {summaryLine && !error ? (
+                <p className="text-muted small mb-2">{summaryLine}</p>
+              ) : null}
+              <div className="table-responsive position-relative">
+                <Spin spinning={loading}>
+                  <Table
+                    props={dataSource.length}
+                    columns={columns}
+                    dataSource={dataSource}
+                  />
+                </Spin>
               </div>
             </div>
           </div>

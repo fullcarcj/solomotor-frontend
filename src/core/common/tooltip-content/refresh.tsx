@@ -6,19 +6,25 @@ import React from 'react'
 
 import { Tooltip } from 'antd';
 import Link from 'next/link';
-const RefreshIcon = () => {
-  return (
 
+type RefreshIconProps = { onRefresh?: () => void };
+
+const RefreshIcon = ({ onRefresh }: RefreshIconProps) => {
+  return (
     <li>
       <Tooltip title="Refresh">
-        <Link href="#">
+        <Link
+          href="#"
+          onClick={(e) => {
+            e.preventDefault();
+            onRefresh?.();
+          }}
+        >
           <i className="ti ti-refresh"></i>
         </Link>
       </Tooltip>
     </li>
-
-
-  )
-}
+  );
+};
 
 export default RefreshIcon

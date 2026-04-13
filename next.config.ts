@@ -2,6 +2,13 @@ import path from "path";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  env: {
+    PRODUCT_IMAGE_BASE_URL:
+      process.env.PRODUCT_IMAGE_BASE_URL ||
+      process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL ||
+      "",
+  },
+
    async rewrites() {
     return [
       {
