@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  getWebhookAdminSecret,
+  getWebhookReceiverBaseUrl,
+} from "@/lib/inventoryWebhookProxyEnv";
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
@@ -7,8 +11,8 @@ type RouteCtx = { params: Promise<{ id: string }> };
  * (misma baja lógica que DELETE; evita proxies que bloquean DELETE).
  */
 export async function POST(_req: NextRequest, context: RouteCtx) {
-  const base = process.env.WEBHOOK_RECEIVER_BASE_URL?.trim().replace(/\/$/, "");
-  const secret = process.env.WEBHOOK_ADMIN_SECRET?.trim();
+  const base = getWebhookReceiverBaseUrl();
+  const secret = getWebhookAdminSecret();
   const { id } = await context.params;
 
   if (!base) {
@@ -17,7 +21,7 @@ export async function POST(_req: NextRequest, context: RouteCtx) {
         error: {
           code: "CONFIG",
           message:
-            "Falta WEBHOOK_RECEIVER_BASE_URL. Añádela en .env o .env.local y reinicia `next dev`.",
+            "Falta WEBHOOK_RECEIVER_BASE_URL. En local: .env.local. En Render: Environment del servicio Next → Save → redeploy.",
         },
       },
       { status: 503 }
@@ -29,7 +33,7 @@ export async function POST(_req: NextRequest, context: RouteCtx) {
         error: {
           code: "CONFIG",
           message:
-            "Falta WEBHOOK_ADMIN_SECRET (mismo valor que ADMIN_SECRET del backend).",
+            "Falta secreto admin: WEBHOOK_ADMIN_SECRET o ADMIN_SECRET (mismo valor que en el webhook-receiver). Render: Environment del frontend → Save → Manual Deploy.",
         },
       },
       { status: 503 }

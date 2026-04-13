@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  getWebhookAdminSecret,
+  getWebhookReceiverBaseUrl,
+} from "@/lib/inventoryWebhookProxyEnv";
 
 /**
  * Proxy hacia webhook-receiver: GET /api/inventory/products
  * Requiere auth admin en el backend; el secreto solo vive en el servidor (env).
  */
 export async function GET(req: NextRequest) {
-  const base = process.env.WEBHOOK_RECEIVER_BASE_URL?.trim().replace(/\/$/, "");
-  const secret = process.env.WEBHOOK_ADMIN_SECRET?.trim();
+  const base = getWebhookReceiverBaseUrl();
+  const secret = getWebhookAdminSecret();
 
   if (!base) {
     return NextResponse.json(
@@ -14,7 +18,7 @@ export async function GET(req: NextRequest) {
         error: {
           code: "CONFIG",
           message:
-            "Falta WEBHOOK_RECEIVER_BASE_URL (URL base del webhook-receiver, sin barra final). Añádela en .env o .env.local y reinicia `next dev`.",
+            "Falta WEBHOOK_RECEIVER_BASE_URL (URL base del webhook-receiver, sin barra final). En local: .env.local y reinicia `next dev`. En Render: Environment del servicio Next → Save → redeploy.",
         },
       },
       { status: 503 }
@@ -26,7 +30,7 @@ export async function GET(req: NextRequest) {
         error: {
           code: "CONFIG",
           message:
-            "Falta WEBHOOK_ADMIN_SECRET. Debe ser el mismo valor que ADMIN_SECRET del backend. Añádelo en .env o .env.local y reinicia `next dev`.",
+            "Falta secreto admin para el proxy: define WEBHOOK_ADMIN_SECRET o ADMIN_SECRET (mismo valor que ADMIN_SECRET del webhook-receiver). En Render: Environment del servicio frontend → Save → Manual Deploy.",
         },
       },
       { status: 503 }
