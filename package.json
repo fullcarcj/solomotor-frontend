@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "export": "next export",
     "build": "next build",
     "start": "next start",
+    "start:static": "npx --yes serve@latest out",
     "lint": "next lint"
   },
   "dependencies": {
