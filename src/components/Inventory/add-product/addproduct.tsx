@@ -228,7 +228,7 @@ export default function AddProductComponent({
     });
   };
 
-  const handleImageFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
     e.target.value = "";
     if (!files.length) return;
@@ -238,41 +238,36 @@ export default function AddProductComponent({
       return;
     }
 
-    setPendingImages((prev) => {
-      const remaining = 9 - prev.length;
-      if (remaining <= 0) {
-        message.warning("Máximo 9 imágenes.");
-        return prev;
+    const remaining = 9 - pendingImagesRef.current.length;
+    if (remaining <= 0) {
+      message.warning("Máximo 9 imágenes.");
+      return;
+    }
+
+    const part = files.slice(0, remaining);
+    const built: { blob: Blob; preview: string }[] = [];
+    for (const f of part) {
+      try {
+        const blob = await fileToWebpBlob(f);
+        built.push({ blob, preview: URL.createObjectURL(blob) });
+      } catch {
+        message.error(`No se pudo convertir a WebP: ${f.name}`);
       }
+    }
+    if (!built.length) return;
 
-      void (async () => {
-        const part = files.slice(0, remaining);
-        const built: { blob: Blob; preview: string }[] = [];
-        for (const f of part) {
-          try {
-            const blob = await fileToWebpBlob(f);
-            built.push({ blob, preview: URL.createObjectURL(blob) });
-          } catch {
-            message.error(`No se pudo convertir a WebP: ${f.name}`);
-          }
-        }
-        if (!built.length) return;
-        setPendingImages((p) => {
-          const space = 9 - p.length;
-          if (space <= 0) {
-            built.forEach((b) => URL.revokeObjectURL(b.preview));
-            return p;
-          }
-          const take = built.slice(0, space);
-          if (take.length < built.length) {
-            built.slice(take.length).forEach((b) => URL.revokeObjectURL(b.preview));
-            message.warning("Solo caben 9 imágenes en total.");
-          }
-          return [...p, ...take];
-        });
-      })();
-
-      return prev;
+    setPendingImages((p) => {
+      const space = 9 - p.length;
+      if (space <= 0) {
+        built.forEach((b) => URL.revokeObjectURL(b.preview));
+        return p;
+      }
+      const take = built.slice(0, space);
+      if (take.length < built.length) {
+        built.slice(take.length).forEach((b) => URL.revokeObjectURL(b.preview));
+        message.warning("Solo caben 9 imágenes en total.");
+      }
+      return [...p, ...take];
     });
   };
 

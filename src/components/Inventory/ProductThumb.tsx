@@ -14,7 +14,7 @@ type Props = {
   alt?: string;
 };
 
-/** Convención Storage: `productos/{SKU}.webp`. Prueba .webp / .jpg / .png y cae al placeholder si falla. */
+/** Resuelve en background la primera URL válida; evita parpadeo y bucles de error. */
 export function ProductThumb({
   sku,
   fallback,
@@ -45,22 +45,41 @@ export function ProductThumb({
     return [...urls, fallback];
   }, [sku, base, fallback]);
 
-  const [idx, setIdx] = useState(0);
+  const [src, setSrc] = useState(fallback);
   useEffect(() => {
-    setIdx(0);
-  }, [sku, base, fallback]);
+    let cancelled = false;
 
-  const safeIdx = Math.min(idx, Math.max(0, candidates.length - 1));
-  const src = candidates[safeIdx] ?? fallback;
+    const probe = (url: string) =>
+      new Promise<boolean>((resolve) => {
+        const img = new window.Image();
+        img.onload = () => resolve(true);
+        img.onerror = () => resolve(false);
+        img.src = url;
+      });
+
+    void (async () => {
+      for (const url of candidates) {
+        const ok = await probe(url);
+        if (!cancelled && ok) {
+          setSrc(url);
+          return;
+        }
+      }
+      if (!cancelled) setSrc(fallback);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [candidates, fallback]);
 
   return (
     <img
-      key={`${sku}:${idx}:${candidates[0] ?? ""}`}
       alt={alt}
       className={className}
       src={src}
       onError={() => {
-        setIdx((i) => (i + 1 < candidates.length ? i + 1 : i));
+        setSrc((prev) => (prev === fallback ? prev : fallback));
       }}
     />
   );
