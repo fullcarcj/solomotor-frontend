@@ -31,6 +31,7 @@ const Datatable = (all: any) => {
     props: tableKey,
     columns,
     dataSource = [],
+    rowKey: rowKeyProp,
     filterText,
     filterKeys,
     hideBuiltinSearch = false,
@@ -61,6 +62,25 @@ const Datatable = (all: any) => {
   const onSelectChange = (newSelectedRowKeys: any) => {
     setSelectedRowKeys(newSelectedRowKeys);
   };
+
+  const defaultRowKey = useCallback(
+    (record: any) => {
+      if (typeof rowKeyProp === "function") return rowKeyProp(record);
+      if (typeof rowKeyProp === "string" && record[rowKeyProp] != null) {
+        return String(record[rowKeyProp]);
+      }
+      if (record.tableRowKey != null) return String(record.tableRowKey);
+      const raw = record.id ?? record.product_id ?? record.productId;
+      if (raw != null && raw !== "") {
+        const n = Number(raw);
+        if (Number.isFinite(n) && n > 0) return String(n);
+        return String(raw);
+      }
+      const sku = String(record.sku ?? "").trim();
+      return `row:${encodeURIComponent(sku || "unknown")}`;
+    },
+    [rowKeyProp]
+  );
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -107,7 +127,7 @@ const Datatable = (all: any) => {
         columns={columns}
         {...tableRest}
         dataSource={filteredDataSource}
-        rowKey={(record) => record.id}
+        rowKey={defaultRowKey}
         pagination={{
           locale: { items_per_page: "" },
           nextIcon: (

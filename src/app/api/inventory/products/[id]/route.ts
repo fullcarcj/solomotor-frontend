@@ -6,6 +6,13 @@ import {
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
+function normalizeProductRouteId(raw: string): string {
+  const t = raw.trim();
+  const m = /^id-(\d+)$/i.exec(t);
+  if (m) return m[1];
+  return t;
+}
+
 function proxyConfig() {
   const base = getWebhookReceiverBaseUrl();
   const secret = getWebhookAdminSecret();
@@ -47,7 +54,8 @@ export async function GET(_req: NextRequest, context: RouteCtx) {
   const cfg = proxyConfig();
   if ("error" in cfg) return cfg.error;
   const { base, secret } = cfg;
-  const { id } = await context.params;
+  const { id: rawId } = await context.params;
+  const id = normalizeProductRouteId(rawId);
 
   if (!/^\d+$/.test(id)) {
     return NextResponse.json(
@@ -79,7 +87,8 @@ export async function DELETE(_req: NextRequest, context: RouteCtx) {
   const cfg = proxyConfig();
   if ("error" in cfg) return cfg.error;
   const { base, secret } = cfg;
-  const { id } = await context.params;
+  const { id: rawId } = await context.params;
+  const id = normalizeProductRouteId(rawId);
 
   if (!/^\d+$/.test(id)) {
     return NextResponse.json(

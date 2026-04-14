@@ -6,6 +6,14 @@ import {
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
+/** Si por error llega `id-123` (p. ej. confusión con rowKey), extrae solo los dígitos. */
+function normalizeProductRouteId(raw: string): string {
+  const t = raw.trim();
+  const m = /^id-(\d+)$/i.exec(t);
+  if (m) return m[1];
+  return t;
+}
+
 /**
  * Proxy POST → webhook-receiver /api/inventory/products/:id/deactivate
  * (misma baja lógica que DELETE; evita proxies que bloquean DELETE).
@@ -13,7 +21,8 @@ type RouteCtx = { params: Promise<{ id: string }> };
 export async function POST(_req: NextRequest, context: RouteCtx) {
   const base = getWebhookReceiverBaseUrl();
   const secret = getWebhookAdminSecret();
-  const { id } = await context.params;
+  const { id: rawId } = await context.params;
+  const id = normalizeProductRouteId(rawId);
 
   if (!base) {
     return NextResponse.json(
@@ -47,15 +56,28 @@ export async function POST(_req: NextRequest, context: RouteCtx) {
     );
   }
 
-  const upstream = await fetch(`${base}/api/inventory/products/deactivate`, {
+  const pid = Number(id);
+  const headers: HeadersInit = {
+    "X-Admin-Secret": secret,
+    "Content-Type": "application/json",
+  };
+
+  const pathUrl = `${base}/api/inventory/products/${encodeURIComponent(id)}/deactivate`;
+  let upstream = await fetch(pathUrl, {
     method: "POST",
-    headers: {
-      "X-Admin-Secret": secret,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ product_id: Number(id) }),
+    headers,
+    body: "{}",
     cache: "no-store",
   });
+
+  if (upstream.status === 404) {
+    upstream = await fetch(`${base}/api/inventory/products/deactivate`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ product_id: pid }),
+      cache: "no-store",
+    });
+  }
 
   const body = await upstream.text();
   return new NextResponse(body, {

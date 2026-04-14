@@ -15,8 +15,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProductThumb } from "@/components/Inventory/ProductThumb";
 import { inventoryPosProductFallbackPath } from "@/lib/inventoryPosPlaceholderPath";
 
+/** Id único: en el proyecto hay muchos `#delete-modal`; `getElementById` devolvía otro modal y el ID no coincidía. */
+const INVENTORY_PRODUCT_DELETE_MODAL_ID = "inventory-product-delete-modal";
+
 type InventoryApiProduct = {
-  id: number;
+  id?: number | string;
+  product_id?: number | string;
+  productId?: number | string;
   sku: string;
   name: string;
   category: string | null;
@@ -26,6 +31,14 @@ type InventoryApiProduct = {
   source?: string | null;
 };
 
+function parseProductIdFromApi(p: InventoryApiProduct): number | undefined {
+  const raw = p.id ?? p.product_id ?? p.productId;
+  if (raw == null || raw === "") return undefined;
+  const n = typeof raw === "number" ? raw : Number(String(raw).trim());
+  if (Number.isFinite(n) && n > 0) return Math.trunc(n);
+  return undefined;
+}
+
 type InventoryListPayload = {
   products: InventoryApiProduct[];
   pagination?: { total: number; limit: number; offset: number; has_more?: boolean };
@@ -33,16 +46,22 @@ type InventoryListPayload = {
 };
 
 function mapApiProductToRow(p: InventoryApiProduct) {
+  const id = parseProductIdFromApi(p);
+  const tableRowKey =
+    id != null
+      ? `id-${id}`
+      : `sku-${encodeURIComponent(String(p.sku ?? "").trim() || "unknown")}`;
   const priceNum = Number(p.unit_price_usd);
   const price =
     p.unit_price_usd == null || Number.isNaN(priceNum)
       ? "—"
       : `$${priceNum.toFixed(2)}`;
   return {
-    id: p.id,
+    id,
+    tableRowKey,
     sku: p.sku ?? "",
     product: p.name ?? "",
-    productImageFallback: inventoryPosProductFallbackPath(p.id, p.sku),
+    productImageFallback: inventoryPosProductFallbackPath(id, p.sku),
     category: p.category ?? "—",
     brand: p.brand ?? "—",
     price,
@@ -72,7 +91,7 @@ export default function ProductListComponent() {
   }, [skuOrNameSearch]);
 
   const hideDeleteModal = useCallback(() => {
-    const el = document.getElementById("delete-modal");
+    const el = document.getElementById(INVENTORY_PRODUCT_DELETE_MODAL_ID);
     if (el) {
       void import("bootstrap").then(({ Modal }) => {
         Modal.getInstance(el)?.hide();
@@ -81,9 +100,16 @@ export default function ProductListComponent() {
     setPendingDeleteId(null);
   }, []);
 
-  const openDeleteModal = useCallback((productId: number) => {
-    setPendingDeleteId(productId);
-    const el = document.getElementById("delete-modal");
+  const openDeleteModal = useCallback((productId: number | undefined | null) => {
+    const id = Number(productId);
+    if (!Number.isFinite(id) || id <= 0) {
+      message.error(
+        "Este producto no tiene un ID numérico válido (id / product_id); no se puede dar de baja desde aquí."
+      );
+      return;
+    }
+    setPendingDeleteId(Math.trunc(id));
+    const el = document.getElementById(INVENTORY_PRODUCT_DELETE_MODAL_ID);
     if (el) {
       void import("bootstrap").then(({ Modal }) => {
         Modal.getOrCreateInstance(el).show();
@@ -157,11 +183,16 @@ export default function ProductListComponent() {
   );
 
   const confirmDelete = useCallback(async () => {
-    if (pendingDeleteId == null) return;
+    const nid = pendingDeleteId;
+    if (nid == null || !Number.isFinite(nid) || nid <= 0) {
+      message.error("No hay producto seleccionado para eliminar (falta ID).");
+      return;
+    }
+    const idStr = String(Math.trunc(nid));
     setDeleting(true);
     try {
       const res = await fetch(
-        `/api/inventory/products/${pendingDeleteId}/deactivate`,
+        `/api/inventory/products/${idStr}/deactivate`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -280,34 +311,54 @@ export default function ProductListComponent() {
       {
         title: "Action",
         dataIndex: "action",
-        render: (_: unknown, record: { id: number }) => (
-          <div className="action-table-data">
-            <div className="edit-delete-action">
-              <Link
-                className="me-2 p-2"
-                href={`${route.productdetails}?id=${record.id}`}
-              >
-                <Eye className="feather-view" />
-              </Link>
-              <Link
-                className="me-2 p-2"
-                href={`${route.editproduct}?id=${record.id}`}
-              >
-                <Edit className="feather-edit" />
-              </Link>
-              <Link
-                className="confirm-text p-2"
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  openDeleteModal(record.id);
-                }}
-              >
-                <Trash2 className="feather-trash-2" />
-              </Link>
+        render: (_: unknown, record: { id?: number; sku: string }) => {
+          const pid = record.id;
+          const hasId = pid != null && Number.isFinite(Number(pid)) && Number(pid) > 0;
+          const detailHref = hasId
+            ? `${route.productdetails}?id=${pid}`
+            : "#";
+          const editHref = hasId ? `${route.editproduct}?id=${pid}` : "#";
+          return (
+            <div className="action-table-data">
+              <div className="edit-delete-action">
+                <Link
+                  className="me-2 p-2"
+                  href={detailHref}
+                  onClick={(e) => {
+                    if (!hasId) {
+                      e.preventDefault();
+                      message.warning("Falta ID de producto para abrir el detalle.");
+                    }
+                  }}
+                >
+                  <Eye className="feather-view" />
+                </Link>
+                <Link
+                  className="me-2 p-2"
+                  href={editHref}
+                  onClick={(e) => {
+                    if (!hasId) {
+                      e.preventDefault();
+                      message.warning("Falta ID de producto para editar.");
+                    }
+                  }}
+                >
+                  <Edit className="feather-edit" />
+                </Link>
+                <Link
+                  className="confirm-text p-2"
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    openDeleteModal(pid);
+                  }}
+                >
+                  <Trash2 className="feather-trash-2" />
+                </Link>
+              </div>
             </div>
-          </div>
-        ),
+          );
+        },
       },
     ],
     [route.productdetails, route.editproduct, openDeleteModal]
@@ -672,6 +723,7 @@ export default function ProductListComponent() {
                 <Spin spinning={loading}>
                   <Table
                     props={dataSource.length}
+                    rowKey="tableRowKey"
                     columns={columns}
                     dataSource={dataSource}
                     hideBuiltinSearch
@@ -687,7 +739,7 @@ export default function ProductListComponent() {
       </div>
       <>
         {/* delete modal */}
-        <div className="modal fade" id="delete-modal">
+        <div className="modal fade" id={INVENTORY_PRODUCT_DELETE_MODAL_ID}>
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="page-wrapper-new p-0">
@@ -713,7 +765,12 @@ export default function ProductListComponent() {
                     <button
                       type="button"
                       className="btn btn-primary fs-13 fw-medium p-2 px-3"
-                      disabled={deleting || pendingDeleteId == null}
+                      disabled={
+                        deleting ||
+                        pendingDeleteId == null ||
+                        !Number.isFinite(pendingDeleteId) ||
+                        pendingDeleteId <= 0
+                      }
                       onClick={() => void confirmDelete()}
                     >
                       {deleting ? "Eliminando…" : "Yes Delete"}
