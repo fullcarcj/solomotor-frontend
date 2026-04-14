@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Select from "react-select";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
@@ -9,6 +9,10 @@ import "slick-carousel/slick/slick-theme.css";
 import Link from "next/link";
 import CounterTwo from "@/core/common/counter/counterTwo";
 import PosModals from "@/core/modals/pos-modal/posModals";
+import PosInventoryProductGrid, {
+  filterPosProductsByTab,
+  type PosInventoryApiProduct,
+} from "./PosInventoryProductGrid";
 
 export default function Pos4Component() {
   const [activeTab, setActiveTab] = useState("all");
@@ -55,6 +59,79 @@ export default function Pos4Component() {
     { value: "ana", label: "Ana" },
     { value: "elza", label: "Elza" },
   ];
+
+  const [posProducts, setPosProducts] = useState<PosInventoryApiProduct[]>([]);
+  const [posInventoryLoading, setPosInventoryLoading] = useState(true);
+  const [posInventoryError, setPosInventoryError] = useState<string | null>(null);
+  const [posSearchInput, setPosSearchInput] = useState("");
+  const [posDebouncedSearch, setPosDebouncedSearch] = useState("");
+  const posLoadSeqRef = useRef(0);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setPosDebouncedSearch(posSearchInput.trim()), 400);
+    return () => window.clearTimeout(t);
+  }, [posSearchInput]);
+
+  const loadPosInventory = useCallback(
+    async (opts?: { signal?: AbortSignal }): Promise<void> => {
+      const signal = opts?.signal;
+      const seq = ++posLoadSeqRef.current;
+      setPosInventoryLoading(true);
+      setPosInventoryError(null);
+      try {
+        const params = new URLSearchParams();
+        const q = posDebouncedSearch;
+        if (q) {
+          params.set("search", q);
+          params.set("limit", "500");
+        } else {
+          params.set("limit", "200");
+        }
+        params.set("offset", "0");
+        const res = await fetch(`/api/inventory/products?${params}`, {
+          cache: "no-store",
+          ...(signal ? { signal } : {}),
+        });
+        let body: unknown;
+        try {
+          body = await res.json();
+        } catch {
+          throw new Error("Respuesta no JSON del servidor");
+        }
+        if (!res.ok) {
+          const msg =
+            (body as { error?: { message?: string; code?: string } })?.error?.message ||
+            (body as { error?: { code?: string } })?.error?.code ||
+            res.statusText;
+          throw new Error(msg);
+        }
+        if (seq !== posLoadSeqRef.current) return;
+        const payload = (body as { data?: { products?: PosInventoryApiProduct[] } }).data;
+        setPosProducts(payload?.products ?? []);
+      } catch (e) {
+        if (signal?.aborted) return;
+        if (seq !== posLoadSeqRef.current) return;
+        setPosInventoryError(
+          e instanceof Error ? e.message : "Error al cargar productos"
+        );
+      } finally {
+        if (seq === posLoadSeqRef.current) setPosInventoryLoading(false);
+      }
+    },
+    [posDebouncedSearch]
+  );
+
+  useEffect(() => {
+    const ac = new AbortController();
+    void loadPosInventory({ signal: ac.signal });
+    return () => ac.abort();
+  }, [loadPosInventory]);
+
+  const visiblePosInventoryProducts = useMemo(
+    () => filterPosProductsByTab(posProducts, activeTab),
+    [posProducts, activeTab]
+  );
+
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
@@ -110,6 +187,8 @@ export default function Pos4Component() {
                         type="text"
                         className="form-control"
                         placeholder="Search Product"
+                        value={posSearchInput}
+                        onChange={(e) => setPosSearchInput(e.target.value)}
                       />
                     </div>
                     <Link href="#" className="btn btn-sm btn-primary">
@@ -130,7 +209,7 @@ export default function Pos4Component() {
                   >
                     <Link href="#">
                       <img
-                        src="assets/img/categories/category-01.svg"
+                        src="/assets/img/categories/category-01.svg"
                         alt="Categories"
                       />
                     </Link>
@@ -147,7 +226,7 @@ export default function Pos4Component() {
                   >
                     <Link href="#">
                       <img
-                        src="assets/img/categories/category-02.svg"
+                        src="/assets/img/categories/category-02.svg"
                         alt="Categories"
                       />
                     </Link>
@@ -164,7 +243,7 @@ export default function Pos4Component() {
                   >
                     <Link href="#">
                       <img
-                        src="assets/img/categories/category-03.svg"
+                        src="/assets/img/categories/category-03.svg"
                         alt="Categories"
                       />
                     </Link>
@@ -181,7 +260,7 @@ export default function Pos4Component() {
                   >
                     <Link href="#">
                       <img
-                        src="assets/img/categories/category-04.svg"
+                        src="/assets/img/categories/category-04.svg"
                         alt="Categories"
                       />
                     </Link>
@@ -198,7 +277,7 @@ export default function Pos4Component() {
                   >
                     <Link href="#">
                       <img
-                        src="assets/img/categories/category-05.svg"
+                        src="/assets/img/categories/category-05.svg"
                         alt="Categories"
                       />
                     </Link>
@@ -215,7 +294,7 @@ export default function Pos4Component() {
                   >
                     <Link href="#">
                       <img
-                        src="assets/img/categories/category-06.svg"
+                        src="/assets/img/categories/category-06.svg"
                         alt="Categories"
                       />
                     </Link>
@@ -232,7 +311,7 @@ export default function Pos4Component() {
                   >
                     <Link href="#">
                       <img
-                        src="assets/img/categories/category-07.svg"
+                        src="/assets/img/categories/category-07.svg"
                         alt="Categories"
                       />
                     </Link>
@@ -249,7 +328,7 @@ export default function Pos4Component() {
                   >
                     <Link href="#">
                       <img
-                        src="assets/img/categories/category-02.svg"
+                        src="/assets/img/categories/category-02.svg"
                         alt="Categories"
                       />
                     </Link>
@@ -260,988 +339,14 @@ export default function Pos4Component() {
                 </Slider>
                 <div className="pos-products">
                   <div className="tabs_container">
-                    <div
-                      className={`tab_content ${
-                        activeTab === "all" ? "active" : ""
-                      } `}
-                      data-tab="all"
-                    >
-                      <div className="row row-cols-xxl-5 g-3">
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-01.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Charger Cable</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">$30</h6>
-                                <p className="text-pink">40 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card active"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-02.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Apple Airpods 2</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $120
-                                </h6>
-                                <p className="text-pink">25 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-03.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Vacuum Cleaner</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $800
-                                </h6>
-                                <p className="text-pink">12 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-04.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Realme 8 Pro</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $700
-                                </h6>
-                                <p className="text-pink">18 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-05.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Vacuum Robot</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $600
-                                </h6>
-                                <p className="text-pink">35 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-06.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Apple Watch Series 9</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $300
-                                </h6>
-                                <p className="text-pink">08 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-07.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Apple Watch Series 9</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $300
-                                </h6>
-                                <p className="text-pink">08 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-08.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Bracelet</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $1430
-                                </h6>
-                                <p className="text-pink">13 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-09.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">YETI Flask</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $1560
-                                </h6>
-                                <p className="text-pink">30 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-10.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Osmo Med Kit</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $410
-                                </h6>
-                                <p className="text-pink">15 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-11.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Celestique Perfume</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $150
-                                </h6>
-                                <p className="text-pink">45 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-12.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Dell XPS 13</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $1140
-                                </h6>
-                                <p className="text-pink">22 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-13.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Cheese Snack</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">$15</h6>
-                                <p className="text-pink">55 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-14.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Blue Boot Shoes</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $320
-                                </h6>
-                                <p className="text-pink">30 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-15.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Sonic Aura X7</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $230
-                                </h6>
-                                <p className="text-pink">20 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-16.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Brown Formal Shoes</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $160
-                                </h6>
-                                <p className="text-pink">13 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-17.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Apple Iphone 13 </Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $1200
-                                </h6>
-                                <p className="text-pink">15 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-18.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">PixelCrafter 3000</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $900
-                                </h6>
-                                <p className="text-pink">20 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-19.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Citrify Orange Juice</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">$80</h6>
-                                <p className="text-pink">16 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-20.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Aroma Coffee Maker</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $170
-                                </h6>
-                                <p className="text-pink">35 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div
-                      className={`tab_content ${
-                        activeTab === "headphones" ? "active" : ""
-                      } `}
-                      data-tab="headphones"
-                    >
-                      <div className="row row-cols-xxl-5 g-3">
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-02.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Apple Airpods 2</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $120
-                                </h6>
-                                <p className="text-pink">25 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-15.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Sonic Aura X7</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $1200
-                                </h6>
-                                <p className="text-pink">15 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div
-                      className={`tab_content ${
-                        activeTab === "shoes" ? "active" : ""
-                      } `}
-                      data-tab="shoes"
-                    >
-                      <div className="row row-cols-xxl-5 g-3">
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-14.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Blue Boot Shoes</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $320
-                                </h6>
-                                <p className="text-pink">30 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-16.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Brown Formal Shoes</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $160
-                                </h6>
-                                <p className="text-pink">13 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div
-                      className={`tab_content ${
-                        activeTab === "mobiles" ? "active" : ""
-                      } `}
-                      data-tab="mobiles"
-                    >
-                      <div className="row row-cols-xxl-5 g-3">
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-01.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Charger Cable</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">$30</h6>
-                                <p className="text-pink">40 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-04.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Realme 8 Pro</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $700
-                                </h6>
-                                <p className="text-pink">18 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-17.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Apple Iphone 13 </Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $1200
-                                </h6>
-                                <p className="text-pink">15 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div
-                      className={`tab_content ${
-                        activeTab === "watches" ? "active" : ""
-                      } `}
-                      data-tab="watches"
-                    >
-                      <div className="row row-cols-xxl-5 g-3">
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-07.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Apple Watch Series 9</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $300
-                                </h6>
-                                <p className="text-pink">08 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div
-                      className={`tab_content ${
-                        activeTab === "laptops" ? "active" : ""
-                      } `}
-                      data-tab="laptops"
-                    >
-                      <div className="row row-cols-xxl-5">
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-12.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Dell XPS 13</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $1140
-                                </h6>
-                                <p className="text-pink">22 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-01.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Charger Cable</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">$30</h6>
-                                <p className="text-pink">40 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div
-                      className={`tab_content ${
-                        activeTab === "homeneed" ? "active" : ""
-                      } `}
-                      data-tab="homeneed"
-                    >
-                      <div className="row row-cols-xxl-5">
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-03.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Vacuum Cleaner</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $800
-                                </h6>
-                                <p className="text-pink">12 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-05.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Vacuum Robot</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $600
-                                </h6>
-                                <p className="text-pink">35 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-13.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Cheese Snack</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">$15</h6>
-                                <p className="text-pink">55 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-19.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Citrify Orange Juice</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">$80</h6>
-                                <p className="text-pink">16 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-20.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Aroma Coffee Maker</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $170
-                                </h6>
-                                <p className="text-pink">35 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div
-                      className={`tab_content ${
-                        activeTab === "headphone" ? "active" : ""
-                      } `}
-                      data-tab="headphone"
-                    >
-                      <div className="row row-cols-xxl-5">
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-02.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Apple Airpods 2</Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $120
-                                </h6>
-                                <p className="text-pink">25 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl">
-                          <div
-                            className="product-info card"
-                            onClick={() => setShowAlert1(!showAlert1)}
-                            tabIndex={0}
-                          >
-                            <Link href="#" className="product-image">
-                              <img
-                                src="assets/img/products/pos-product-15.jpg"
-                                alt="Products"
-                              />
-                            </Link>
-                            <div className="product-content">
-                              <h6 className="fs-14 fw-bold mb-1">
-                                <Link href="#">Apple Iphone 13 </Link>
-                              </h6>
-                              <div className="d-flex align-items-center justify-content-between">
-                                <h6 className="text-teal fs-14 fw-bold">
-                                  $1200
-                                </h6>
-                                <p className="text-pink">15 Pcs</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                    <div className="tab_content active" data-tab={activeTab}>
+                      <PosInventoryProductGrid
+                        products={visiblePosInventoryProducts}
+                        loading={posInventoryLoading}
+                        error={posInventoryError}
+                        onProductCardClick={() => setShowAlert1(!showAlert1)}
+                        variant="pos4"
+                      />
                     </div>
                   </div>
                 </div>
@@ -1287,7 +392,7 @@ export default function Pos4Component() {
                   <div className="product-wrap">
                     <div className="empty-cart">
                       <div className="mb-1">
-                        <img src="assets/img/icons/empty-cart.svg" alt="img" />
+                        <img src="/assets/img/icons/empty-cart.svg" alt="img" />
                       </div>
                       <p className="fw-bold">No Products Selected</p>
                     </div>
@@ -1598,7 +703,7 @@ export default function Pos4Component() {
                         data-bs-toggle="modal"
                         data-bs-target="#payment-cash"
                       >
-                        <img src="assets/img/icons/cash-icon.svg" alt="img" />
+                        <img src="/assets/img/icons/cash-icon.svg" alt="img" />
                         <p className="fw-medium">Cash</p>
                       </Link>
                     </div>
@@ -1609,7 +714,7 @@ export default function Pos4Component() {
                         data-bs-toggle="modal"
                         data-bs-target="#payment-card"
                       >
-                        <img src="assets/img/icons/card.svg" alt="img" />
+                        <img src="/assets/img/icons/card.svg" alt="img" />
                         <p className="fw-medium">Card</p>
                       </Link>
                     </div>
@@ -1620,7 +725,7 @@ export default function Pos4Component() {
                         data-bs-toggle="modal"
                         data-bs-target="#payment-points"
                       >
-                        <img src="assets/img/icons/points.svg" alt="img" />
+                        <img src="/assets/img/icons/points.svg" alt="img" />
                         <p className="fw-medium">Points</p>
                       </Link>
                     </div>
@@ -1631,7 +736,7 @@ export default function Pos4Component() {
                         data-bs-toggle="modal"
                         data-bs-target="#payment-deposit"
                       >
-                        <img src="assets/img/icons/deposit.svg" alt="img" />
+                        <img src="/assets/img/icons/deposit.svg" alt="img" />
                         <p className="fw-medium">Deposit</p>
                       </Link>
                     </div>
@@ -1642,7 +747,7 @@ export default function Pos4Component() {
                         data-bs-toggle="modal"
                         data-bs-target="#payment-cheque"
                       >
-                        <img src="assets/img/icons/cheque.svg" alt="img" />
+                        <img src="/assets/img/icons/cheque.svg" alt="img" />
                         <p className="fw-medium">Cheque</p>
                       </Link>
                     </div>
