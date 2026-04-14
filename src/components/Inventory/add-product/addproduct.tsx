@@ -19,7 +19,14 @@ import {
   Image,
 } from "react-feather";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { ProductFirebaseSlotImage } from "@/components/Inventory/ProductThumb";
 import { inventoryPosProductFallbackPath } from "@/lib/inventoryPosPlaceholderPath";
 import { normalizeInventoryImageKey } from "@/lib/productImageUrl";
@@ -60,6 +67,15 @@ function slugify(s: string) {
     .trim()
     .replace(/\s+/g, "-")
     .replace(/[^a-z0-9-]/g, "");
+}
+
+/** Número ≥ 0, `undefined` si vacío, `null` si inválido. */
+function parseNonNegativeOptional(raw: string): number | undefined | null {
+  const t = raw.trim();
+  if (t === "") return undefined;
+  const n = Number(t);
+  if (Number.isNaN(n) || n < 0) return null;
+  return n;
 }
 
 function mergeSelectOption(
@@ -344,6 +360,8 @@ export default function AddProductComponent({
     { blob: Blob; preview: string }[]
   >([]);
   const [uploadingImages, setUploadingImages] = useState(false);
+  /** Guardado PATCH a BD + pipeline de imágenes (modo edición). */
+  const [isSaving, setIsSaving] = useState(false);
   const pendingImagesRef = useRef(pendingImages);
   pendingImagesRef.current = pendingImages;
 
@@ -465,7 +483,10 @@ export default function AddProductComponent({
     });
   };
 
-  const uploadPendingToFirebase = async () => {
+  const uploadPendingToFirebase = async (opts?: {
+    /** Si true, no muestra aviso cuando no hay cambios de imagen (p. ej. tras guardar solo datos en BD). */
+    skipNoopMessage?: boolean;
+  }) => {
     const k = normalizeInventoryImageKey(sku);
     if (!k) {
       message.error("El SKU es obligatorio para nombrar las imágenes.");
@@ -474,7 +495,9 @@ export default function AddProductComponent({
     const hasDelete = markedForDelete.size > 0;
     const hasUpload = pendingImages.length > 0;
     if (!hasDelete && !hasUpload) {
-      message.info("No hay cambios de imágenes pendientes.");
+      if (!opts?.skipNoopMessage) {
+        message.info("No hay cambios de imágenes pendientes.");
+      }
       return;
     }
 
@@ -542,6 +565,94 @@ export default function AddProductComponent({
     }
   };
 
+  const saveEditProductToDb = async () => {
+    const id = initialProduct?.id;
+    if (id == null || !Number.isFinite(Number(id))) {
+      throw new Error("Falta ID del producto.");
+    }
+    const name = productName.trim();
+    if (!name) {
+      message.error("El nombre del producto es obligatorio.");
+      throw new Error("VALIDATION");
+    }
+    const unit = parseNonNegativeOptional(unitPrice);
+    const sq = parseNonNegativeOptional(stockQty);
+    const sm = parseNonNegativeOptional(stockMin);
+    if (unit === null) {
+      message.error("Precio costo inválido.");
+      throw new Error("VALIDATION");
+    }
+    if (sq === null) {
+      message.error("Cantidad inválida.");
+      throw new Error("VALIDATION");
+    }
+    if (sm === null) {
+      message.error("Quantity Alert inválido.");
+      throw new Error("VALIDATION");
+    }
+
+    const category =
+      categoryVal &&
+      String(categoryVal.value).toLowerCase() !== "choose" &&
+      String(categoryVal.label || categoryVal.value).trim()
+        ? String(categoryVal.label || categoryVal.value).trim()
+        : null;
+    const brand =
+      brandVal &&
+      String(brandVal.value).toLowerCase() !== "choose" &&
+      String(brandVal.label || brandVal.value).trim()
+        ? String(brandVal.label || brandVal.value).trim()
+        : null;
+
+    const body: Record<string, unknown> = {
+      name,
+      description: description.trim() === "" ? null : description.trim(),
+      category,
+      brand,
+    };
+    if (unit !== undefined) body.unit_price_usd = unit;
+    if (sq !== undefined) body.stock_qty = sq;
+    if (sm !== undefined) body.stock_min = sm;
+
+    const res = await fetch(`/api/inventory/products/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+    let parsed: { data?: unknown; error?: { message?: string } };
+    try {
+      parsed = (await res.json()) as typeof parsed;
+    } catch {
+      throw new Error("Respuesta no JSON del servidor");
+    }
+    if (!res.ok) {
+      throw new Error(
+        parsed.error?.message ?? `Error al guardar producto (${res.status})`
+      );
+    }
+    message.success("Datos del producto guardados en el servidor.");
+  };
+
+  const handleFormSubmit = async (ev: FormEvent) => {
+    ev.preventDefault();
+    if (isEdit && initialProduct?.id != null) {
+      setIsSaving(true);
+      try {
+        await saveEditProductToDb();
+        await uploadPendingToFirebase({ skipNoopMessage: true });
+      } catch (e) {
+        if (e instanceof Error && e.message !== "VALIDATION") {
+          message.error(e.message);
+        }
+      } finally {
+        setIsSaving(false);
+      }
+      return;
+    }
+    void uploadPendingToFirebase();
+  };
+
   return (
     <>
       <div className="page-wrapper">
@@ -574,13 +685,7 @@ export default function AddProductComponent({
             <Alert type="error" message={loadError} className="mb-3" showIcon />
           ) : null}
           {/* /add */}
-          <form
-            className="add-product-form"
-            onSubmit={(ev) => {
-              ev.preventDefault();
-              void uploadPendingToFirebase();
-            }}
-          >
+          <form className="add-product-form" onSubmit={handleFormSubmit}>
             <div className="add-product">
               <div
                 className="accordions-items-seperate"
@@ -1239,10 +1344,12 @@ export default function AddProductComponent({
                 <button
                   type="submit"
                   className="btn btn-primary"
-                  disabled={uploadingImages}
+                  disabled={uploadingImages || isSaving}
                 >
-                  {uploadingImages
-                    ? "Subiendo…"
+                  {uploadingImages || isSaving
+                    ? isEdit
+                      ? "Guardando…"
+                      : "Subiendo…"
                     : isEdit
                       ? "Save Changes"
                       : "Guardar imágenes (Firebase)"}

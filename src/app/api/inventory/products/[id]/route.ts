@@ -81,6 +81,45 @@ export async function GET(_req: NextRequest, context: RouteCtx) {
 }
 
 /**
+ * Proxy PATCH → webhook-receiver /api/inventory/products/:id
+ * (nombre, descripción, categoría, marca, precio, stock).
+ */
+export async function PATCH(req: NextRequest, context: RouteCtx) {
+  const cfg = proxyConfig();
+  if ("error" in cfg) return cfg.error;
+  const { base, secret } = cfg;
+  const { id: rawId } = await context.params;
+  const id = normalizeProductRouteId(rawId);
+
+  if (!/^\d+$/.test(id)) {
+    return NextResponse.json(
+      { error: { code: "INVALID_ID", message: "ID de producto inválido" } },
+      { status: 400 }
+    );
+  }
+
+  const payload = await req.text();
+  const upstream = await fetch(`${base}/api/inventory/products/${id}`, {
+    method: "PATCH",
+    headers: {
+      "X-Admin-Secret": secret,
+      "Content-Type": "application/json",
+    },
+    body: payload || "{}",
+    cache: "no-store",
+  });
+
+  const body = await upstream.text();
+  return new NextResponse(body, {
+    status: upstream.status,
+    headers: {
+      "Content-Type":
+        upstream.headers.get("Content-Type") ?? "application/json",
+    },
+  });
+}
+
+/**
  * Proxy DELETE → webhook-receiver /api/inventory/products/:id
  */
 export async function DELETE(_req: NextRequest, context: RouteCtx) {
