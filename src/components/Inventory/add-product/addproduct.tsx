@@ -10,7 +10,7 @@ import Addunits from "@/core/modals/inventory/addunits";
 import AddVariant from "@/core/modals/inventory/addvariant";
 import AddVarientNew from "@/core/modals/inventory/addVarientNew";
 import { all_routes } from "@/data/all_routes";
-import { Alert, message } from "antd";
+import { Alert, message, Popconfirm } from "antd";
 import {
   ArrowLeft,
   Info,
@@ -20,7 +20,12 @@ import {
 } from "react-feather";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { normalizeInventoryImageKey } from "@/lib/productImageUrl";
+import {
+  firebaseStorageORootFromBase,
+  normalizeInventoryImageKey,
+  productImageBaseUrl,
+  productImageStoragePrefix,
+} from "@/lib/productImageUrl";
 import { fileToWebpBlob } from "@/lib/encodeImageWebpClient";
 import Select from "react-select";
 export type InventoryProductDetail = {
@@ -46,6 +51,9 @@ type CategoryProductRow = {
 };
 
 type SelectOption = { value: string; label: string };
+
+/** Estado visual por slot de imagen Firebase (edición). */
+type FirebaseSlotUi = "loading" | "ok" | "empty";
 
 /** Valor de `Unit` que muestra el campo `pcs_unit` (Piezas por Juego). */
 const UNIT_VALUE_JUEGO_SET_COMBO = "juegoSetCombo";
@@ -330,6 +338,15 @@ export default function AddProductComponent({
   const [pendingImages, setPendingImages] = useState<
     { blob: Blob; preview: string }[]
   >([]);
+  /** URLs públicas de imágenes ya guardadas en Firebase (solo edición). */
+  const [firebaseGalleryUrls, setFirebaseGalleryUrls] = useState<string[]>(
+    []
+  );
+  /** Por slot 1–9: comprobando imagen, existe (muestra miniatura + X) o no hay archivo. */
+  const [firebaseSlotUi, setFirebaseSlotUi] = useState<
+    Partial<Record<number, FirebaseSlotUi>>
+  >({});
+  const [firebaseGalleryNonce, setFirebaseGalleryNonce] = useState(0);
   const [uploadingImages, setUploadingImages] = useState(false);
   const pendingImagesRef = useRef(pendingImages);
   pendingImagesRef.current = pendingImages;
@@ -339,6 +356,41 @@ export default function AddProductComponent({
       pendingImagesRef.current.forEach((p) => URL.revokeObjectURL(p.preview));
     };
   }, []);
+
+  /** Misma convención que `product-images/upload`: `{prefix}/{safe}_{index}.webp`. */
+  useEffect(() => {
+    if (!isEdit) {
+      setFirebaseGalleryUrls([]);
+      setFirebaseSlotUi({});
+      return;
+    }
+    const base = productImageBaseUrl();
+    const key = normalizeInventoryImageKey(sku);
+    if (!base || !key) {
+      setFirebaseGalleryUrls([]);
+      setFirebaseSlotUi({});
+      return;
+    }
+    const root = firebaseStorageORootFromBase(base);
+    if (!root) {
+      setFirebaseGalleryUrls([]);
+      setFirebaseSlotUi({});
+      return;
+    }
+    const safe = key.replace(/[/\\?%*:|"<>]/g, "_");
+    const prefix = productImageStoragePrefix();
+    const urls: string[] = [];
+    for (let i = 1; i <= 9; i++) {
+      const path = `${prefix}/${safe}_${i}.webp`;
+      urls.push(
+        `${root}/${encodeURIComponent(path)}?alt=media&v=${firebaseGalleryNonce}`
+      );
+    }
+    setFirebaseGalleryUrls(urls);
+    const nextUi: Partial<Record<number, FirebaseSlotUi>> = {};
+    for (let s = 1; s <= 9; s++) nextUi[s] = "loading";
+    setFirebaseSlotUi(nextUi);
+  }, [isEdit, sku, firebaseGalleryNonce]);
 
   const removePendingAt = (idx: number) => {
     setPendingImages((prev) => {
@@ -392,6 +444,32 @@ export default function AddProductComponent({
     });
   };
 
+  const deleteFirebaseSlot = async (slot: number) => {
+    const k = normalizeInventoryImageKey(sku);
+    if (!k) return;
+    try {
+      const res = await fetch("/api/inventory/product-images/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sku: k, index: slot }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: { message?: string };
+      };
+      if (!res.ok) {
+        throw new Error(
+          data?.error?.message ?? `Error HTTP ${res.status}`
+        );
+      }
+      message.success("Imagen eliminada de Firebase.");
+      setFirebaseGalleryNonce((n) => n + 1);
+    } catch (err) {
+      message.error(
+        err instanceof Error ? err.message : "No se pudo eliminar la imagen"
+      );
+    }
+  };
+
   const uploadPendingToFirebase = async () => {
     const k = normalizeInventoryImageKey(sku);
     if (!k) {
@@ -425,6 +503,7 @@ export default function AddProductComponent({
       message.success("Imágenes guardadas en Firebase.");
       pendingImages.forEach((p) => URL.revokeObjectURL(p.preview));
       setPendingImages([]);
+      setFirebaseGalleryNonce((n) => n + 1);
     } catch (err) {
       message.error(
         err instanceof Error ? err.message : "Error al subir imágenes"
@@ -998,6 +1077,70 @@ export default function AddProductComponent({
                                 </div>
                               </div>
                             </div>
+                            {isEdit && firebaseGalleryUrls.length === 9
+                              ? firebaseGalleryUrls.map((url, idx) => {
+                                  const slot = idx + 1;
+                                  const ui = firebaseSlotUi[slot] ?? "loading";
+                                  if (ui === "empty") return null;
+                                  if (ui === "loading") {
+                                    return (
+                                      <img
+                                        key={`fb-probe-${slot}-${firebaseGalleryNonce}`}
+                                        src={url}
+                                        alt=""
+                                        className="add-product-fb-probe-offscreen"
+                                        decoding="async"
+                                        onLoad={() => {
+                                          setFirebaseSlotUi((prev) => {
+                                            if (prev[slot] === "empty") {
+                                              return prev;
+                                            }
+                                            return { ...prev, [slot]: "ok" };
+                                          });
+                                        }}
+                                        onError={() => {
+                                          setFirebaseSlotUi((prev) => ({
+                                            ...prev,
+                                            [slot]: "empty",
+                                          }));
+                                        }}
+                                      />
+                                    );
+                                  }
+                                  return (
+                                    <div
+                                      className="phone-img"
+                                      key={`fb-${slot}-${firebaseGalleryNonce}`}
+                                    >
+                                      <img
+                                        src={url}
+                                        alt={`Imagen ${slot} (Firebase)`}
+                                        decoding="async"
+                                      />
+                                      <Popconfirm
+                                        title="¿Eliminar esta imagen?"
+                                        description="Se borrará el archivo en Firebase Storage."
+                                        okText="Eliminar"
+                                        cancelText="Cancelar"
+                                        okButtonProps={{ danger: true }}
+                                        onConfirm={() => {
+                                          void deleteFirebaseSlot(slot);
+                                        }}
+                                      >
+                                        <Link
+                                          href="#"
+                                          onClick={(e) =>
+                                            e.preventDefault()
+                                          }
+                                          aria-label={`Eliminar imagen ${slot} de Firebase`}
+                                        >
+                                          <X className="x-square-add remove-product" />
+                                        </Link>
+                                      </Popconfirm>
+                                    </div>
+                                  );
+                                })
+                              : null}
                             {pendingImages.map((img, idx) => (
                               <div className="phone-img" key={img.preview}>
                                 <img src={img.preview} alt={`Vista ${idx + 1}`} />
@@ -1014,6 +1157,17 @@ export default function AddProductComponent({
                                 Completa el SKU para habilitar la subida (se
                                 guardan como {`SKU_1.webp`}, {`SKU_2.webp`}… en la
                                 carpeta del bucket configurada).
+                              </p>
+                            ) : null}
+                            {isEdit &&
+                            normalizeInventoryImageKey(sku) &&
+                            !productImageBaseUrl() ? (
+                              <p className="text-muted small mt-2 mb-0 add-choosen--product-images-hint w-100">
+                                Define{" "}
+                                <code className="small">NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL</code>{" "}
+                                (URL base del objeto en Firebase Storage, como
+                                en consola) para ver aquí las imágenes ya
+                                subidas.
                               </p>
                             ) : null}
                           </div>
