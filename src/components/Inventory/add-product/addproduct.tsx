@@ -19,7 +19,7 @@ import {
   Image,
 } from "react-feather";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { normalizeInventoryImageKey } from "@/lib/productImageUrl";
 import { fileToWebpBlob } from "@/lib/encodeImageWebpClient";
 import Select from "react-select";
@@ -34,6 +34,8 @@ export type InventoryProductDetail = {
   stock_qty?: string | number | null;
   stock_min?: string | number | null;
   stock_max?: string | number | null;
+  /** Referencia de categoría Mercado Libre (p. ej. MLV…) si el backend la expone. */
+  category_ml?: string | null;
 };
 
 /** Fila de `category_products` expuesta por GET /api/inventory/category-products. */
@@ -133,6 +135,12 @@ export default function AddProductComponent({
   );
   const [unitVal, setUnitVal] = useState<SelectOption | null>(null);
   const [pcsUnitVal, setPcsUnitVal] = useState<SelectOption | null>(null);
+  /** Filas completas del catálogo (descripción + category_ml para MLV). */
+  const [categoryMlRows, setCategoryMlRows] = useState<CategoryProductRow[]>(
+    []
+  );
+  /** Texto mostrado: categoría de publicación ML Venezuela (MLV) asociada al producto. */
+  const [predictedMlCategory, setPredictedMlCategory] = useState("");
 
   useEffect(() => {
     setStoreVal(STORE_OPTIONS[0] ?? null);
@@ -204,6 +212,7 @@ export default function AddProductComponent({
           throw new Error(msg);
         }
         const rows = body.data?.categories ?? [];
+        setCategoryMlRows(rows);
         const seen = new Set<string>();
         const fromApi: SelectOption[] = [];
         for (const r of rows) {
@@ -223,6 +232,7 @@ export default function AddProductComponent({
             e instanceof Error ? e.message : "No se pudieron cargar categorías"
           );
           setCategoryRemoteBase([...CATEGORY_CHOOSE]);
+          setCategoryMlRows([]);
         }
       }
     })();
@@ -239,6 +249,56 @@ export default function AddProductComponent({
       ),
     [categoryRemoteBase, initialProduct]
   );
+
+  const normalizeMlvHint = useCallback((raw: string) => {
+    const t = raw.trim();
+    if (!t) return "";
+    const u = t.toUpperCase();
+    if (u.startsWith("MLV")) return t;
+    return `MLV-${t}`;
+  }, []);
+
+  const refreshPredictedMlCategory = useCallback(() => {
+    const label = (categoryVal?.label ?? "").trim();
+    if (!label || label.toLowerCase() === "choose") {
+      setPredictedMlCategory("");
+      message.warning("Elige una categoría de producto primero.");
+      return;
+    }
+    const row = categoryMlRows.find(
+      (r) =>
+        (r.category_descripcion ?? "").trim().toLowerCase() ===
+        label.toLowerCase()
+    );
+    const raw = (row?.category_ml ?? "").trim();
+    if (!raw) {
+      setPredictedMlCategory("");
+      message.info(
+        "No hay referencia ML en el catálogo para esta categoría (category_products.category_ml)."
+      );
+      return;
+    }
+    setPredictedMlCategory(normalizeMlvHint(raw));
+    message.success("Categoría Mercado Libre actualizada desde el catálogo.");
+  }, [categoryVal, categoryMlRows, normalizeMlvHint]);
+
+  useEffect(() => {
+    if (!categoryMlRows.length) return;
+    const fromProduct = initialProduct?.category_ml?.trim();
+    if (fromProduct) {
+      setPredictedMlCategory(normalizeMlvHint(fromProduct));
+      return;
+    }
+    const cat = initialProduct?.category?.trim();
+    if (!cat) return;
+    const row = categoryMlRows.find(
+      (r) =>
+        (r.category_descripcion ?? "").trim().toLowerCase() === cat.toLowerCase()
+    );
+    const raw = (row?.category_ml ?? "").trim();
+    if (raw) setPredictedMlCategory(normalizeMlvHint(raw));
+  }, [initialProduct, categoryMlRows, normalizeMlvHint]);
+
   const brandOptions = useMemo(
     () => mergeSelectOption(BRAND_OPTIONS_BASE, initialProduct?.brand ?? null),
     [initialProduct]
@@ -699,9 +759,6 @@ export default function AddProductComponent({
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                               />
-                              <p className="text-muted fs-14 mt-1 mb-0">
-                                Máximo 60 palabras
-                              </p>
                             </div>
                           </div>
                         </div>
@@ -776,34 +833,85 @@ export default function AddProductComponent({
                               />
                             </div>
                           </div>
-                        ) : null}
-                      </div>
-                      <div className="row">
-                        {!isEdit ? (
-                          <div className="col-lg-4 col-sm-6 col-12">
+                        ) : (
+                          <div className="col-sm-6 col-12">
                             <div className="mb-3">
-                              <label className="form-label">
-                                Quantity
-                                <span className="text-danger ms-1">*</span>
+                              <label
+                                className="form-label"
+                                htmlFor="predicted-ml-category"
+                              >
+                                Categoria Predicha Mercadolibre
                               </label>
-                              <input
-                                type="text"
-                                className="form-control"
-                                value={stockQty}
-                                onChange={(e) =>
-                                  setStockQty(e.target.value)
-                                }
-                              />
+                              <div className="input-group">
+                                <input
+                                  id="predicted-ml-category"
+                                  type="text"
+                                  className="form-control"
+                                  readOnly
+                                  value={predictedMlCategory}
+                                  placeholder="Ej. MLV-… (Actualizar tras Category)"
+                                />
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-primary"
+                                  onClick={() => refreshPredictedMlCategory()}
+                                >
+                                  Actualizar
+                                </button>
+                              </div>
                             </div>
                           </div>
-                        ) : null}
-                        <div
-                          className={
-                            !isEdit
-                              ? "col-lg-4 col-sm-6 col-12"
-                              : "col-sm-6 col-12"
-                          }
-                        >
+                        )}
+                      </div>
+                      {showPcsUnit ? (
+                        <div className="row">
+                          <div className="col-12">
+                            <div className="mb-3">
+                              <label
+                                className="form-label"
+                                htmlFor="predicted-ml-category"
+                              >
+                                Categoria Predicha Mercadolibre
+                              </label>
+                              <div className="input-group">
+                                <input
+                                  id="predicted-ml-category"
+                                  type="text"
+                                  className="form-control"
+                                  readOnly
+                                  value={predictedMlCategory}
+                                  placeholder="Ej. MLV-… (Actualizar tras Category)"
+                                />
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-primary"
+                                  onClick={() => refreshPredictedMlCategory()}
+                                >
+                                  Actualizar
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                      <div className="row">
+                        <div className="col-lg-4 col-sm-6 col-12">
+                          <div className="mb-3">
+                            <label className="form-label">
+                              Cantidad Ingresar
+                              <span className="text-danger ms-1">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control"
+                              value={stockQty}
+                              onChange={(e) =>
+                                setStockQty(e.target.value)
+                              }
+                            />
+                          </div>
+                        </div>
+                        <div className="col-lg-4 col-sm-6 col-12">
                           <div className="mb-3">
                             <label className="form-label">
                               Precio costo
@@ -819,13 +927,7 @@ export default function AddProductComponent({
                             />
                           </div>
                         </div>
-                        <div
-                          className={
-                            !isEdit
-                              ? "col-lg-4 col-sm-6 col-12"
-                              : "col-sm-6 col-12"
-                          }
-                        >
+                        <div className="col-lg-4 col-sm-6 col-12">
                           <div className="mb-3">
                             <label className="form-label">
                               Quantity Alert
