@@ -483,7 +483,8 @@ span {
         margin: 0 15px;
     }
 }
-.image-upload-new{
+/** Variante alta (vistas producto con .productviews); no aplica a `.image-upload.image-upload-new` (120×120 en _common) */
+.image-upload-new:not(.image-upload) {
     min-height: 258px;
     .productviewscontent{
         display: -webkit-box;

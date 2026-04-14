@@ -27,6 +27,56 @@
     @include mixins.respond-below(custom767) {
         flex-wrap: wrap;
     }
+    /** Fila tipo galería: recuadro “Add Images” cuadrado 120×120 alineado con miniaturas */
+    &.add-choosen--product-images {
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 20px;
+        row-gap: 12px;
+
+        .add-product-image-upload-wrap {
+            /** `flex: auto` usa el min-width intrínseco del <input type="file"> y alarga la fila */
+            flex: 0 0 120px;
+            width: 120px;
+            max-width: 120px;
+            min-width: 0;
+        }
+
+        .image-upload.image-upload-new,
+        .image-upload.image-upload-two {
+            margin-bottom: 0;
+            border-radius: 10px;
+
+            .image-uploads {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                height: 100%;
+                padding: 8px 6px;
+                box-sizing: border-box;
+            }
+
+            h4 {
+                font-size: variables.$font-size-12;
+                line-height: 1.25;
+                margin: 4px 0 0;
+                text-align: center;
+            }
+        }
+
+        .phone-img {
+            margin-left: 0;
+        }
+
+        .phone-img img {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+        }
+    }
     .phone-img{
         position: relative;
         width: 120px;

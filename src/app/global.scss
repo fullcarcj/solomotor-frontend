@@ -1709,7 +1709,8 @@ body {
   }
 }
 
-.image-upload .image-uploads {
+/** No aplicar al slot 120×120 (compacto define su padding en _common / _add-product) */
+.image-upload:not(.image-upload-new):not(.image-upload-two) .image-uploads {
   padding: 43px 0;
 }
 

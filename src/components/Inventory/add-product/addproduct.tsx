@@ -12,7 +12,7 @@ import Addunits from "@/core/modals/inventory/addunits";
 import AddVariant from "@/core/modals/inventory/addvariant";
 import AddVarientNew from "@/core/modals/inventory/addVarientNew";
 import { all_routes } from "@/data/all_routes";
-import { Alert, DatePicker } from "antd";
+import { Alert, DatePicker, message } from "antd";
 import {
   ArrowLeft,
   Calendar,
@@ -25,7 +25,9 @@ import {
   Image,
 } from "react-feather";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { normalizeInventoryImageKey } from "@/lib/productImageUrl";
+import { fileToWebpBlob } from "@/lib/encodeImageWebpClient";
 import Select from "react-select";
 import TagInput from "@/core/common/Taginput";
 export type InventoryProductDetail = {
@@ -204,16 +206,118 @@ export default function AddProductComponent({
       label: "Accidental Protection Plan",
     },
   ];
-  const [isImageVisible, setIsImageVisible] = useState(true);
+  const [pendingImages, setPendingImages] = useState<
+    { blob: Blob; preview: string }[]
+  >([]);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const pendingImagesRef = useRef(pendingImages);
+  pendingImagesRef.current = pendingImages;
 
-  const handleRemoveProduct = () => {
-    setIsImageVisible(false);
-  };
-  const [isImageVisible1, setIsImageVisible1] = useState(true);
+  useEffect(() => {
+    return () => {
+      pendingImagesRef.current.forEach((p) => URL.revokeObjectURL(p.preview));
+    };
+  }, []);
 
-  const handleRemoveProduct1 = () => {
-    setIsImageVisible1(false);
+  const removePendingAt = (idx: number) => {
+    setPendingImages((prev) => {
+      const copy = [...prev];
+      const removed = copy.splice(idx, 1)[0];
+      if (removed) URL.revokeObjectURL(removed.preview);
+      return copy;
+    });
   };
+
+  const handleImageFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    e.target.value = "";
+    if (!files.length) return;
+
+    if (!normalizeInventoryImageKey(sku)) {
+      message.warning("Indica el SKU antes de añadir imágenes.");
+      return;
+    }
+
+    setPendingImages((prev) => {
+      const remaining = 9 - prev.length;
+      if (remaining <= 0) {
+        message.warning("Máximo 9 imágenes.");
+        return prev;
+      }
+
+      void (async () => {
+        const part = files.slice(0, remaining);
+        const built: { blob: Blob; preview: string }[] = [];
+        for (const f of part) {
+          try {
+            const blob = await fileToWebpBlob(f);
+            built.push({ blob, preview: URL.createObjectURL(blob) });
+          } catch {
+            message.error(`No se pudo convertir a WebP: ${f.name}`);
+          }
+        }
+        if (!built.length) return;
+        setPendingImages((p) => {
+          const space = 9 - p.length;
+          if (space <= 0) {
+            built.forEach((b) => URL.revokeObjectURL(b.preview));
+            return p;
+          }
+          const take = built.slice(0, space);
+          if (take.length < built.length) {
+            built.slice(take.length).forEach((b) => URL.revokeObjectURL(b.preview));
+            message.warning("Solo caben 9 imágenes en total.");
+          }
+          return [...p, ...take];
+        });
+      })();
+
+      return prev;
+    });
+  };
+
+  const uploadPendingToFirebase = async () => {
+    const k = normalizeInventoryImageKey(sku);
+    if (!k) {
+      message.error("El SKU es obligatorio para nombrar las imágenes.");
+      return;
+    }
+    if (pendingImages.length === 0) {
+      message.info("No hay imágenes nuevas para subir.");
+      return;
+    }
+    setUploadingImages(true);
+    try {
+      for (let i = 0; i < pendingImages.length; i++) {
+        const fd = new FormData();
+        fd.append("file", pendingImages[i].blob, `${k}_${i + 1}.webp`);
+        fd.append("sku", k);
+        fd.append("index", String(i + 1));
+        const res = await fetch("/api/inventory/product-images/upload", {
+          method: "POST",
+          body: fd,
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: { message?: string };
+        };
+        if (!res.ok) {
+          throw new Error(
+            data?.error?.message ?? `Error HTTP ${res.status}`
+          );
+        }
+      }
+      message.success("Imágenes guardadas en Firebase.");
+      pendingImages.forEach((p) => URL.revokeObjectURL(p.preview));
+      setPendingImages([]);
+    } catch (err) {
+      message.error(
+        err instanceof Error ? err.message : "Error al subir imágenes"
+      );
+    } finally {
+      setUploadingImages(false);
+    }
+  };
+
   return (
     <>
       <div className="page-wrapper">
@@ -246,7 +350,13 @@ export default function AddProductComponent({
             <Alert type="error" message={loadError} className="mb-3" showIcon />
           ) : null}
           {/* /add */}
-          <form className="add-product-form">
+          <form
+            className="add-product-form"
+            onSubmit={(ev) => {
+              ev.preventDefault();
+              void uploadPendingToFirebase();
+            }}
+          >
             <div className="add-product">
               <div
                 className="accordions-items-seperate"
@@ -480,7 +590,7 @@ export default function AddProductComponent({
                             </label>
                             <input type="text" className="form-control list" />
                             <button
-                              type="submit"
+                              type="button"
                               className="btn btn-primaryadd"
                             >
                               Generate
@@ -964,13 +1074,22 @@ export default function AddProductComponent({
                     <div className="accordion-body border-top">
                       <div className="text-editor add-list add">
                         <div className="col-lg-12">
-                          <div className="add-choosen">
-                            <div className="mb-3">
-                              <div className="image-upload">
-                                <input type="file" />
+                          <div className="add-choosen add-choosen--product-images">
+                            <div className="add-product-image-upload-wrap">
+                              <div className="image-upload image-upload-new">
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  multiple
+                                  disabled={
+                                    !normalizeInventoryImageKey(sku) ||
+                                    uploadingImages
+                                  }
+                                  onChange={handleImageFiles}
+                                />
                                 <div className="image-uploads">
                                   <PlusCircle
-                                  size={14}
+                                    size={14}
                                     data-feather="plus-circle"
                                     className="plus-down-add me-0"
                                   />
@@ -978,34 +1097,24 @@ export default function AddProductComponent({
                                 </div>
                               </div>
                             </div>
-                            {isImageVisible1 && (
-                              <div className="phone-img">
-                                <img
-                                  src="assets/img/products/phone-add-2.png"
-                                  alt="image"
-                                />
-                                <Link href="#">
+                            {pendingImages.map((img, idx) => (
+                              <div className="phone-img" key={img.preview}>
+                                <img src={img.preview} alt={`Vista ${idx + 1}`} />
+                                <Link href="#" onClick={(e) => e.preventDefault()}>
                                   <X
                                     className="x-square-add remove-product"
-                                    onClick={handleRemoveProduct1}
+                                    onClick={() => removePendingAt(idx)}
                                   />
                                 </Link>
                               </div>
-                            )}
-                            {isImageVisible && (
-                              <div className="phone-img">
-                                <img
-                                  src="assets/img/products/phone-add-1.png"
-                                  alt="image"
-                                />
-                                <Link href="#">
-                                  <X
-                                    className="x-square-add remove-product"
-                                    onClick={handleRemoveProduct}
-                                  />
-                                </Link>
-                              </div>
-                            )}
+                            ))}
+                            {!normalizeInventoryImageKey(sku) ? (
+                              <p className="text-muted small mt-2 mb-0 add-choosen--product-images-hint w-100">
+                                Completa el SKU para habilitar la subida (se
+                                guardan como {`SKU_1.webp`}, {`SKU_2.webp`}… en la
+                                carpeta del bucket configurada).
+                              </p>
+                            ) : null}
                           </div>
                         </div>
                       </div>
@@ -1152,8 +1261,14 @@ export default function AddProductComponent({
                 <button type="button" className="btn btn-secondary me-2">
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  Add Product
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={uploadingImages}
+                >
+                  {uploadingImages
+                    ? "Subiendo…"
+                    : "Guardar imágenes (Firebase)"}
                 </button>
               </div>
             </div>

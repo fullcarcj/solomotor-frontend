@@ -530,7 +530,23 @@ th,td {
         margin-bottom: 0;
         width: 120px;
         height: 120px;
+        min-width: 120px;
+        max-width: 120px;
+        overflow: hidden;
         border: 1px dashed rgba(145, 158, 171, 0.32);
+        position: relative;
+        input[type="file"] {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            min-width: 0;
+            opacity: 0;
+            cursor: pointer;
+            z-index: 9;
+        }
         .image-uploads{
             padding: 43px 0;
         }
@@ -556,9 +572,35 @@ th,td {
             color: variables.$gray-300;
         }
     }
-    &.image-upload-new{
-        input[type="file"]{
-            height: 258px;
+    /** Slot compacto 120×120 (alineado con miniaturas de producto / galería) */
+    &.image-upload-new {
+        width: 120px;
+        height: 120px;
+        min-width: 120px;
+        max-width: 120px;
+        min-height: 120px;
+        max-height: 120px;
+        margin-bottom: 0;
+        box-sizing: border-box;
+        border-radius: 10px;
+        border-style: dashed;
+        overflow: hidden;
+        /**
+         * `input[type=file]` tiene ancho mínimo intrínseco (~240px+). En flex, eso
+         * estiraba el recuadro a barra horizontal. Sacamos el input del flujo.
+         */
+        input[type="file"] {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            min-width: 0;
+            max-width: none;
+            opacity: 0;
+            cursor: pointer;
+            z-index: 9;
         }
         .image-uploads {
             display: -webkit-box;
@@ -572,6 +614,14 @@ th,td {
             -ms-flex-pack: center;
             height: 100%;
             flex-direction: column;
+            padding: 8px 6px;
+            box-sizing: border-box;
+            h4 {
+                font-size: variables.$font-size-12;
+                line-height: 1.25;
+                margin: 4px 0 0;
+                text-align: center;
+            }
         }
     }
 }
