@@ -14,6 +14,17 @@ type Props = {
   alt?: string;
 };
 
+function rankCandidate(url: string): number {
+  let score = 0;
+  // Prioriza la convención real del proyecto: SKU_1.webp
+  if (/_1\.webp(?:\?|$)/i.test(url)) score += 100;
+  if (/\.webp(?:\?|$)/i.test(url)) score += 40;
+  // Prefiere rutas en carpeta (`/productos/` o `/products/`) sobre raíz plana.
+  if (/%2F/i.test(url) || /\/(productos|products)\//i.test(url)) score += 15;
+  if (/flatroot/i.test(url)) score -= 10;
+  return score;
+}
+
 /** Resuelve en background la primera URL válida; evita parpadeo y bucles de error. */
 export function ProductThumb({
   sku,
@@ -42,7 +53,8 @@ export function ProductThumb({
   const candidates = useMemo(() => {
     if (!base) return [fallback];
     const urls = firebaseProductImageCandidateUrls(sku, base);
-    return [...urls, fallback];
+    const ranked = [...urls].sort((a, b) => rankCandidate(b) - rankCandidate(a));
+    return [...ranked, fallback];
   }, [sku, base, fallback]);
 
   const [src, setSrc] = useState(fallback);
@@ -58,10 +70,14 @@ export function ProductThumb({
       });
 
     void (async () => {
-      for (const url of candidates) {
-        const ok = await probe(url);
-        if (!cancelled && ok) {
-          setSrc(url);
+      // Resolver en lotes paralelos para evitar esperar 1x1 decenas de 404.
+      const BATCH_SIZE = 8;
+      for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
+        const batch = candidates.slice(i, i + BATCH_SIZE);
+        const results = await Promise.all(batch.map((u) => probe(u)));
+        const okIdx = results.findIndex(Boolean);
+        if (okIdx >= 0) {
+          if (!cancelled) setSrc(batch[okIdx]);
           return;
         }
       }
