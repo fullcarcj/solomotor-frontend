@@ -3,10 +3,11 @@
 
 import { all_routes } from '@/data/all_routes';
 import Link from 'next/link';
-import React from 'react'
+import React, { useState } from 'react'
 
 
 const TwoColumnSidebar = () => {
+    const [isInventoryMenuOpen, setIsInventoryMenuOpen] = useState(false);
 
     const route = all_routes;
 
@@ -338,68 +339,81 @@ const TwoColumnSidebar = () => {
                                 </div>
                                 <div className="tab-pane fade" id="inventory">
                                     <ul>
-                                        <li className="menu-title">
-                                            <span>Inventory</span>
-                                        </li>
-                                        <li>
-                                            <Link href={route.productlist}>
-                                                <span>Products</span>
+                                        <li className="submenu">
+                                            <Link
+                                                href="#"
+                                                className={isInventoryMenuOpen ? 'subdrop' : ''}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    setIsInventoryMenuOpen((open) => !open);
+                                                }}
+                                                aria-expanded={isInventoryMenuOpen}
+                                            >
+                                                <span>Inventory</span>
+                                                <span className="menu-arrow" />
                                             </Link>
-                                        </li>
-                                        <li>
-                                            <Link href={route.addproduct}>
-                                                <span>Create Product</span>
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link href={route.expiredproduct}>
-                                                <span>Expired Products</span>
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link href={route.lowstock}>
-                                                <span>Low Stocks</span>
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link href={route.categorylist}>
-                                                <span>Category</span>
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link href={route.subcategories}>
-                                                <span>Sub Category</span>
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link href={route.brandlist}>
-                                                <span>Brands</span>
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link href={route.units}>
-                                                <span>Units</span>
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link href={route.variantattributes}>
-                                                <span>Variant Attributes</span>
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link href={route.warranty}>
-                                                <span>Warranties</span>
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link href={route.barcode}>
-                                                <span>Print Barcode</span>
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link href={route.qrcode}>
-                                                <span>Print QR Code</span>
-                                            </Link>
+                                            <ul style={{ display: isInventoryMenuOpen ? 'block' : 'none' }}>
+                                                <li>
+                                                    <Link href={route.productlist}>
+                                                        <span>Products</span>
+                                                    </Link>
+                                                </li>
+                                                <li>
+                                                    <Link href={route.addproduct}>
+                                                        <span>Create Product</span>
+                                                    </Link>
+                                                </li>
+                                                <li>
+                                                    <Link href={route.expiredproduct}>
+                                                        <span>Expired Products</span>
+                                                    </Link>
+                                                </li>
+                                                <li>
+                                                    <Link href={route.lowstock}>
+                                                        <span>Low Stocks</span>
+                                                    </Link>
+                                                </li>
+                                                <li>
+                                                    <Link href={route.categorylist}>
+                                                        <span>Category</span>
+                                                    </Link>
+                                                </li>
+                                                <li>
+                                                    <Link href={route.subcategories}>
+                                                        <span>Sub Category</span>
+                                                    </Link>
+                                                </li>
+                                                <li>
+                                                    <Link href={route.brandlist}>
+                                                        <span>Brands</span>
+                                                    </Link>
+                                                </li>
+                                                <li>
+                                                    <Link href={route.units}>
+                                                        <span>Units</span>
+                                                    </Link>
+                                                </li>
+                                                <li>
+                                                    <Link href={route.variantattributes}>
+                                                        <span>Variant Attributes</span>
+                                                    </Link>
+                                                </li>
+                                                <li>
+                                                    <Link href={route.warranty}>
+                                                        <span>Warranties</span>
+                                                    </Link>
+                                                </li>
+                                                <li>
+                                                    <Link href={route.barcode}>
+                                                        <span>Print Barcode</span>
+                                                    </Link>
+                                                </li>
+                                                <li>
+                                                    <Link href={route.qrcode}>
+                                                        <span>Print QR Code</span>
+                                                    </Link>
+                                                </li>
+                                            </ul>
                                         </li>
                                     </ul>
                                 </div>

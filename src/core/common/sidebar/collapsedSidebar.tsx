@@ -13,6 +13,7 @@ const CollapsedSidebar = () => {
   const [isActive5, setIsActive5] = useState(false);
   const [isActive6, setIsActive6] = useState(false);
   const [isActive7, setIsActive7] = useState(false);
+  const [isActive8, setIsActive8] = useState(false);
 
   const handleSelectClick = () => {
     setIsActive(!isActive);
@@ -34,6 +35,9 @@ const CollapsedSidebar = () => {
   };
   const handleSelectClick7 = () => {
     setIsActive7(!isActive7);
+  };
+  const handleSelectClick8 = () => {
+    setIsActive8(!isActive8);
   };
 
   return (
@@ -250,65 +254,78 @@ const CollapsedSidebar = () => {
               id="product"
               aria-labelledby="messages-tab"
             >
-              <li>
-                <Link href="product-list">
-                  <span>Products</span>
+              <li className="submenu">
+                <Link
+                  href="#"
+                  onClick={handleSelectClick8}
+                  className={isActive8 ? "subdrop" : ""}
+                  aria-expanded={isActive8}
+                >
+                  <span>Inventory</span>
+                  <span className="menu-arrow" />
                 </Link>
-              </li>
-              <li>
-                <Link href="add-product">
-                  <span>Create Product</span>
-                </Link>
-              </li>
-              <li>
-                <Link href="expired-products">
-                  <span>Expired Products</span>
-                </Link>
-              </li>
-              <li>
-                <Link href="low-stocks">
-                  <span>Low Stocks</span>
-                </Link>
-              </li>
-              <li>
-                <Link href="category-list">
-                  <span>Category</span>
-                </Link>
-              </li>
-              <li>
-                <Link href="sub-categories">
-                  <span>Sub Category</span>
-                </Link>
-              </li>
-              <li>
-                <Link href="brand-list">
-                  <span>Brands</span>
-                </Link>
-              </li>
-              <li>
-                <Link href="units">
-                  <span>Units</span>
-                </Link>
-              </li>
-              <li>
-                <Link href="varriant-attributes">
-                  <span>Variant Attributes</span>
-                </Link>
-              </li>
-              <li>
-                <Link href="warranty">
-                  <span>Warranties</span>
-                </Link>
-              </li>
-              <li>
-                <Link href="barcode">
-                  <span>Print Barcode</span>
-                </Link>
-              </li>
-              <li>
-                <Link href="qrcode">
-                  <span>Print QR Code</span>
-                </Link>
+                <ul style={{ display: isActive8 ? "block" : "none" }}>
+                  <li>
+                    <Link href="product-list">
+                      <span>Products</span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="add-product">
+                      <span>Create Product</span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="expired-products">
+                      <span>Expired Products</span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="low-stocks">
+                      <span>Low Stocks</span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="category-list">
+                      <span>Category</span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="sub-categories">
+                      <span>Sub Category</span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="brand-list">
+                      <span>Brands</span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="units">
+                      <span>Units</span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="varriant-attributes">
+                      <span>Variant Attributes</span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="warranty">
+                      <span>Warranties</span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="barcode">
+                      <span>Print Barcode</span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="qrcode">
+                      <span>Print QR Code</span>
+                    </Link>
+                  </li>
+                </ul>
               </li>
             </ul>
             <ul className="tab-pane" id="sales" aria-labelledby="profile-tab">

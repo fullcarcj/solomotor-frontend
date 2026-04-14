@@ -10,6 +10,28 @@ import { all_routes } from "@/data/all_routes";
 import { ChevronsLeft } from "react-feather";
 import PerfectScrollbar from 'react-perfect-scrollbar';
 import 'react-perfect-scrollbar/dist/css/styles.css';
+
+/** Recoge todos los `link` de un árbol de submenú (rutas activas / resaltado del padre). */
+function collectSubmenuLinks(nodes: any[] | undefined): string[] {
+  const acc: string[] = [];
+  const walk = (list: any[] | undefined) => {
+    if (!list) return;
+    for (const n of list) {
+      if (
+        n?.link &&
+        typeof n.link === "string" &&
+        n.link.length > 0 &&
+        n.link !== "#"
+      ) {
+        acc.push(n.link);
+      }
+      if (n?.submenuItems?.length) walk(n.submenuItems);
+    }
+  };
+  walk(nodes);
+  return acc;
+}
+
 export default function Sidebar() {
   const route = all_routes;
   const pathname = usePathname();
@@ -56,7 +78,6 @@ export default function Sidebar() {
     // Update the DOM based on `dataLayout` and `expandMenus`
     document.body.classList.toggle("expand-menu", expandMenus || dataLayout === "layout-hovered");
   }, [expandMenus, dataLayout]);
-  
 
   return (
     <>
@@ -129,22 +150,20 @@ export default function Sidebar() {
           <div className="sidebar-inner slimscroll">
             <div id="sidebar-menu" className="sidebar-menu">
               <ul>
-                {SidebarData?.map((mainLabel: any, index: any) => (
+                {SidebarData?.map((mainLabel: any, index: any) => {
+                  const topItems = mainLabel?.submenuItems ?? [];
+                  const hideSectionHdr =
+                    topItems.length === 1 &&
+                    topItems[0]?.submenu === true &&
+                    topItems[0]?.label === mainLabel?.label;
+                  return (
                   <li className="submenu-open" key={index}>
-                    <h6 className="submenu-hdr">{mainLabel?.label}</h6>
+                    {!hideSectionHdr ? (
+                      <h6 className="submenu-hdr">{mainLabel?.label}</h6>
+                    ) : null}
                     <ul>
                       {mainLabel?.submenuItems?.map((title: any, i: any) => {
-                        const link_array: any[] = [];
-                        title?.submenuItems?.map((link: any) => {
-                          link_array.push(link?.link);
-                          if (link?.submenu) {
-                            link?.submenuItems?.map((item: any) => {
-                              link_array.push(item?.link);
-                            });
-                          }
-                          return link_array;
-                        });
-                        title.links = link_array;
+                        title.links = collectSubmenuLinks(title?.submenuItems);
                         return (
                           <React.Fragment key={i}>
                             <li
@@ -162,12 +181,20 @@ export default function Sidebar() {
                                     ? "noopener noreferrer"
                                     : undefined
                                 }
-                                onClick={() => toggleSidebar(title?.label)}
+                                onClick={(e) => {
+                                  if (
+                                    title?.submenu &&
+                                    (!title?.link || title.link === "#")
+                                  ) {
+                                    e.preventDefault();
+                                  }
+                                  toggleSidebar(title?.label);
+                                }}
                                 className={`${
                                   subOpen === title?.label ? "subdrop" : ""
                                 } ${
                                   title?.links?.includes(pathname)
-                                    ? "subdrop active"
+                                    ? "active"
                                     : ""
                                 }`}
                               >
@@ -194,15 +221,19 @@ export default function Sidebar() {
                                       <Link
                                         href={item?.link || "#"}
                                         className={`${
-                                          item?.submenuItems
-                                            ?.map((link: any) => link.link)
-                                            .includes(pathname) ||
+                                          collectSubmenuLinks(
+                                            item?.submenuItems
+                                          ).includes(pathname) ||
                                           item?.link === pathname
                                             ? "active"
                                             : ""
                                         } ${
                                           subsidebar === item?.label
                                             ? "subdrop"
+                                            : ""
+                                        }${
+                                          item?.icon
+                                            ? " submenu-link-with-icon"
                                             : ""
                                         }`}
                                         target={item?.target || undefined}
@@ -211,11 +242,22 @@ export default function Sidebar() {
                                             ? "noopener noreferrer"
                                             : undefined
                                         }
-                                        onClick={() =>
-                                          toggleSubsidebar(item?.label)
-                                        }
+                                        onClick={(e) => {
+                                          if (
+                                            item?.submenu &&
+                                            (!item?.link || item.link === "#")
+                                          ) {
+                                            e.preventDefault();
+                                          }
+                                          toggleSubsidebar(item?.label);
+                                        }}
                                       >
-                                        {item?.label}
+                                        {item?.icon ? (
+                                          <i
+                                            className={`ti ti-${item.icon} me-2`}
+                                          />
+                                        ) : null}
+                                        <span>{item?.label}</span>
                                         {item?.submenu && (
                                           <span className="menu-arrow inside-submenu" />
                                         )}
@@ -238,11 +280,9 @@ export default function Sidebar() {
                                                     ? "submenu-two subdrop"
                                                     : "submenu-two"
                                                 } ${
-                                                  items?.submenuItems
-                                                    ?.map(
-                                                      (link: any) => link.link
-                                                    )
-                                                    .includes(pathname) ||
+                                                  collectSubmenuLinks(
+                                                    items?.submenuItems
+                                                  ).includes(pathname) ||
                                                   items?.link === pathname
                                                     ? "active"
                                                     : ""
@@ -270,7 +310,8 @@ export default function Sidebar() {
                       })}
                     </ul>
                   </li>
-                ))}
+                );
+                })}
               </ul>
             </div>
           </div>

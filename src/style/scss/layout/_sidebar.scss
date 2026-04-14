@@ -924,6 +924,16 @@ body.mini-sidebar{
         display: none;
     }
 }
+/* Submenú con icono Tabler: sin bullet; sangría ~3 espacios (3ch) a la izquierda. */
+.sidebar .sidebar-menu .submenu.submenu-two > a.submenu-link-with-icon,
+.settings-sidebar .sidebar-menu .submenu.submenu-two > a.submenu-link-with-icon {
+    padding: 8px 10px 8px calc(12px + 3ch);
+    &::after {
+        display: none !important;
+        content: none !important;
+    }
+}
+
 .sidebar .sidebar-menu .menu-arrow::before, .settings-sidebar .sidebar-menu .menu-arrow::before {
     left: 5px;
 }
@@ -938,6 +948,9 @@ body.mini-sidebar{
             .submenu-open .submenu ul li a {
                 padding: 8px 10px 8px 30px !important;
            }
+            .submenu-open .submenu ul li a.submenu-link-with-icon {
+                padding: 8px 10px 8px calc(12px + 3ch) !important;
+            }
         } 
     }
     body.layout-mode-rtl.mini-sidebar.expand-menu {
@@ -945,6 +958,9 @@ body.mini-sidebar{
             .submenu-open .submenu ul li a {
                 padding: 8px 30px 8px 10px !important;
            }
+            .submenu-open .submenu ul li a.submenu-link-with-icon {
+                padding: 8px calc(12px + 3ch) 8px 10px !important;
+            }
         } 
     }
 }
