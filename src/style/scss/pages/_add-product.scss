@@ -356,3 +356,14 @@
   padding-left: 10px;
  }
  }
+
+/** Observación: altura inicial alineada con un Select (Brand / react-select ~42px). */
+.add-product .add-product-observation-input {
+    min-height: 42px;
+    height: 42px;
+    padding-top: 0.375rem;
+    padding-bottom: 0.375rem;
+    line-height: 1.5;
+    resize: vertical;
+    overflow-y: auto;
+}

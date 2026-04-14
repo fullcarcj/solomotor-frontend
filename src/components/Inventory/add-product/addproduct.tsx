@@ -3,7 +3,6 @@
 
 import CounterThree from "@/core/common/counter/counterThree";
 import CommonFooter from "@/core/common/footer/commonFooter";
-import TextEditor from "@/core/common/texteditor/texteditor";
 import CollapesIcon from "@/core/common/tooltip-content/collapes";
 import RefreshIcon from "@/core/common/tooltip-content/refresh";
 import AddBrand from "@/core/modals/inventory/addbrand";
@@ -431,74 +430,108 @@ export default function AddProductComponent({
                           </div>
                         </div>
                       </div>
-                      <div className="row">
-                        <div className="col-sm-6 col-12">
-                          <div className="mb-3">
-                            <label className="form-label">
-                              Product Name
-                              <span className="text-danger ms-1">*</span>
-                            </label>
-                            <input
-                              type="text"
-                              className="form-control"
-                              value={productName}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                setProductName(v);
-                                if (!isEdit) setSlug(slugify(v));
-                              }}
-                            />
+                      {isEdit ? (
+                        <div className="row">
+                          <div className="col-sm-6 col-12">
+                            <div className="mb-3">
+                              <label className="form-label">
+                                Product Name
+                                <span className="text-danger ms-1">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                className="form-control"
+                                value={productName}
+                                onChange={(e) => setProductName(e.target.value)}
+                              />
+                            </div>
+                          </div>
+                          <div className="col-sm-6 col-12">
+                            <div className="mb-3">
+                              <label className="form-label">
+                                SKU<span className="text-danger ms-1">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                className="form-control"
+                                value={sku}
+                                onChange={(e) => setSku(e.target.value)}
+                                readOnly
+                              />
+                            </div>
                           </div>
                         </div>
-                        <div className="col-sm-6 col-12">
-                          <div className="mb-3">
-                            <label className="form-label">
-                              Slug<span className="text-danger ms-1">*</span>
-                            </label>
-                            <input
-                              type="text"
-                              className="form-control"
-                              value={slug}
-                              onChange={(e) => setSlug(e.target.value)}
-                            />
+                      ) : (
+                        <>
+                          <div className="row">
+                            <div className="col-sm-6 col-12">
+                              <div className="mb-3">
+                                <label className="form-label">
+                                  Product Name
+                                  <span className="text-danger ms-1">*</span>
+                                </label>
+                                <input
+                                  type="text"
+                                  className="form-control"
+                                  value={productName}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    setProductName(v);
+                                    setSlug(slugify(v));
+                                  }}
+                                />
+                              </div>
+                            </div>
+                            <div className="col-sm-6 col-12">
+                              <div className="mb-3">
+                                <label className="form-label">
+                                  Slug<span className="text-danger ms-1">*</span>
+                                </label>
+                                <input
+                                  type="text"
+                                  className="form-control"
+                                  value={slug}
+                                  onChange={(e) => setSlug(e.target.value)}
+                                />
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                      <div className="row">
-                        <div className="col-sm-6 col-12">
-                          <div className="mb-3 list position-relative">
-                            <label className="form-label">
-                              SKU<span className="text-danger ms-1">*</span>
-                            </label>
-                            <input
-                              type="text"
-                              className="form-control list"
-                              value={sku}
-                              onChange={(e) => setSku(e.target.value)}
-                              readOnly={isEdit}
-                            />
-                            <button
-                              type="button"
-                              className="btn btn-primaryadd"
-                            >
-                              Generate
-                            </button>
+                          <div className="row">
+                            <div className="col-sm-6 col-12">
+                              <div className="mb-3 list position-relative">
+                                <label className="form-label">
+                                  SKU<span className="text-danger ms-1">*</span>
+                                </label>
+                                <input
+                                  type="text"
+                                  className="form-control list"
+                                  value={sku}
+                                  onChange={(e) => setSku(e.target.value)}
+                                />
+                                <button
+                                  type="button"
+                                  className="btn btn-primaryadd"
+                                >
+                                  Generate
+                                </button>
+                              </div>
+                            </div>
+                            <div className="col-sm-6 col-12">
+                              <div className="mb-3">
+                                <label className="form-label">
+                                  Selling Type
+                                  <span className="text-danger ms-1">*</span>
+                                </label>
+                                <Select
+                                  className="react-select"
+                                  options={sellingtype}
+                                  placeholder="Choose"
+                                />
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                        <div className="col-sm-6 col-12">
-                          <div className="mb-3">
-                            <label className="form-label">
-                              Selling Type
-                              <span className="text-danger ms-1">*</span>
-                            </label>
-                            <Select
-                              className="react-select"
-                              options={sellingtype}
-                              placeholder="Choose"
-                            />
-                          </div>
-                        </div>
-                      </div>
+                        </>
+                      )}
                       <div className="addservice-info">
                         <div className="row">
                           <div className="col-sm-6 col-12">
@@ -558,6 +591,18 @@ export default function AddProductComponent({
                                   Brand
                                   <span className="text-danger ms-1">*</span>
                                 </label>
+                                <Link
+                                  href="#"
+                                  data-bs-toggle="modal"
+                                  data-bs-target="#add-brand"
+                                >
+                                  <PlusCircle
+                                    size={14}
+                                    data-feather="plus-circle"
+                                    className="plus-down-add"
+                                  />
+                                  <span>Add New</span>
+                                </Link>
                               </div>
                               <Select
                                 className="react-select"
@@ -571,70 +616,64 @@ export default function AddProductComponent({
                             </div>
                           </div>
                           <div className="col-sm-6 col-12">
-                            <div className="mb-3">
-                              <div className="add-newplus">
-                                <label className="form-label">
-                                  Unit
-                                  <span className="text-danger ms-1">*</span>
-                                </label>
-                              </div>
-                              <Select
-                                className="react-select"
-                                options={unit}
-                                placeholder="Choose"
+                            <div className="mb-3 add-product-observation">
+                              <label className="form-label">Observación</label>
+                              <textarea
+                                className="form-control add-product-observation-input"
+                                rows={1}
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
                               />
+                              <p className="text-muted fs-14 mt-1 mb-0">
+                                Máximo 60 palabras
+                              </p>
                             </div>
                           </div>
                         </div>
                       </div>
+                      {!isEdit ? (
+                        <div className="row">
+                          <div className="col-lg-6 col-sm-6 col-12">
+                            <div className="mb-3">
+                              <label className="form-label">
+                                Barcode Symbology
+                                <span className="text-danger ms-1">*</span>
+                              </label>
+                              <Select
+                                className="react-select"
+                                options={barcodesymbol}
+                                placeholder="Choose"
+                              />
+                            </div>
+                          </div>
+                          <div className="col-lg-6 col-sm-6 col-12">
+                            <div className="mb-3">
+                              <label className="form-label">
+                                Item Code
+                                <span className="text-danger ms-1">*</span>
+                              </label>
+                              <input type="text" className="form-control" />
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
                       <div className="row">
-                        <div className="col-lg-6 col-sm-6 col-12">
+                        <div className="col-sm-6 col-12">
                           <div className="mb-3">
-                            <label className="form-label">
-                              Barcode Symbology
-                              <span className="text-danger ms-1">*</span>
-                            </label>
+                            <div className="add-newplus">
+                              <label className="form-label">
+                                Unit
+                                <span className="text-danger ms-1">*</span>
+                              </label>
+                            </div>
                             <Select
                               className="react-select"
-                              options={barcodesymbol}
+                              options={unit}
                               placeholder="Choose"
                             />
                           </div>
                         </div>
-                        <div className="col-lg-6 col-sm-6 col-12">
-                          <div className="mb-3 list position-relative">
-                            <label className="form-label">
-                              Item Code
-                              <span className="text-danger ms-1">*</span>
-                            </label>
-                            <input type="text" className="form-control list" />
-                            <button
-                              type="button"
-                              className="btn btn-primaryadd"
-                            >
-                              Generate
-                            </button>
-                          </div>
-                        </div>
                       </div>
-                      {/* Editor */}
-                      <div className="col-lg-12">
-                        <div className="summer-description-box">
-                          <label className="form-label">Description</label>
-                          {isEdit ? (
-                            <textarea
-                              className="form-control"
-                              rows={5}
-                              value={description}
-                              onChange={(e) => setDescription(e.target.value)}
-                            />
-                          ) : (
-                            <TextEditor />
-                          )}
-                          <p className="fs-14 mt-1">Maximum 60 Words</p>
-                        </div>
-                      </div>
-                      {/* /Editor */}
                     </div>
                   </div>
                 </div>
