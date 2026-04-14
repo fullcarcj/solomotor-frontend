@@ -276,17 +276,38 @@ export default function ProductListComponent() {
       {
         title: "Product",
         dataIndex: "product",
-        render: (text: any, record: any) => (
-          <div className="d-flex align-items-center">
-            <Link href="#" className="avatar avatar-md me-2">
-              <ProductThumb
-                sku={record.sku}
-                fallback={record.productImageFallback}
-              />
-            </Link>
-            <Link href="#">{text}</Link>
-          </div>
-        ),
+        render: (text: any, record: any) => {
+          const pid = record.id;
+          const hasId =
+            pid != null && Number.isFinite(Number(pid)) && Number(pid) > 0;
+          const editHref = hasId
+            ? `${route.editproduct}?id=${pid}`
+            : "#";
+          return (
+            <div className="d-flex align-items-center">
+              <Link href="#" className="avatar avatar-md me-2">
+                <ProductThumb
+                  sku={record.sku}
+                  fallback={record.productImageFallback}
+                />
+              </Link>
+              <Link
+                href={editHref}
+                className="text-primary text-decoration-none"
+                onClick={(e) => {
+                  if (!hasId) {
+                    e.preventDefault();
+                    message.warning(
+                      "Falta ID de producto para abrir la edición."
+                    );
+                  }
+                }}
+              >
+                {text}
+              </Link>
+            </div>
+          );
+        },
         sorter: (a: any, b: any) =>
           String(a.product).localeCompare(String(b.product)),
       },
