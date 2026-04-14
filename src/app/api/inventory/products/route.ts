@@ -19,7 +19,11 @@ async function fetchInventoryUpstream(
     cache: "no-store",
   };
   try {
-    return await fetch(url, { ...init, dispatcher: inventoryUpstreamAgent });
+    // `dispatcher` es de undici (Node); no figura en DOM RequestInit pero el fetch de Node lo usa.
+    return await fetch(url, {
+      ...init,
+      dispatcher: inventoryUpstreamAgent,
+    } as RequestInit);
   } catch (e) {
     console.warn(
       "[api/inventory/products] fetch con Agent undici falló, reintento sin dispatcher:",
