@@ -18,7 +18,7 @@ function normalizeProductRouteId(raw: string): string {
  * Proxy POST → webhook-receiver /api/inventory/products/:id/deactivate
  * (misma baja lógica que DELETE; evita proxies que bloquean DELETE).
  */
-export async function POST(_req: NextRequest, context: RouteCtx) {
+export async function POST(req: NextRequest, context: RouteCtx) {
   const base = getWebhookReceiverBaseUrl();
   const secret = getWebhookAdminSecret();
   const { id: rawId } = await context.params;
@@ -56,7 +56,24 @@ export async function POST(_req: NextRequest, context: RouteCtx) {
     );
   }
 
-  const pid = Number(id);
+  let pid = Number(id);
+  try {
+    const body = (await req.json().catch(() => null)) as
+      | { product_id?: number | string; id?: number | string }
+      | null;
+    const maybe = body?.product_id ?? body?.id;
+    const parsed =
+      maybe == null
+        ? Number.NaN
+        : typeof maybe === "number"
+          ? maybe
+          : Number(String(maybe).trim());
+    if (Number.isFinite(parsed) && parsed > 0) {
+      pid = Math.trunc(parsed);
+    }
+  } catch {
+    // Si no llega body JSON, seguimos con el ID de la ruta.
+  }
   const headers: HeadersInit = {
     "X-Admin-Secret": secret,
     "Content-Type": "application/json",
@@ -66,11 +83,11 @@ export async function POST(_req: NextRequest, context: RouteCtx) {
   let upstream = await fetch(pathUrl, {
     method: "POST",
     headers,
-    body: "{}",
+    body: JSON.stringify({ product_id: pid }),
     cache: "no-store",
   });
 
-  if (upstream.status === 404) {
+  if (upstream.status === 404 || upstream.status === 400 || upstream.status === 422) {
     upstream = await fetch(`${base}/api/inventory/products/deactivate`, {
       method: "POST",
       headers,

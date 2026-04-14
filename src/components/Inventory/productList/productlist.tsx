@@ -196,7 +196,7 @@ export default function ProductListComponent() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: "{}",
+          body: JSON.stringify({ product_id: Number(idStr) }),
           cache: "no-store",
         }
       );
@@ -226,6 +226,7 @@ export default function ProductListComponent() {
       message.error(
         e instanceof Error ? e.message : "No se pudo eliminar el producto"
       );
+      hideDeleteModal();
     } finally {
       setDeleting(false);
     }

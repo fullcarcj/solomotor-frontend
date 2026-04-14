@@ -1,0 +1,264 @@
+# ============================================================
+# .cursorrules — Reglas del proyecto v1.1.0
+# Última actualización: 2026-04-14
+# ============================================================
+# FILOSOFÍA:
+#   "Fix first, clean after — pero siempre deja evidencia."
+#   Las reglas son OBLIGATORIAS salvo que se declare explícitamente
+#   un escape hatch en el código con el formato especificado.
+#   Sin escape hatch declarado → la regla aplica sin excepción.
+# ============================================================
+
+# ── MODOS DE OPERACIÓN ─────────────────────────────────────
+# Cursor debe identificar el modo de la tarea antes de comenzar:
+#
+#   [MODE: FIX]      → Bug activo, regresión, error de integración FE↔BE.
+#                      Prioridad: resolver sin romper. Diff mínimo.
+#
+#   [MODE: FEATURE]  → Nueva funcionalidad planificada.
+#                      Aplicar todas las reglas sin excepción.
+#
+#   [MODE: REFACTOR] → Mejora estructural explícitamente solicitada.
+#                      Aplicar todas las reglas sin excepción.
+#
+# Si el modo no está claro, preguntar antes de escribir código.
+# NUNCA asumir modo FEATURE en una tarea que parece un fix.
+
+# ══════════════════════════════════════════════════════════════
+# REGLA 1 — PALETA DE ESTILOS (Tailwind)
+# ══════════════════════════════════════════════════════════════
+#
+# [MODE: FEATURE / REFACTOR] — SIEMPRE:
+#   • No usar colores arbitrarios (text-[#333], bg-[#1a1a1a], etc.)
+#   • Priorizar tokens de tailwind.config: primary, secondary, muted, etc.
+#   • Si el token no existe, proponerlo en tailwind.config PRIMERO.
+#
+# [MODE: FIX] — PERMITIDO con escape hatch:
+#   • Se puede usar color arbitrario temporal si el fix es visual urgente.
+#   • OBLIGATORIO dejar este comentario exacto en la misma línea o arriba:
+#
+#       {/* DEBT-STYLE: text-[#333] — proponer token en tailwind.config */}
+#
+#   • Sin ese comentario, el color arbitrario se considera violación.
+#
+# ✅ CORRECTO (feature):
+#   <p className="text-muted-foreground">...</p>
+#
+# ✅ CORRECTO (fix urgente con evidencia):
+#   {/* DEBT-STYLE: text-[#d32f2f] — proponer token 'destructive-text' */}
+#   <span className="text-[#d32f2f]">Error crítico</span>
+#
+# ❌ INCORRECTO (siempre):
+#   <p className="text-[#333]">...</p>   ← sin comentario DEBT-STYLE
+
+tailwind_no_arbitrary_colors: true
+tailwind_fix_mode_escape: "DEBT-STYLE comment required"
+
+# ══════════════════════════════════════════════════════════════
+# REGLA 2 — REUTILIZACIÓN DE UI
+# ══════════════════════════════════════════════════════════════
+#
+# [MODE: FEATURE / REFACTOR] — SIEMPRE:
+#   • Si un patrón de clases Tailwind se repite ≥3 veces → extraer componente.
+#   • Crear en /components/ui/<NombreComponente>.tsx con props explícitas.
+#   • Documentar en resumen: nombre, props, archivos reemplazados.
+#
+# [MODE: FIX] — DIFERIDO con evidencia obligatoria:
+#   • NO crear ni mover componentes durante un bugfix.
+#   • Si detectas el patrón repetido, NO lo toques. Deja este comentario:
+#
+#       // DEBT-UI: patrón repetido en [archivo1, archivo2, archivo3]
+#       // Extraer a /components/ui/<Nombre> en próximo REFACTOR.
+#       // Prioridad: alta | media | baja
+#
+#   • El comentario es OBLIGATORIO si detectas el patrón. No silencio.
+#
+# ANTI-ESPAGUETI (sin escape hatch en ningún modo):
+#   • Props siempre tipadas (TypeScript). Nunca spreads sin tipar: {...props}
+#   • Componente con más de 3 responsabilidades visuales → subdividir.
+#   • No crear componentes "Dios" (CardWithTableAndModalAndForm.tsx).
+#
+# ✅ CORRECTO (fix, patrón detectado):
+#   // DEBT-UI: className="px-4 py-2 rounded bg-primary text-white"
+#   // repetido en ProductTable.tsx, OrderList.tsx, UserCard.tsx
+#   // Extraer a /components/ui/PrimaryButton.tsx — Prioridad: media
+#
+# ❌ INCORRECTO:
+#   Crear componente nuevo en medio de un bugfix sin declarar DEBT-UI.
+
+ui_extract_repeated_patterns: true
+ui_repeated_threshold: 3
+ui_fix_mode: "DEBT-UI comment required, no extraction during fix"
+ui_component_output_dir: "components/ui"
+
+# ══════════════════════════════════════════════════════════════
+# REGLA 3 — ESTADO EN REACT (sin excepciones en ningún modo)
+# ══════════════════════════════════════════════════════════════
+#
+# APLICA EN TODOS LOS MODOS. No tiene escape hatch.
+#
+# • Modales y formularios: usar useState para item seleccionado y su ID.
+# • El ID se guarda en estado en el momento exacto del click.
+# • El modal lee el ID desde estado, nunca desde el DOM ni closures stale.
+# • Evitar .bind() en handlers cliente. Solo permitido en Server Actions
+#   donde sea estrictamente necesario, con comentario que explique por qué.
+#
+# PATRÓN OBLIGATORIO para delete/edit con modal:
+#
+#   const [selectedId, setSelectedId] = useState<string | null>(null)
+#   const [isOpen, setIsOpen]         = useState(false)
+#
+#   // Al abrir:
+#   onClick={() => { setSelectedId(item.id); setIsOpen(true) }}
+#
+#   // Al confirmar en modal:
+#   onConfirm={async () => { if (selectedId) await deleteItem(selectedId) }}
+#
+# ❌ NUNCA:
+#   onClick={handleDelete.bind(null, item.id)}    ← .bind en cliente
+#   const id = e.currentTarget.dataset.id          ← ID desde DOM
+#   onConfirm={() => deleteItem(item.id)}           ← closure potencialmente stale
+
+react_modal_state_pattern: required
+react_no_bind_client: true
+react_no_id_from_dom: true
+
+# ══════════════════════════════════════════════════════════════
+# REGLA 4 — SEPARACIÓN DE RESPONSABILIDADES
+# ══════════════════════════════════════════════════════════════
+#
+# [MODE: FEATURE / REFACTOR] — SIEMPRE:
+#   • Componentes de presentación no contienen fetch() ni lógica de API.
+#   • Estructura esperada:
+#       /services/<entidad>Service.ts   → fetch, transformación, errores
+#       /hooks/use<Entidad>.ts          → estado derivado, mutaciones
+#       /components/<Entidad>/<C>.tsx   → render + eventos UI únicamente
+#
+# [MODE: FIX] — Fix in-place permitido con deuda declarada:
+#   • Si el bug vive en un componente que mezcla UI + fetch,
+#     corregir IN-PLACE sin mover el fetch ni crear archivos nuevos.
+#   • OBLIGATORIO este bloque de comentario después del fix:
+#
+#       // DEBT-ARCH: fetch inline — mover a /services/<entidad>Service.ts
+#       // Motivo del fix in-place: [descripción breve del bug]
+#       // Prioridad: alta | media | baja
+#
+#   • Sin este bloque, el fix in-place se considera violación.
+#
+# ANTI-ESPAGUETI (sin escape hatch en ningún modo):
+#   • Un archivo de servicio = un recurso / entidad. No mezclar.
+#   • Los hooks no llaman a otros hooks de negocio directamente.
+#   • Las funciones utilitarias van en /utils/, no al final del componente.
+#   • Los tipos van en /types/ o co-localizados; nunca inline anónimos.
+#
+# ✅ CORRECTO (fix con evidencia):
+#   // DEBT-ARCH: fetch inline — mover a /services/inventoryService.ts
+#   // Motivo: payload DELETE incorrecto causaba 400. Fix urgente en prod.
+#   // Prioridad: alta
+#   const res = await fetch(`/api/products/${selectedId}`, { method: 'DELETE' })
+#
+# ❌ INCORRECTO:
+#   fetch() dentro del JSX return, o en useEffect sin servicio ni comentario DEBT-ARCH.
+
+separation_of_concerns: true
+fix_mode_inline_allowed: true
+fix_mode_requires_debt_arch_comment: true
+no_fetch_in_jsx_return: true
+
+# ══════════════════════════════════════════════════════════════
+# REGLA 5 — CRITERIOS DE SALIDA (sin excepciones en ningún modo)
+# ══════════════════════════════════════════════════════════════
+#
+# APLICA EN TODOS LOS MODOS.
+# Antes de terminar, mostrar resumen con esta estructura:
+#
+#   ## Resumen
+#   | Ítem                  | Detalle                              |
+#   |-----------------------|--------------------------------------|
+#   | Modo de la tarea      | [FIX / FEATURE / REFACTOR]           |
+#   | Archivos modificados  | rutas relativas al root              |
+#   | Reglas aplicadas      | lista de reglas cumplidas            |
+#   | Deudas declaradas     | DEBT-STYLE / DEBT-UI / DEBT-ARCH     |
+#   | Request final (si FIX)| método, URL, body exacto             |
+#   | Cómo validar          | pasos concretos en Network o consola |
+#
+# Si no hay deudas → "Ninguna".
+# Si hay deudas → listar con archivo y línea aproximada.
+
+require_exit_summary: true
+exit_summary_includes_debt_log: true
+
+# ══════════════════════════════════════════════════════════════
+# GUARDRAILS ANTI-ESPAGUETI — SIEMPRE, SIN EXCEPCIONES
+# ══════════════════════════════════════════════════════════════
+#
+# Estas restricciones aplican en TODOS los modos, incluyendo FIX.
+# Son la línea que separa "deuda controlada" de "espagueti con arroz".
+# No tienen escape hatch. Si violarlas parece necesario, parar y consultar.
+#
+# G1. Un archivo = una responsabilidad.
+#     Si un archivo ya hace dos cosas distintas, no agregar una tercera
+#     sin declarar DEBT-ARCH con prioridad alta.
+#
+# G2. No duplicar lógica de negocio.
+#     Si ya existe una función que hace lo mismo, usar la existente.
+#     Si hay dos versiones del mismo helper → unificar antes de añadir tercera.
+#
+# G3. No agregar parámetros fantasma a peticiones API.
+#     Solo enviar lo que el backend espera. Sin alt=media, sin campos
+#     inventados. Verificar contrato antes de modificar cualquier payload.
+#
+# G4. No instalar dependencias sin justificación en el resumen de salida.
+#     Si la solución requiere una librería nueva, declararla con motivo.
+#     No instalar "por si acaso" ni para hacer algo que ya existe en el proyecto.
+#
+# G5. No comentar código muerto. Eliminarlo.
+#     Código comentado = deuda invisible. El historial está en git.
+#
+# G6. Diff mínimo en modo FIX.
+#     Solo tocar las líneas necesarias. No reformatear, no renombrar
+#     variables, no reordenar imports en el mismo cambio que el fix.
+#
+# G7. Archivos nuevos: máximo 300 líneas.
+#     Si va a superar 300 líneas, dividir en módulos antes de crearlo.
+#     Para archivos existentes que ya superan 300: no agregar más sin
+#     declarar DEBT-ARCH de split.
+
+guardrails_no_exceptions:
+  - G1_one_file_one_responsibility
+  - G2_no_duplicate_business_logic
+  - G3_no_phantom_api_params
+  - G4_no_unjustified_dependencies
+  - G5_no_commented_dead_code
+  - G6_minimal_diff_in_fix_mode
+  - G7_max_300_lines_new_files
+
+# ══════════════════════════════════════════════════════════════
+# SISTEMA DE DEUDA TÉCNICA — FORMATO ESTÁNDAR
+# ══════════════════════════════════════════════════════════════
+#
+# Todos los escape hatches dejan un comentario DEBT-* trazable.
+# Buscar deuda acumulada: grep -r "DEBT-" src/
+#
+#   DEBT-STYLE  → color/clase Tailwind temporal (Regla 1)
+#   DEBT-UI     → componente pendiente de extraer (Regla 2)
+#   DEBT-ARCH   → lógica pendiente de mover a servicio/hook (Regla 4)
+#
+# Formato mínimo obligatorio para cualquier DEBT-*:
+#
+#   // DEBT-[TIPO]: [qué hay que hacer]
+#   // Destino: [archivo o carpeta donde debe vivir]
+#   // Motivo del diferimiento: [razón breve]
+#   // Prioridad: alta | media | baja
+#
+# Regla de prioridad por defecto:
+#   • Sin prioridad declarada → se asume ALTA.
+#   • DEBT en archivos de integración FE↔BE → siempre ALTA.
+#   • DEBT-STYLE en componente sin lógica → puede ser BAJA.
+#
+# El equipo revisa los DEBT-* en cada sprint de limpieza.
+# Una deuda alta sin resolver después de 2 sprints se escala.
+
+debt_prefix_convention: "DEBT-STYLE | DEBT-UI | DEBT-ARCH"
+debt_searchable_command: "grep -r 'DEBT-' src/"
+debt_default_priority: "alta si no se declara"
