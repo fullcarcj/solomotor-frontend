@@ -42,7 +42,17 @@ export type InventoryProductDetail = {
   stock_max?: string | number | null;
 };
 
+/** Fila de `category_products` expuesta por GET /api/inventory/category-products. */
+type CategoryProductRow = {
+  id: number;
+  category_descripcion: string;
+  category_ml: string | null;
+};
+
 type SelectOption = { value: string; label: string };
+
+/** Valor de `Unit` que muestra el campo `pcs_unit` (Piezas por Juego). */
+const UNIT_VALUE_JUEGO_SET_COMBO = "juegoSetCombo";
 
 function slugify(s: string) {
   return s
@@ -71,10 +81,8 @@ function mergeSelectOption(
   return [{ value: v, label: v }, ...base];
 }
 
-const CATEGORY_OPTIONS_BASE: SelectOption[] = [
+const CATEGORY_CHOOSE: SelectOption[] = [
   { value: "choose", label: "Choose" },
-  { value: "lenovo", label: "Lenovo" },
-  { value: "electronics", label: "Electronics" },
 ];
 
 const BRAND_OPTIONS_BASE: SelectOption[] = [
@@ -115,6 +123,13 @@ export default function AddProductComponent({
   const [unitPrice, setUnitPrice] = useState("");
   const [stockMin, setStockMin] = useState("");
   const [categoryVal, setCategoryVal] = useState<SelectOption | null>(null);
+  const [categoryRemoteBase, setCategoryRemoteBase] = useState<
+    SelectOption[]
+  >(() => [...CATEGORY_CHOOSE]);
+  const [categoriesStatus, setCategoriesStatus] = useState<
+    "idle" | "loading" | "ok" | "error"
+  >("loading");
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
   const [brandVal, setBrandVal] = useState<SelectOption | null>(null);
   const [storeVal, setStoreVal] = useState<SelectOption | null>(
     () => STORE_OPTIONS[0] ?? null
@@ -122,6 +137,8 @@ export default function AddProductComponent({
   const [warehouseVal, setWarehouseVal] = useState<SelectOption | null>(
     () => WAREHOUSE_OPTIONS[0] ?? null
   );
+  const [unitVal, setUnitVal] = useState<SelectOption | null>(null);
+  const [pcsUnitVal, setPcsUnitVal] = useState<SelectOption | null>(null);
 
   useEffect(() => {
     setStoreVal(STORE_OPTIONS[0] ?? null);
@@ -150,13 +167,83 @@ export default function AddProductComponent({
     setBrandVal(b ? { value: b, label: b } : null);
   }, [initialProduct]);
 
+  useEffect(() => {
+    if (unitVal?.value !== UNIT_VALUE_JUEGO_SET_COMBO) {
+      setPcsUnitVal(null);
+    }
+  }, [unitVal]);
+
+  /** Menú react-select en `document.body` para que no lo recorte overflow del acordeón/tarjeta. */
+  const reactSelectPortalProps = useMemo(
+    () => ({
+      menuPortalTarget:
+        typeof document !== "undefined" ? document.body : null,
+      styles: {
+        menuPortal: (base: Record<string, unknown>) => ({
+          ...base,
+          zIndex: 9999,
+        }),
+      },
+    }),
+    []
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setCategoriesStatus("loading");
+      setCategoriesError(null);
+      try {
+        const res = await fetch("/api/inventory/category-products", {
+          cache: "no-store",
+        });
+        const body = (await res.json()) as {
+          data?: { categories?: CategoryProductRow[] };
+          error?: { code?: string; message?: string };
+        };
+        if (cancelled) return;
+        if (!res.ok) {
+          const msg =
+            body?.error?.message ||
+            body?.error?.code ||
+            `Error ${res.status}`;
+          throw new Error(msg);
+        }
+        const rows = body.data?.categories ?? [];
+        const seen = new Set<string>();
+        const fromApi: SelectOption[] = [];
+        for (const r of rows) {
+          const d = (r.category_descripcion ?? "").trim();
+          if (!d) continue;
+          const k = d.toLowerCase();
+          if (seen.has(k)) continue;
+          seen.add(k);
+          fromApi.push({ value: d, label: d });
+        }
+        setCategoryRemoteBase([...CATEGORY_CHOOSE, ...fromApi]);
+        setCategoriesStatus("ok");
+      } catch (e) {
+        if (!cancelled) {
+          setCategoriesStatus("error");
+          setCategoriesError(
+            e instanceof Error ? e.message : "No se pudieron cargar categorías"
+          );
+          setCategoryRemoteBase([...CATEGORY_CHOOSE]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const categoryOptions = useMemo(
     () =>
       mergeSelectOption(
-        CATEGORY_OPTIONS_BASE,
+        categoryRemoteBase,
         initialProduct?.category ?? null
       ),
-    [initialProduct]
+    [categoryRemoteBase, initialProduct]
   );
   const brandOptions = useMemo(
     () => mergeSelectOption(BRAND_OPTIONS_BASE, initialProduct?.brand ?? null),
@@ -180,7 +267,9 @@ export default function AddProductComponent({
     { value: "choose", label: "Choose" },
     { value: "kg", label: "Kg" },
     { value: "pc", label: "Pc" },
+    { value: UNIT_VALUE_JUEGO_SET_COMBO, label: "Juego Set combo" },
   ];
+  const showPcsUnit = unitVal?.value === UNIT_VALUE_JUEGO_SET_COMBO;
   const sellingtype = [
     { value: "choose", label: "Choose" },
     { value: "transactionalSelling", label: "Transactional selling" },
@@ -391,7 +480,7 @@ export default function AddProductComponent({
                             <label className="form-label">
                               Store<span className="text-danger ms-1">*</span>
                             </label>
-                            <Select
+                            <Select {...reactSelectPortalProps}
                               className="react-select"
                               classNamePrefix="react-select"
                               options={STORE_OPTIONS}
@@ -413,7 +502,7 @@ export default function AddProductComponent({
                               Warehouse
                               <span className="text-danger ms-1">*</span>
                             </label>
-                            <Select
+                            <Select {...reactSelectPortalProps}
                               className="react-select"
                               classNamePrefix="react-select"
                               options={WAREHOUSE_OPTIONS}
@@ -522,7 +611,7 @@ export default function AddProductComponent({
                                   Selling Type
                                   <span className="text-danger ms-1">*</span>
                                 </label>
-                                <Select
+                                <Select {...reactSelectPortalProps}
                                   className="react-select"
                                   options={sellingtype}
                                   placeholder="Choose"
@@ -533,11 +622,22 @@ export default function AddProductComponent({
                         </>
                       )}
                       <div className="addservice-info">
+                        {categoriesStatus === "error" && categoriesError ? (
+                          <Alert
+                            type="warning"
+                            showIcon
+                            className="mb-3"
+                            message={categoriesError}
+                          />
+                        ) : null}
                         <div className="row">
                           <div className="col-sm-6 col-12">
                             <div className="mb-3">
                               <div className="add-newplus">
-                                <label className="form-label">
+                                <label
+                                  className="form-label"
+                                  htmlFor="inventory-category-select"
+                                >
                                   Category
                                   <span className="text-danger ms-1">*</span>
                                 </label>
@@ -547,23 +647,31 @@ export default function AddProductComponent({
                                   data-bs-target="#add-units-category"
                                 >
                                   <PlusCircle
-                                  size={14}
+                                    size={14}
                                     data-feather="plus-circle"
                                     className="plus-down-add"
                                   />
                                   <span>Add New</span>
                                 </Link>
                               </div>
-                              <Select
+                              <Select {...reactSelectPortalProps}
+                                inputId="inventory-category-select"
                                 className="react-select"
+                                classNamePrefix="react-select"
                                 options={categoryOptions}
-                                placeholder="Choose"
+                                placeholder={
+                                  categoriesStatus === "loading"
+                                    ? "Cargando categorías…"
+                                    : "Choose"
+                                }
                                 value={categoryVal}
                                 onChange={(opt) =>
                                   setCategoryVal(
                                     opt as SelectOption | null
                                   )
                                 }
+                                isDisabled={categoriesStatus === "loading"}
+                                isLoading={categoriesStatus === "loading"}
                               />
                             </div>
                           </div>
@@ -573,7 +681,7 @@ export default function AddProductComponent({
                                 Sub Category
                                 <span className="text-danger ms-1">*</span>
                               </label>
-                              <Select
+                              <Select {...reactSelectPortalProps}
                                 className="react-select"
                                 options={subcategory}
                                 placeholder="Choose"
@@ -604,7 +712,7 @@ export default function AddProductComponent({
                                   <span>Add New</span>
                                 </Link>
                               </div>
-                              <Select
+                              <Select {...reactSelectPortalProps}
                                 className="react-select"
                                 options={brandOptions}
                                 placeholder="Choose"
@@ -639,7 +747,7 @@ export default function AddProductComponent({
                                 Barcode Symbology
                                 <span className="text-danger ms-1">*</span>
                               </label>
-                              <Select
+                              <Select {...reactSelectPortalProps}
                                 className="react-select"
                                 options={barcodesymbol}
                                 placeholder="Choose"
@@ -666,13 +774,42 @@ export default function AddProductComponent({
                                 <span className="text-danger ms-1">*</span>
                               </label>
                             </div>
-                            <Select
+                            <Select {...reactSelectPortalProps}
                               className="react-select"
+                              classNamePrefix="react-select"
                               options={unit}
+                              value={unitVal}
+                              onChange={(opt) =>
+                                setUnitVal(opt as SelectOption | null)
+                              }
                               placeholder="Choose"
                             />
                           </div>
                         </div>
+                        {showPcsUnit ? (
+                          <div
+                            className="col-sm-6 col-12"
+                            data-field="pcs_unit"
+                          >
+                            <div className="mb-3">
+                              <label className="form-label" htmlFor="pcs_unit">
+                                Piezas por Juego
+                                <span className="text-danger ms-1">*</span>
+                              </label>
+                              <Select {...reactSelectPortalProps}
+                                inputId="pcs_unit"
+                                className="react-select"
+                                classNamePrefix="react-select"
+                                options={unit}
+                                value={pcsUnitVal}
+                                onChange={(opt) =>
+                                  setPcsUnitVal(opt as SelectOption | null)
+                                }
+                                placeholder="Choose"
+                              />
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -800,7 +937,7 @@ export default function AddProductComponent({
                                     Tax Type
                                     <span className="text-danger ms-1">*</span>
                                   </label>
-                                  <Select
+                                  <Select {...reactSelectPortalProps}
                                     className="react-select"
                                     options={taxtype}
                                     placeholder="Select Option"
@@ -813,7 +950,7 @@ export default function AddProductComponent({
                                     Discount Type
                                     <span className="text-danger ms-1">*</span>
                                   </label>
-                                  <Select
+                                  <Select {...reactSelectPortalProps}
                                     className="react-select"
                                     options={discounttype}
                                     placeholder="Choose"
@@ -1259,7 +1396,7 @@ export default function AddProductComponent({
                                 Warranty
                                 <span className="text-danger ms-1">*</span>
                               </label>
-                              <Select
+                              <Select {...reactSelectPortalProps}
                                 className="react-select"
                                 options={warrenty}
                                 placeholder="Choose"

@@ -367,3 +367,12 @@
     resize: vertical;
     overflow-y: auto;
 }
+
+/** Listas react-select: espacio al pie y acordeón sin recortar (evita menú cortado). */
+form.add-product-form {
+    padding-bottom: 5rem;
+
+    .accordions-items-seperate .accordion-item {
+        overflow: visible;
+    }
+}
