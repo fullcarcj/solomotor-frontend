@@ -1,7 +1,6 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 
-import CounterThree from "@/core/common/counter/counterThree";
 import CommonFooter from "@/core/common/footer/commonFooter";
 import CollapesIcon from "@/core/common/tooltip-content/collapes";
 import RefreshIcon from "@/core/common/tooltip-content/refresh";
@@ -11,14 +10,10 @@ import Addunits from "@/core/modals/inventory/addunits";
 import AddVariant from "@/core/modals/inventory/addvariant";
 import AddVarientNew from "@/core/modals/inventory/addVarientNew";
 import { all_routes } from "@/data/all_routes";
-import { Alert, DatePicker, message } from "antd";
+import { Alert, message } from "antd";
 import {
   ArrowLeft,
-  Calendar,
   Info,
-  LifeBuoy,
-  List,
-  Plus,
   PlusCircle,
   X,
   Image,
@@ -28,7 +23,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { normalizeInventoryImageKey } from "@/lib/productImageUrl";
 import { fileToWebpBlob } from "@/lib/encodeImageWebpClient";
 import Select from "react-select";
-import TagInput from "@/core/common/Taginput";
 export type InventoryProductDetail = {
   id: number;
   sku: string;
@@ -249,14 +243,6 @@ export default function AddProductComponent({
     () => mergeSelectOption(BRAND_OPTIONS_BASE, initialProduct?.brand ?? null),
     [initialProduct]
   );
-  const [tags, setTags] = useState(["Red", "Black"]);
-  const handleTagsChange = (newTags: string[]) => {
-    setTags(newTags);
-  };
-
-  const [product, setProduct] = useState(false);
-  const [product2, setProduct2] = useState(true);
-
   const subcategory = [
     { value: "choose", label: "Choose" },
     { value: "lenovo", label: "Lenovo" },
@@ -280,25 +266,6 @@ export default function AddProductComponent({
     { value: "code34", label: "Code34" },
     { value: "code35", label: "Code35" },
     { value: "code36", label: "Code36" },
-  ];
-  const taxtype = [
-    { value: "exclusive", label: "Exclusive" },
-    { value: "salesTax", label: "Sales Tax" },
-  ];
-  const discounttype = [
-    { value: "choose", label: "Choose" },
-    { value: "percentage", label: "Percentage" },
-    { value: "cash", label: "Cash" },
-  ];
-
-  const warrenty = [
-    { value: "choose", label: "Choose" },
-    { value: "Replacement Warranty", label: "Replacement Warranty" },
-    { value: "On-Site Warranty", label: "On-Site Warranty" },
-    {
-      value: "Accidental Protection Plan",
-      label: "Accidental Protection Plan",
-    },
   ];
   const [pendingImages, setPendingImages] = useState<
     { blob: Blob; preview: string }[]
@@ -811,431 +778,68 @@ export default function AddProductComponent({
                           </div>
                         ) : null}
                       </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="accordion-item border mb-4">
-                  <h2 className="accordion-header" id="headingSpacingTwo">
-                    <div
-                      className="accordion-button collapsed bg-white"
-                      data-bs-toggle="collapse"
-                      data-bs-target="#SpacingTwo"
-                      aria-expanded="true"
-                      aria-controls="SpacingTwo"
-                    >
-                      <div className="d-flex align-items-center justify-content-between flex-fill">
-                        <h5 className="d-flex align-items-center">
-                          <LifeBuoy
-                            data-feather="life-buoy"
-                            className="text-primary me-2"
-                          />
-                          <span>Pricing &amp; Stocks</span>
-                        </h5>
-                      </div>
-                    </div>
-                  </h2>
-                  <div
-                    id="SpacingTwo"
-                    className="accordion-collapse collapse show"
-                    aria-labelledby="headingSpacingTwo"
-                  >
-                    <div className="accordion-body border-top">
-                      <div className="mb-3s">
-                        <label className="form-label">
-                          Product Type
-                          <span className="text-danger ms-1">*</span>
-                        </label>
-                        <div className="single-pill-product mb-3">
-                          <ul
-                            className="nav nav-pills"
-                            id="pills-tab1"
-                            role="tablist"
-                          >
-                            <li className="nav-item" role="presentation">
-                              <span
-                                className="custom_radio me-4 mb-0 active"
-                                id="pills-home-tab"
-                                data-bs-toggle="pill"
-                                data-bs-target="#pills-home"
-                                role="tab"
-                                aria-controls="pills-home"
-                                aria-selected="true"
-                              >
-                                <input
-                                  type="radio"
-                                  className="form-control"
-                                  name="payment"
-                                />
-                                <span className="checkmark" /> Single Product
-                              </span>
-                            </li>
-                            <li className="nav-item" role="presentation">
-                              <span
-                                className="custom_radio me-2 mb-0"
-                                id="pills-profile-tab"
-                                data-bs-toggle="pill"
-                                data-bs-target="#pills-profile"
-                                role="tab"
-                                aria-controls="pills-profile"
-                                aria-selected="false"
-                              >
-                                <input
-                                  type="radio"
-                                  className="form-control"
-                                  name="sign"
-                                />
-                                <span className="checkmark" /> Variable Product
-                              </span>
-                            </li>
-                          </ul>
-                        </div>
-                      </div>
-                      <div className="tab-content" id="pills-tabContent">
-                        <div
-                          className="tab-pane fade show active"
-                          id="pills-home"
-                          role="tabpanel"
-                          aria-labelledby="pills-home-tab"
-                        >
-                          <div className="single-product">
-                            <div className="row">
-                              <div className="col-lg-4 col-sm-6 col-12">
-                                <div className="mb-3">
-                                  <label className="form-label">
-                                    Quantity
-                                    <span className="text-danger ms-1">*</span>
-                                  </label>
-                                  <input
-                                    type="text"
-                                    className="form-control"
-                                    value={stockQty}
-                                    onChange={(e) =>
-                                      setStockQty(e.target.value)
-                                    }
-                                  />
-                                </div>
-                              </div>
-                              <div className="col-lg-4 col-sm-6 col-12">
-                                <div className="mb-3">
-                                  <label className="form-label">
-                                    Price
-                                    <span className="text-danger ms-1">*</span>
-                                  </label>
-                                  <input
-                                    type="text"
-                                    className="form-control"
-                                    value={unitPrice}
-                                    onChange={(e) =>
-                                      setUnitPrice(e.target.value)
-                                    }
-                                  />
-                                </div>
-                              </div>
-                              <div className="col-lg-4 col-sm-6 col-12">
-                                <div className="mb-3">
-                                  <label className="form-label">
-                                    Tax Type
-                                    <span className="text-danger ms-1">*</span>
-                                  </label>
-                                  <Select {...reactSelectPortalProps}
-                                    className="react-select"
-                                    options={taxtype}
-                                    placeholder="Select Option"
-                                  />
-                                </div>
-                              </div>
-                              <div className="col-lg-4 col-sm-6 col-12">
-                                <div className="mb-3">
-                                  <label className="form-label">
-                                    Discount Type
-                                    <span className="text-danger ms-1">*</span>
-                                  </label>
-                                  <Select {...reactSelectPortalProps}
-                                    className="react-select"
-                                    options={discounttype}
-                                    placeholder="Choose"
-                                  />
-                                </div>
-                              </div>
-                              <div className="col-lg-4 col-sm-6 col-12">
-                                <div className="mb-3">
-                                  <label className="form-label">
-                                    Discount Value
-                                    <span className="text-danger ms-1">*</span>
-                                  </label>
-                                  <input className="form-control" type="text" />
-                                </div>
-                              </div>
-                              <div className="col-lg-4 col-sm-6 col-12">
-                                <div className="mb-3">
-                                  <label className="form-label">
-                                    Quantity Alert
-                                    <span className="text-danger ms-1">*</span>
-                                  </label>
-                                  <input
-                                    type="text"
-                                    className="form-control"
-                                    value={stockMin}
-                                    onChange={(e) =>
-                                      setStockMin(e.target.value)
-                                    }
-                                  />
-                                </div>
-                              </div>
+                      <div className="row">
+                        {!isEdit ? (
+                          <div className="col-lg-4 col-sm-6 col-12">
+                            <div className="mb-3">
+                              <label className="form-label">
+                                Quantity
+                                <span className="text-danger ms-1">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                className="form-control"
+                                value={stockQty}
+                                onChange={(e) =>
+                                  setStockQty(e.target.value)
+                                }
+                              />
                             </div>
+                          </div>
+                        ) : null}
+                        <div
+                          className={
+                            !isEdit
+                              ? "col-lg-4 col-sm-6 col-12"
+                              : "col-sm-6 col-12"
+                          }
+                        >
+                          <div className="mb-3">
+                            <label className="form-label">
+                              Precio costo
+                              <span className="text-danger ms-1">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control"
+                              value={unitPrice}
+                              onChange={(e) =>
+                                setUnitPrice(e.target.value)
+                              }
+                            />
                           </div>
                         </div>
                         <div
-                          className="tab-pane fade"
-                          id="pills-profile"
-                          role="tabpanel"
-                          aria-labelledby="pills-profile-tab"
+                          className={
+                            !isEdit
+                              ? "col-lg-4 col-sm-6 col-12"
+                              : "col-sm-6 col-12"
+                          }
                         >
-                          <div className="row select-color-add">
-                            <div className="col-lg-6 col-sm-6 col-12">
-                              <div className="mb-3">
-                                <label className="form-label">
-                                  Variant Attribute{" "}
-                                  <span className="text-danger ms-1">*</span>
-                                </label>
-                                <div className="row">
-                                  <div className="col-lg-10 col-sm-10 col-10">
-                                    <select
-                                      className="form-control variant-select select-option"
-                                      id="colorSelect"
-                                      onChange={() => setProduct(true)}
-                                    >
-                                      <option>Choose</option>
-                                      <option>Color</option>
-                                      <option value="red">Red</option>
-                                      <option value="black">Black</option>
-                                    </select>
-                                  </div>
-                                  <div className="col-lg-2 col-sm-2 col-2 ps-0">
-                                    <div className="add-icon tab">
-                                      <Link
-                                        href="#"
-                                        className="btn btn-filter"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#add-units"
-                                      >
-                                        <i className="feather feather-plus-circle" />
-                                      </Link>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                              {product && (
-                                <div
-                                  className={`selected-hide-color ${
-                                    product2 ? "d-block" : ""
-                                  } `}
-                                  id="input-show"
-                                >
-                                  <label className="form-label">
-                                    Variant Attribute{" "}
-                                    <span className="text-danger ms-1">*</span>
-                                  </label>
-                                  <div className="row align-items-center">
-                                    <div className="col-lg-10 col-sm-10 col-10">
-                                      <div className="mb-3">
-                                        <TagInput
-                                          initialTags={tags}
-                                          onTagsChange={handleTagsChange}
-                                        />
-                                      </div>
-                                    </div>
-                                    <div className="col-lg-2 col-sm-2 col-2 ps-0">
-                                      <div className="mb-3 ">
-                                        <Link
-                                          href="#"
-                                          className="remove-color"
-                                          onClick={() => setProduct2(false)}
-                                        >
-                                          <i className="far fa-trash-alt" />
-                                        </Link>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
+                          <div className="mb-3">
+                            <label className="form-label">
+                              Quantity Alert
+                              <span className="text-danger ms-1">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control"
+                              value={stockMin}
+                              onChange={(e) =>
+                                setStockMin(e.target.value)
+                              }
+                            />
                           </div>
-                          {product && (
-                            <div
-                              className="modal-body-table variant-table d-block"
-                              id="variant-table"
-                            >
-                              <div className="table-responsive">
-                                <table className="table">
-                                  <thead>
-                                    <tr>
-                                      <th>Variantion</th>
-                                      <th>Variant Value</th>
-                                      <th>SKU</th>
-                                      <th>Quantity</th>
-                                      <th>Price</th>
-                                      <th className="no-sort" />
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    <tr>
-                                      <td>
-                                        <div className="add-product">
-                                          <input
-                                            type="text"
-                                            className="form-control"
-                                            defaultValue="color"
-                                          />
-                                        </div>
-                                      </td>
-                                      <td>
-                                        <div className="add-product">
-                                          <input
-                                            type="text"
-                                            className="form-control"
-                                            defaultValue="red"
-                                          />
-                                        </div>
-                                      </td>
-                                      <td>
-                                        <div className="add-product">
-                                          <input
-                                            type="text"
-                                            className="form-control"
-                                            defaultValue={1234}
-                                          />
-                                        </div>
-                                      </td>
-                                      <td>
-                                        <CounterThree />
-                                      </td>
-                                      <td>
-                                        <div className="add-product">
-                                          <input
-                                            type="text"
-                                            className="form-control"
-                                            defaultValue={50000}
-                                          />
-                                        </div>
-                                      </td>
-                                      <td className="action-table-data">
-                                        <div className="edit-delete-action">
-                                          <div className="input-block add-lists">
-                                            <label className="checkboxs">
-                                              <input
-                                                type="checkbox"
-                                                defaultChecked
-                                              />
-                                              <span className="checkmarks" />
-                                            </label>
-                                          </div>
-                                          <Link
-                                            className="me-2 p-2"
-                                            href="#"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#add-variation"
-                                          >
-                                            <Plus
-                                              data-feather="plus"
-                                              className="feather-edit"
-                                            />
-                                          </Link>
-                                          <Link
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#delete-modal"
-                                            className="p-2"
-                                            href="#"
-                                          >
-                                            <i
-                                              data-feather="trash-2"
-                                              className="feather-trash-2"
-                                            />
-                                          </Link>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                    <tr>
-                                      <td>
-                                        <div className="add-product">
-                                          <input
-                                            type="text"
-                                            className="form-control"
-                                            defaultValue="color"
-                                          />
-                                        </div>
-                                      </td>
-                                      <td>
-                                        <div className="add-product">
-                                          <input
-                                            type="text"
-                                            className="form-control"
-                                            defaultValue="black"
-                                          />
-                                        </div>
-                                      </td>
-                                      <td>
-                                        <div className="add-product">
-                                          <input
-                                            type="text"
-                                            className="form-control"
-                                            defaultValue={2345}
-                                          />
-                                        </div>
-                                      </td>
-                                      <td>
-                                        <CounterThree />
-                                      </td>
-                                      <td>
-                                        <div className="add-product">
-                                          <input
-                                            type="text"
-                                            className="form-control"
-                                            defaultValue={50000}
-                                          />
-                                        </div>
-                                      </td>
-                                      <td className="action-table-data">
-                                        <div className="edit-delete-action">
-                                          <div className="input-block add-lists">
-                                            <label className="checkboxs">
-                                              <input
-                                                type="checkbox"
-                                                defaultChecked
-                                              />
-                                              <span className="checkmarks" />
-                                            </label>
-                                          </div>
-                                          <Link
-                                            className="me-2 p-2"
-                                            href="#"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#edit-units"
-                                          >
-                                            <Plus
-                                              data-feather="plus"
-                                              className="feather-edit"
-                                            />
-                                          </Link>
-                                          <Link
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#delete-modal"
-                                            className="p-2"
-                                            href="#"
-                                          >
-                                            <i
-                                              data-feather="trash-2"
-                                              className="feather-trash-2"
-                                            />
-                                          </Link>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  </tbody>
-                                </table>
-                              </div>
-                            </div>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -1310,139 +914,6 @@ export default function AddProductComponent({
                                 carpeta del bucket configurada).
                               </p>
                             ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="accordion-item border mb-4">
-                  <h2 className="accordion-header" id="headingSpacingFour">
-                    <div
-                      className="accordion-button collapsed bg-white"
-                      data-bs-toggle="collapse"
-                      data-bs-target="#SpacingFour"
-                      aria-expanded="true"
-                      aria-controls="SpacingFour"
-                    >
-                      <div className="d-flex align-items-center justify-content-between flex-fill">
-                        <h5 className="d-flex align-items-center">
-                          <List
-                            data-feather="list"
-                            className="text-primary me-2"
-                          />
-                          <span>Custom Fields</span>
-                        </h5>
-                      </div>
-                    </div>
-                  </h2>
-                  <div
-                    id="SpacingFour"
-                    className="accordion-collapse collapse show"
-                    aria-labelledby="headingSpacingFour"
-                  >
-                    <div className="accordion-body border-top">
-                      <div>
-                        <div className="p-3 bg-light rounded d-flex align-items-center border mb-3">
-                          <div className=" d-flex align-items-center">
-                            <div className="form-check form-check-inline">
-                              <input
-                                className="form-check-input"
-                                type="checkbox"
-                                id="warranties"
-                                defaultValue="option1"
-                              />
-                              <label
-                                className="form-check-label"
-                                htmlFor="warranties"
-                              >
-                                Warranties
-                              </label>
-                            </div>
-                            <div className="form-check form-check-inline">
-                              <input
-                                className="form-check-input"
-                                type="checkbox"
-                                id="manufacturer"
-                                defaultValue="option2"
-                              />
-                              <label
-                                className="form-check-label"
-                                htmlFor="manufacturer"
-                              >
-                                Manufacturer
-                              </label>
-                            </div>
-                            <div className="form-check form-check-inline">
-                              <input
-                                className="form-check-input"
-                                type="checkbox"
-                                id="expiry"
-                                defaultValue="option2"
-                              />
-                              <label
-                                className="form-check-label"
-                                htmlFor="expiry"
-                              >
-                                Expiry
-                              </label>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="row">
-                          <div className="col-sm-6 col-12">
-                            <div className="mb-3">
-                              <label className="form-label">
-                                Warranty
-                                <span className="text-danger ms-1">*</span>
-                              </label>
-                              <Select {...reactSelectPortalProps}
-                                className="react-select"
-                                options={warrenty}
-                                placeholder="Choose"
-                              />
-                            </div>
-                          </div>
-                          <div className="col-sm-6 col-12">
-                            <div className="mb-3 add-product">
-                              <label className="form-label">
-                                Manufacturer
-                                <span className="text-danger ms-1">*</span>
-                              </label>
-                              <input type="text" className="form-control" />
-                            </div>
-                          </div>
-                        </div>
-                        <div className="row">
-                          <div className="col-sm-6 col-12">
-                            <div className="mb-3">
-                              <label className="form-label">
-                                Manufactured Date
-                                <span className="text-danger ms-1">*</span>
-                              </label>
-                              <div className="input-groupicon calender-input">
-                                <Calendar className="info-img" />
-                                <DatePicker
-                                  className="form-control datetimepicker"
-                                  placeholder="dd/mm/yyyy"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                          <div className="col-sm-6 col-12">
-                            <div className="mb-3">
-                              <label className="form-label">
-                                Expiry On
-                                <span className="text-danger ms-1">*</span>
-                              </label>
-                              <div className="input-groupicon calender-input">
-                                <Calendar className="info-img" />
-                                <DatePicker
-                                  className="form-control datetimepicker"
-                                  placeholder="dd/mm/yyyy"
-                                />
-                              </div>
-                            </div>
                           </div>
                         </div>
                       </div>
