@@ -11,7 +11,7 @@ import { Download, Edit, Eye, Trash2 } from "react-feather";
 import Link from "next/link";
 import CommonFooter from "@/core/common/footer/commonFooter";
 import { Alert, Spin, message } from "antd";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ProductThumb } from "@/components/Inventory/ProductThumb";
 import { inventoryPosProductFallbackPath } from "@/lib/inventoryPosPlaceholderPath";
 
@@ -82,6 +82,8 @@ export default function ProductListComponent() {
   const [deleting, setDeleting] = useState(false);
   const [skuOrNameSearch, setSkuOrNameSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  /** Evita aplicar respuestas viejas si hay abort (Strict Mode) o búsqueda rápida. */
+  const loadSeqRef = useRef(0);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -118,8 +120,9 @@ export default function ProductListComponent() {
   }, []);
 
   const loadProducts = useCallback(
-    async (opts?: { signal?: AbortSignal }) => {
+    async (opts?: { signal?: AbortSignal }): Promise<boolean> => {
       const signal = opts?.signal;
+      const seq = ++loadSeqRef.current;
       setLoading(true);
       setError(null);
       try {
@@ -150,6 +153,7 @@ export default function ProductListComponent() {
             res.statusText;
           throw new Error(msg);
         }
+        if (seq !== loadSeqRef.current) return false;
         const payload = (body as { data?: InventoryListPayload }).data;
         const products = payload?.products ?? [];
         setDataSource(products.map((row) => mapApiProductToRow(row)));
@@ -170,13 +174,15 @@ export default function ProductListComponent() {
         } else {
           setSummaryLine(products.length ? `${products.length} productos` : null);
         }
+        return true;
       } catch (e) {
-        if (signal?.aborted) return;
-        setDataSource([]);
-        setSummaryLine(null);
+        if (signal?.aborted) return false;
+        if (seq !== loadSeqRef.current) return false;
+        /** No vaciar la tabla: un fallo al refrescar (p. ej. tras borrar) no debe dejar la lista en blanco. */
         setError(e instanceof Error ? e.message : "Error al cargar productos");
+        return false;
       } finally {
-        if (!signal?.aborted) setLoading(false);
+        if (seq === loadSeqRef.current) setLoading(false);
       }
     },
     [debouncedSearch]
@@ -196,7 +202,7 @@ export default function ProductListComponent() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ product_id: Number(idStr) }),
+          body: JSON.stringify({ id: Number(idStr) }),
           cache: "no-store",
         }
       );
@@ -215,13 +221,35 @@ export default function ProductListComponent() {
         throw new Error(msg);
       }
       const data = (body as { data?: { already_inactive?: boolean } }).data;
+      const removedId = Math.trunc(nid);
+      setDataSource((prev) =>
+        prev.filter((row: { id?: number }) => row.id !== removedId)
+      );
       hideDeleteModal();
       message.success(
         data?.already_inactive
           ? "El producto ya estaba inactivo."
           : "Producto dado de baja correctamente."
       );
-      await loadProducts();
+      const refreshed = await loadProducts();
+      /**
+       * El GET `/api/inventory/products` puede seguir devolviendo el ítem (otra tabla / caché / soft-delete
+       * no reflejado en el listado). Tras una baja exitosa, no mostramos ese ID aunque vuelva en la respuesta.
+       */
+      setDataSource((prev) =>
+        prev.filter((row: { id?: number | string }) => {
+          const rid = row.id;
+          if (rid == null || rid === "") return true;
+          const n = typeof rid === "number" ? rid : Number(String(rid).trim());
+          if (!Number.isFinite(n)) return true;
+          return Math.trunc(n) !== removedId;
+        })
+      );
+      if (!refreshed) {
+        message.warning(
+          "No se pudo volver a cargar la lista desde el servidor; revisa el aviso de error o usa el botón de actualizar."
+        );
+      }
     } catch (e) {
       message.error(
         e instanceof Error ? e.message : "No se pudo eliminar el producto"

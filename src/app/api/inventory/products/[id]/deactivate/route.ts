@@ -61,7 +61,8 @@ export async function POST(req: NextRequest, context: RouteCtx) {
     const body = (await req.json().catch(() => null)) as
       | { product_id?: number | string; id?: number | string }
       | null;
-    const maybe = body?.product_id ?? body?.id;
+    /** Tabla `products`: PK es `id`; el webhook puede esperar `id` antes que `product_id`. */
+    const maybe = body?.id ?? body?.product_id;
     const parsed =
       maybe == null
         ? Number.NaN
@@ -74,30 +75,34 @@ export async function POST(req: NextRequest, context: RouteCtx) {
   } catch {
     // Si no llega body JSON, seguimos con el ID de la ruta.
   }
-  const headers: HeadersInit = {
-    "X-Admin-Secret": secret,
-    "Content-Type": "application/json",
-  };
 
-  const pathUrl = `${base}/api/inventory/products/${encodeURIComponent(id)}/deactivate`;
-  let upstream = await fetch(pathUrl, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ product_id: pid }),
-    cache: "no-store",
-  });
-
-  if (upstream.status === 404 || upstream.status === 400 || upstream.status === 422) {
-    upstream = await fetch(`${base}/api/inventory/products/deactivate`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ product_id: pid }),
+  const upstream = await fetch(
+    `${base}/inventario-productos?k=${encodeURIComponent(secret)}&id=${encodeURIComponent(String(pid))}`,
+    {
+      method: "DELETE",
+      headers: {
+        "X-Admin-Secret": secret,
+      },
       cache: "no-store",
-    });
+    }
+  );
+
+  if (!upstream.ok) {
+    const errText = await upstream.text();
+    console.error("[deactivate] upstream error", upstream.status, errText);
+    return NextResponse.json(
+      {
+        error: {
+          code: "UPSTREAM",
+          message: errText || upstream.statusText,
+        },
+      },
+      { status: upstream.status }
+    );
   }
 
-  const body = await upstream.text();
-  return new NextResponse(body, {
+  const okText = await upstream.text();
+  return new NextResponse(okText, {
     status: upstream.status,
     headers: {
       "Content-Type":
