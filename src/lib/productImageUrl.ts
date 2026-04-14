@@ -192,3 +192,36 @@ export function firebaseProductImageCandidateUrls(
   }
   return list;
 }
+
+/**
+ * URLs candidatas para un solo stem de objeto en Storage (p. ej. `MI-SKU_2` → `MI-SKU_2.webp`).
+ * Usado en edición para mostrar cada foto numerada sin mezclar con el resto de variantes del SKU.
+ */
+export function firebaseProductImageCandidateUrlsForStem(
+  stem: string,
+  base: string
+): string[] {
+  const list: string[] = [];
+  const push = (u: string | null | undefined) => {
+    if (u && !list.includes(u)) list.push(u);
+  };
+
+  const b = base.trim();
+  const s = normalizeInventoryImageKey(String(stem));
+  if (!b || !s) return list;
+
+  const folderBase = baseUsesEncodedFolderPath(b);
+
+  for (const ext of IMAGE_EXTS) {
+    if (folderBase) {
+      push(firebaseProductImageUrl(s, b, ext));
+      push(firebaseProductImageUrlEncodedFullPath(s, b, ext));
+      push(firebaseProductImageUrlFlatRoot(s, b, ext));
+    } else {
+      push(firebaseProductImageUrlFlatRoot(s, b, ext));
+      push(firebaseProductImageUrl(s, b, ext));
+      push(firebaseProductImageUrlEncodedFullPath(s, b, ext));
+    }
+  }
+  return list;
+}

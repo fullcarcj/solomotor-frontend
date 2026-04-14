@@ -12,6 +12,9 @@ function productImageBaseFromProcessEnv(): string {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  /** Evita que Webpack empaquete `undici` (Agent del proxy de inventario); usa el módulo de Node en runtime. */
+  serverExternalPackages: ["undici"],
+
   env: {
     PRODUCT_IMAGE_BASE_URL: productImageBaseFromProcessEnv(),
     // Misma URL en cliente (inlined en build). next.config no expone import.meta.env.VITE_*; duplicamos aquí.

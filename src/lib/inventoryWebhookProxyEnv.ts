@@ -2,10 +2,24 @@
  * Variables de entorno del proxy de inventario → webhook-receiver (solo servidor).
  */
 
+/**
+ * URL base del webhook-receiver (sin barra final).
+ * Si falta el esquema (`https://`), se asume HTTPS para que `new URL(base + path)` no lance.
+ */
 export function getWebhookReceiverBaseUrl(): string {
-  return (process.env.WEBHOOK_RECEIVER_BASE_URL ?? "")
+  let raw = (process.env.WEBHOOK_RECEIVER_BASE_URL ?? "")
     .trim()
     .replace(/\/+$/, "");
+  if (!raw) return "";
+  if (!/^https?:\/\//i.test(raw)) {
+    raw = `https://${raw}`;
+  }
+  try {
+    new URL(raw);
+    return raw.replace(/\/+$/, "");
+  } catch {
+    return "";
+  }
 }
 
 /**

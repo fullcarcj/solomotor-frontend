@@ -1,4 +1,8 @@
-import { Agent } from "node:undici";
+/**
+ * Import desde el paquete `undici` (no `node:undici`): Webpack de Next no siempre resuelve
+ * el prefijo `node:` en módulos empaquetados; el paquete es el mismo motor que usa Node.
+ */
+import { Agent } from "undici";
 
 /**
  * El `fetch` global de Node (undici) corta por defecto a ~300s esperando cabeceras.

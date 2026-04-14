@@ -20,9 +20,13 @@ import {
 } from "react-feather";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ProductFirebaseSlotImage } from "@/components/Inventory/ProductThumb";
+import { inventoryPosProductFallbackPath } from "@/lib/inventoryPosPlaceholderPath";
 import { normalizeInventoryImageKey } from "@/lib/productImageUrl";
 import { fileToWebpBlob } from "@/lib/encodeImageWebpClient";
 import Select from "react-select";
+import Lightbox from "yet-another-react-lightbox";
+import "yet-another-react-lightbox/styles.css";
 export type InventoryProductDetail = {
   id: number;
   sku: string;
@@ -343,6 +347,66 @@ export default function AddProductComponent({
   const pendingImagesRef = useRef(pendingImages);
   pendingImagesRef.current = pendingImages;
 
+  /**
+   * Slots de galería en Firebase: null = resolviéndose, true = existe, false = no existe.
+   * Se resetea cuando cambia el SKU en edición.
+   */
+  const [resolvedSlots, setResolvedSlots] = useState<Record<number, boolean | null>>({});
+  /** URL real resuelta por slot (para el lightbox). */
+  const [resolvedUrls, setResolvedUrls] = useState<Record<number, string>>({});
+  /** Índices (1-9) marcados para eliminar al guardar. */
+  const [markedForDelete, setMarkedForDelete] = useState<Set<number>>(new Set());
+  /** Incrementar para forzar re-sondeo de galería tras guardar. */
+  const [galleryKey, setGalleryKey] = useState(0);
+
+  /** Estado del lightbox */
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+
+  useEffect(() => {
+    if (!isEdit) return;
+    setResolvedSlots({});
+    setResolvedUrls({});
+    setMarkedForDelete(new Set());
+  }, [sku, isEdit]);
+
+  const handleSlotResolved = useCallback((n: number, has: boolean, url?: string) => {
+    setResolvedSlots((prev) => ({ ...prev, [n]: has }));
+    if (has && url) setResolvedUrls((prev) => ({ ...prev, [n]: url }));
+  }, []);
+
+  const toggleMarkDelete = useCallback((n: number) => {
+    setMarkedForDelete((prev) => {
+      const next = new Set(prev);
+      if (next.has(n)) next.delete(n);
+      else next.add(n);
+      return next;
+    });
+  }, []);
+
+  /**
+   * Slides para el lightbox: fotos Firebase existentes (orden numérico) + pendientes nuevas.
+   */
+  const lightboxSlides = useMemo(() => {
+    const firebase = Array.from({ length: 9 }, (_, i) => i + 1)
+      .filter((n) => resolvedSlots[n] === true && resolvedUrls[n])
+      .map((n) => ({ src: resolvedUrls[n], alt: `Foto ${n}` }));
+    const pending = pendingImages.map((img, idx) => ({
+      src: img.preview,
+      alt: `Nueva ${idx + 1}`,
+    }));
+    return [...firebase, ...pending];
+  }, [resolvedSlots, resolvedUrls, pendingImages]);
+
+  const openLightbox = useCallback(
+    (src: string) => {
+      const idx = lightboxSlides.findIndex((s) => s.src === src);
+      setLightboxIndex(idx >= 0 ? idx : 0);
+      setLightboxOpen(true);
+    },
+    [lightboxSlides]
+  );
+
   useEffect(() => {
     return () => {
       pendingImagesRef.current.forEach((p) => URL.revokeObjectURL(p.preview));
@@ -407,36 +471,71 @@ export default function AddProductComponent({
       message.error("El SKU es obligatorio para nombrar las imágenes.");
       return;
     }
-    if (pendingImages.length === 0) {
-      message.info("No hay imágenes nuevas para subir.");
+    const hasDelete = markedForDelete.size > 0;
+    const hasUpload = pendingImages.length > 0;
+    if (!hasDelete && !hasUpload) {
+      message.info("No hay cambios de imágenes pendientes.");
       return;
     }
+
     setUploadingImages(true);
     try {
-      for (let i = 0; i < pendingImages.length; i++) {
-        const fd = new FormData();
-        fd.append("file", pendingImages[i].blob, `${k}_${i + 1}.webp`);
-        fd.append("sku", k);
-        fd.append("index", String(i + 1));
-        const res = await fetch("/api/inventory/product-images/upload", {
-          method: "POST",
-          body: fd,
-        });
-        const data = (await res.json().catch(() => ({}))) as {
-          error?: { message?: string };
-        };
-        if (!res.ok) {
-          throw new Error(
-            data?.error?.message ?? `Error HTTP ${res.status}`
-          );
+      // 1. Eliminar los slots marcados
+      if (hasDelete) {
+        for (const n of Array.from(markedForDelete).sort()) {
+          const res = await fetch("/api/inventory/product-images/delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sku: k, index: n }),
+          });
+          const data = (await res.json().catch(() => ({}))) as {
+            error?: { message?: string };
+          };
+          if (!res.ok) {
+            throw new Error(
+              data?.error?.message ?? `Error al eliminar foto ${n}`
+            );
+          }
         }
       }
-      message.success("Imágenes guardadas en Firebase.");
+
+      // 2. Subir nuevas imágenes
+      if (hasUpload) {
+        for (let i = 0; i < pendingImages.length; i++) {
+          const fd = new FormData();
+          fd.append("file", pendingImages[i].blob, `${k}_${i + 1}.webp`);
+          fd.append("sku", k);
+          fd.append("index", String(i + 1));
+          const res = await fetch("/api/inventory/product-images/upload", {
+            method: "POST",
+            body: fd,
+          });
+          const data = (await res.json().catch(() => ({}))) as {
+            error?: { message?: string };
+          };
+          if (!res.ok) {
+            throw new Error(
+              data?.error?.message ?? `Error HTTP ${res.status}`
+            );
+          }
+        }
+      }
+
+      const parts: string[] = [];
+      if (hasDelete) parts.push(`${markedForDelete.size} foto(s) eliminada(s)`);
+      if (hasUpload) parts.push(`${pendingImages.length} foto(s) guardada(s)`);
+      message.success(parts.join(" · "));
+
       pendingImages.forEach((p) => URL.revokeObjectURL(p.preview));
       setPendingImages([]);
+      setMarkedForDelete(new Set());
+      // Forzar re-sondeo de la galería
+      setResolvedSlots({});
+      setResolvedUrls({});
+      setGalleryKey((k) => k + 1);
     } catch (err) {
       message.error(
-        err instanceof Error ? err.message : "Error al subir imágenes"
+        err instanceof Error ? err.message : "Error al guardar imágenes"
       );
     } finally {
       setUploadingImages(false);
@@ -625,22 +724,16 @@ export default function AddProductComponent({
                           </div>
                           <div className="row">
                             <div className="col-sm-6 col-12">
-                              <div className="mb-3 list position-relative">
+                              <div className="mb-3">
                                 <label className="form-label">
                                   SKU<span className="text-danger ms-1">*</span>
                                 </label>
                                 <input
                                   type="text"
-                                  className="form-control list"
+                                  className="form-control"
                                   value={sku}
                                   onChange={(e) => setSku(e.target.value)}
                                 />
-                                <button
-                                  type="button"
-                                  className="btn btn-primaryadd"
-                                >
-                                  Generate
-                                </button>
                               </div>
                             </div>
                             <div className="col-sm-6 col-12">
@@ -992,7 +1085,10 @@ export default function AddProductComponent({
                     <div className="accordion-body border-top">
                       <div className="text-editor add-list add">
                         <div className="col-lg-12">
+                          {/* ── Galería ── */}
                           <div className="add-choosen add-choosen--product-images">
+
+                            {/* 1 · Botón "Add Images" — siempre primero */}
                             <div className="add-product-image-upload-wrap">
                               <div className="image-upload image-upload-new">
                                 <input
@@ -1015,9 +1111,102 @@ export default function AddProductComponent({
                                 </div>
                               </div>
                             </div>
+
+                            {/* 2 · Fotos existentes en Firebase (solo en edición) */}
+                            {isEdit && normalizeInventoryImageKey(sku)
+                              ? Array.from({ length: 9 }, (_, i) => {
+                                  const n = i + 1;
+                                  const skuKey = normalizeInventoryImageKey(sku);
+                                  const stem = `${skuKey}_${n}`;
+                                  const resolved = resolvedSlots[n] ?? null;
+                                  const marked = markedForDelete.has(n);
+                                  const fallback = inventoryPosProductFallbackPath(
+                                    initialProduct?.id ?? null,
+                                    sku
+                                  );
+                                  return (
+                                    /* Oculto mientras resuelve o si no existe */
+                                    <div
+                                      key={`${stem}-${galleryKey}`}
+                                      className="phone-img position-relative"
+                                      style={{
+                                        display: resolved === true ? undefined : "none",
+                                      }}
+                                    >
+                                      {/* Clic en la imagen → lightbox */}
+                                      <button
+                                        type="button"
+                                        className="border-0 bg-transparent p-0 d-block"
+                                        style={{ cursor: "zoom-in" }}
+                                        title="Ver imagen ampliada"
+                                        onClick={() => {
+                                          const url = resolvedUrls[n];
+                                          if (url) openLightbox(url);
+                                        }}
+                                      >
+                                        <ProductFirebaseSlotImage
+                                          stem={stem}
+                                          fallback={fallback}
+                                          onResolved={(has, url) =>
+                                            handleSlotResolved(n, has, url)
+                                          }
+                                          className="rounded border"
+                                          style={{
+                                            width: 96,
+                                            height: 96,
+                                            objectFit: "cover",
+                                            opacity: marked ? 0.4 : 1,
+                                            transition: "opacity .2s",
+                                          }}
+                                          alt={`Foto ${n}`}
+                                        />
+                                      </button>
+                                      {/* Etiqueta "Eliminar" cuando está marcada */}
+                                      {marked && (
+                                        <div
+                                          className="position-absolute top-0 start-0 w-100 d-flex justify-content-center"
+                                          style={{ pointerEvents: "none", paddingTop: 6 }}
+                                        >
+                                          <span className="badge bg-danger">Eliminar</span>
+                                        </div>
+                                      )}
+                                      {/* X para marcar/desmarcar eliminación */}
+                                      <Link
+                                        href="#"
+                                        title={marked ? "Deshacer eliminación" : "Marcar para eliminar"}
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          toggleMarkDelete(n);
+                                        }}
+                                      >
+                                        <X
+                                          className="x-square-add remove-product"
+                                          style={{ color: marked ? "#dc3545" : undefined }}
+                                        />
+                                      </Link>
+                                    </div>
+                                  );
+                                })
+                              : null}
+
+                            {/* 3 · Nuevas imágenes pendientes de subir */}
                             {pendingImages.map((img, idx) => (
                               <div className="phone-img" key={img.preview}>
-                                <img src={img.preview} alt={`Vista ${idx + 1}`} />
+                                {/* Clic en preview → lightbox */}
+                                <button
+                                  type="button"
+                                  className="border-0 bg-transparent p-0 d-block"
+                                  style={{ cursor: "zoom-in" }}
+                                  title="Ver imagen ampliada"
+                                  onClick={() => openLightbox(img.preview)}
+                                >
+                                  <img
+                                    src={img.preview}
+                                    alt={`Vista ${idx + 1}`}
+                                    style={{ width: 96, height: 96, objectFit: "cover" }}
+                                    className="rounded border"
+                                  />
+                                </button>
                                 <Link href="#" onClick={(e) => e.preventDefault()}>
                                   <X
                                     className="x-square-add remove-product"
@@ -1026,6 +1215,7 @@ export default function AddProductComponent({
                                 </Link>
                               </div>
                             ))}
+
                             {!normalizeInventoryImageKey(sku) ? (
                               <p className="text-muted small mt-2 mb-0 add-choosen--product-images-hint w-100">
                                 Completa el SKU para habilitar la subida (se
@@ -1101,6 +1291,15 @@ export default function AddProductComponent({
           </div>
         </div>
       </div>
+
+      {/* Lightbox para galería de imágenes (Firebase + pendientes) */}
+      <Lightbox
+        open={lightboxOpen}
+        close={() => setLightboxOpen(false)}
+        index={lightboxIndex}
+        slides={lightboxSlides}
+        on={{ view: ({ index }) => setLightboxIndex(index) }}
+      />
     </>
   );
 }

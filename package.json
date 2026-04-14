@@ -65,6 +65,7 @@
     "sweetalert2": "^11.26.4",
     "sweetalert2-react-content": "^5.1.0",
     "swiper": "^11.2.10",
+    "undici": "^6.25.0",
     "weather-icons-react": "^1.2.0",
     "yet-another-react-lightbox": "^3.25.0"
   },
