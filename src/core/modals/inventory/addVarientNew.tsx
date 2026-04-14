@@ -73,6 +73,7 @@ const AddVarientNew = () => {
                 Barcode Symbology<span className="text-danger ms-1">*</span>
               </label>
               <Select
+                instanceId="modal-add-variant-barcode"
                 classNamePrefix="react-select"
                 options={barcodesymbol}
                 placeholder="Choose"
@@ -157,6 +158,7 @@ const AddVarientNew = () => {
                 Tax Type<span className="text-danger ms-1">*</span>
               </label>
               <Select
+                instanceId="modal-add-variant-tax"
                 classNamePrefix="react-select"
                 options={tax}
                 placeholder="Choose"
@@ -169,6 +171,7 @@ const AddVarientNew = () => {
                 Tax<span className="text-danger ms-1">*</span>
               </label>
               <Select
+                instanceId="modal-add-variant-tax-type"
                 classNamePrefix="react-select"
                 options={taxtype}
                 placeholder="Choose"
@@ -181,6 +184,7 @@ const AddVarientNew = () => {
                 Discount Type<span className="text-danger ms-1">*</span>{" "}
               </label>
               <Select
+                instanceId="modal-add-variant-discount-type"
                 classNamePrefix="react-select"
                 options={discounttype}
                 placeholder="Choose"

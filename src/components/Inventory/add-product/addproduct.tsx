@@ -175,11 +175,20 @@ export default function AddProductComponent({
     }
   }, [unitVal]);
 
+  /**
+   * Portal del menú solo tras mount: en SSR y en el primer paint del cliente debe ser el mismo
+   * valor (undefined); si usamos `document.body` solo en cliente, la hidratación no coincide con el HTML del servidor.
+   */
+  const [selectMenuPortalTarget, setSelectMenuPortalTarget] =
+    useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setSelectMenuPortalTarget(document.body);
+  }, []);
+
   /** Menú react-select en `document.body` para que no lo recorte overflow del acordeón/tarjeta. */
   const reactSelectPortalProps = useMemo(
     () => ({
-      menuPortalTarget:
-        typeof document !== "undefined" ? document.body : null,
+      menuPortalTarget: selectMenuPortalTarget ?? undefined,
       styles: {
         menuPortal: (base: Record<string, unknown>) => ({
           ...base,
@@ -187,7 +196,7 @@ export default function AddProductComponent({
         }),
       },
     }),
-    []
+    [selectMenuPortalTarget]
   );
 
   useEffect(() => {
@@ -508,6 +517,7 @@ export default function AddProductComponent({
                               Store<span className="text-danger ms-1">*</span>
                             </label>
                             <Select {...reactSelectPortalProps}
+                              instanceId="add-product-store"
                               className="react-select"
                               classNamePrefix="react-select"
                               options={STORE_OPTIONS}
@@ -530,6 +540,7 @@ export default function AddProductComponent({
                               <span className="text-danger ms-1">*</span>
                             </label>
                             <Select {...reactSelectPortalProps}
+                              instanceId="add-product-warehouse"
                               className="react-select"
                               classNamePrefix="react-select"
                               options={WAREHOUSE_OPTIONS}
@@ -639,6 +650,7 @@ export default function AddProductComponent({
                                   <span className="text-danger ms-1">*</span>
                                 </label>
                                 <Select {...reactSelectPortalProps}
+                                  instanceId="add-product-selling-type"
                                   className="react-select"
                                   options={sellingtype}
                                   placeholder="Choose"
@@ -709,6 +721,7 @@ export default function AddProductComponent({
                                 <span className="text-danger ms-1">*</span>
                               </label>
                               <Select {...reactSelectPortalProps}
+                                instanceId="add-product-subcategory"
                                 className="react-select"
                                 options={subcategory}
                                 placeholder="Choose"
@@ -740,6 +753,7 @@ export default function AddProductComponent({
                                 </Link>
                               </div>
                               <Select {...reactSelectPortalProps}
+                                instanceId="add-product-brand"
                                 className="react-select"
                                 options={brandOptions}
                                 placeholder="Choose"
@@ -772,6 +786,7 @@ export default function AddProductComponent({
                                 <span className="text-danger ms-1">*</span>
                               </label>
                               <Select {...reactSelectPortalProps}
+                                instanceId="add-product-barcode-symbology"
                                 className="react-select"
                                 options={barcodesymbol}
                                 placeholder="Choose"
@@ -799,6 +814,7 @@ export default function AddProductComponent({
                               </label>
                             </div>
                             <Select {...reactSelectPortalProps}
+                              instanceId="add-product-unit"
                               className="react-select"
                               classNamePrefix="react-select"
                               options={unit}
@@ -821,6 +837,7 @@ export default function AddProductComponent({
                                 <span className="text-danger ms-1">*</span>
                               </label>
                               <Select {...reactSelectPortalProps}
+                                instanceId="add-product-pcs-unit"
                                 inputId="pcs_unit"
                                 className="react-select"
                                 classNamePrefix="react-select"

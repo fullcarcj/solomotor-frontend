@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { inventoryUpstreamAgent } from "@/lib/inventoryUpstreamUndiciAgent";
 import {
   getWebhookAdminSecret,
   getWebhookReceiverBaseUrl,
@@ -42,18 +43,43 @@ export async function GET(req: NextRequest) {
     target.searchParams.set(key, value);
   });
 
-  const upstream = await fetch(target.toString(), {
-    method: "GET",
-    headers: { "X-Admin-Secret": secret },
-    cache: "no-store",
-  });
+  try {
+    const upstream = await fetch(target.toString(), {
+      method: "GET",
+      headers: { "X-Admin-Secret": secret },
+      cache: "no-store",
+      dispatcher: inventoryUpstreamAgent,
+    });
 
-  const body = await upstream.text();
-  return new NextResponse(body, {
-    status: upstream.status,
-    headers: {
-      "Content-Type":
-        upstream.headers.get("Content-Type") ?? "application/json",
-    },
-  });
+    const body = await upstream.text();
+    return new NextResponse(body, {
+      status: upstream.status,
+      headers: {
+        "Content-Type":
+          upstream.headers.get("Content-Type") ?? "application/json",
+      },
+    });
+  } catch (e) {
+    const cause = e instanceof Error && e.cause instanceof Error ? e.cause : null;
+    const code =
+      cause && "code" in cause && typeof (cause as { code?: string }).code === "string"
+        ? (cause as { code: string }).code
+        : undefined;
+    const isTimeout =
+      code === "UND_ERR_HEADERS_TIMEOUT" ||
+      code === "UND_ERR_BODY_TIMEOUT" ||
+      code === "UND_ERR_CONNECT_TIMEOUT";
+
+    return NextResponse.json(
+      {
+        error: {
+          code: isTimeout ? "UPSTREAM_TIMEOUT" : "UPSTREAM_FETCH_FAILED",
+          message: isTimeout
+            ? "El servidor de inventario tardó demasiado en responder (timeout). Revisa la query en el webhook-receiver o el estado de la base de datos."
+            : "No se pudo contactar al servidor de inventario. Comprueba WEBHOOK_RECEIVER_BASE_URL y la red.",
+        },
+      },
+      { status: isTimeout ? 504 : 502 }
+    );
+  }
 }
