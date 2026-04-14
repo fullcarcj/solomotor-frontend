@@ -84,6 +84,16 @@ const BRAND_OPTIONS_BASE: SelectOption[] = [
   { value: "bolt", label: "Bolt" },
 ];
 
+/** Tienda fija; si en el futuro hay más de una opción, el desplegable se habilita. */
+const STORE_OPTIONS: SelectOption[] = [
+  { value: "FULLCAR CJ CA", label: "FULLCAR CJ CA" },
+];
+
+/** Almacén fijo; misma lógica que Store. */
+const WAREHOUSE_OPTIONS: SelectOption[] = [
+  { value: "BELLO_MONTE", label: "BELLO_MONTE" },
+];
+
 export type AddProductComponentProps = {
   mode?: "create" | "edit";
   initialProduct?: InventoryProductDetail | null;
@@ -107,8 +117,16 @@ export default function AddProductComponent({
   const [stockMin, setStockMin] = useState("");
   const [categoryVal, setCategoryVal] = useState<SelectOption | null>(null);
   const [brandVal, setBrandVal] = useState<SelectOption | null>(null);
+  const [storeVal, setStoreVal] = useState<SelectOption | null>(
+    () => STORE_OPTIONS[0] ?? null
+  );
+  const [warehouseVal, setWarehouseVal] = useState<SelectOption | null>(
+    () => WAREHOUSE_OPTIONS[0] ?? null
+  );
 
   useEffect(() => {
+    setStoreVal(STORE_OPTIONS[0] ?? null);
+    setWarehouseVal(WAREHOUSE_OPTIONS[0] ?? null);
     if (!initialProduct) return;
     const name = initialProduct.name ?? "";
     setProductName(name);
@@ -153,18 +171,6 @@ export default function AddProductComponent({
   const [product, setProduct] = useState(false);
   const [product2, setProduct2] = useState(true);
 
-  const store = [
-    { value: "choose", label: "Choose" },
-    { value: "thomas", label: "Thomas" },
-    { value: "rasmussen", label: "Rasmussen" },
-    { value: "fredJohn", label: "Fred John" },
-  ];
-  const warehouse = [
-    { value: "choose", label: "Choose" },
-    { value: "legendary", label: "Legendary" },
-    { value: "determined", label: "Determined" },
-    { value: "sincere", label: "Sincere" },
-  ];
   const subcategory = [
     { value: "choose", label: "Choose" },
     { value: "lenovo", label: "Lenovo" },
@@ -388,7 +394,16 @@ export default function AddProductComponent({
                             </label>
                             <Select
                               className="react-select"
-                              options={store}
+                              classNamePrefix="react-select"
+                              options={STORE_OPTIONS}
+                              value={storeVal}
+                              onChange={(opt) => {
+                                if (STORE_OPTIONS.length > 1) {
+                                  setStoreVal(opt);
+                                }
+                              }}
+                              isDisabled={STORE_OPTIONS.length <= 1}
+                              isClearable={STORE_OPTIONS.length > 1}
                               placeholder="Choose"
                             />
                           </div>
@@ -401,7 +416,16 @@ export default function AddProductComponent({
                             </label>
                             <Select
                               className="react-select"
-                              options={warehouse}
+                              classNamePrefix="react-select"
+                              options={WAREHOUSE_OPTIONS}
+                              value={warehouseVal}
+                              onChange={(opt) => {
+                                if (WAREHOUSE_OPTIONS.length > 1) {
+                                  setWarehouseVal(opt);
+                                }
+                              }}
+                              isDisabled={WAREHOUSE_OPTIONS.length <= 1}
+                              isClearable={WAREHOUSE_OPTIONS.length > 1}
                               placeholder="Choose"
                             />
                           </div>
@@ -1263,7 +1287,9 @@ export default function AddProductComponent({
                 >
                   {uploadingImages
                     ? "Subiendo…"
-                    : "Guardar imágenes (Firebase)"}
+                    : isEdit
+                      ? "Save Changes"
+                      : "Guardar imágenes (Firebase)"}
                 </button>
               </div>
             </div>
