@@ -414,7 +414,7 @@ const SettingsSideBar = (props: any) => {
                       // className={`active ${
                       //   isFinancialSettingsOpen ? "subdrop" : ""
                       // }`}
-                      onClick={toggleFinancialSettings} className={pathname === route.paymentgateway || pathname === route.banksettingslist || pathname === route.taxrates || pathname == route.currencysettings ? 'active subdrop' : ''}
+                      onClick={toggleFinancialSettings} className={pathname === route.paymentgateway || pathname === route.banksettingslist || pathname === route.taxrates || pathname === route.currencysettings || pathname === route.pricingPolicies || pathname === route.productPrices ? 'active subdrop' : ''}
 
                     >
                       <i className="ti ti-settings-dollar fs-18"></i>
@@ -472,6 +472,26 @@ const SettingsSideBar = (props: any) => {
                           }
                         >
                           Currencies
+                        </Link>
+                      </li>
+                      <li>
+                        <Link
+                          href={route.pricingPolicies}
+                          className={
+                            pathname === route.pricingPolicies ? "active" : ""
+                          }
+                        >
+                          Políticas de Precio
+                        </Link>
+                      </li>
+                      <li>
+                        <Link
+                          href={route.productPrices}
+                          className={
+                            pathname === route.productPrices ? "active" : ""
+                          }
+                        >
+                          Precios Calculados
                         </Link>
                       </li>
                     </ul>

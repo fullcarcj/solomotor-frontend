@@ -129,6 +129,8 @@ export const all_routes = {
   banksettingsgrid: "/bank-settings-grid",
   taxrates: "/tax-rates",
   currencysettings: "/currency-settings",
+  pricingPolicies: "/pricing-policies",
+  productPrices: "/product-prices",
   storagesettings: "/storage-settings",
   banipaddress: "/ban-ip-address",
   generalsettings: "/general-settings",
