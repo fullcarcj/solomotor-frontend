@@ -31,3 +31,19 @@ export function getWebhookAdminSecret(): string {
   if (primary) return primary;
   return (process.env.ADMIN_SECRET ?? "").trim();
 }
+
+/**
+ * Ruta absoluta (path) en el webhook-receiver para el listado de fabricantes.
+ * Por defecto: `GET /api/inventory/manufacturers`.
+ * Si tu API usa otra URL (p. ej. `/api/inventory/brands`), define en `.env.local`:
+ * `INVENTORY_MANUFACTURERS_UPSTREAM_PATH=/api/inventory/brands`
+ */
+export function getInventoryManufacturersUpstreamPath(): string {
+  const raw = (process.env.INVENTORY_MANUFACTURERS_UPSTREAM_PATH ?? "")
+    .trim()
+    .replace(/\s+/g, "");
+  if (raw) {
+    return raw.startsWith("/") ? raw : `/${raw}`;
+  }
+  return "/api/inventory/manufacturers";
+}

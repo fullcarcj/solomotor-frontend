@@ -13,6 +13,14 @@ import { all_routes } from "@/data/all_routes";
 import type { InventoryProductDetail } from "@/components/Inventory/add-product/addproduct";
 import { ProductThumb } from "@/components/Inventory/ProductThumb";
 import { inventoryPosProductFallbackPath } from "@/lib/inventoryPosPlaceholderPath";
+import {
+  productBrandLabel,
+  productCanonicalSku,
+  productCategoryLabel,
+  productDisplayName,
+  productLegacySku,
+  productLongDescription,
+} from "@/lib/inventoryProductCompat";
 
 type ProductDetailApi = InventoryProductDetail & {
   is_active?: boolean;
@@ -116,8 +124,8 @@ const ProductDetailsComponent = () => {
 
   const thumbFallback = useMemo(() => {
     if (!product?.id) return "/assets/img/products/pos-product-01.svg";
-    return inventoryPosProductFallbackPath(product.id, product.sku);
-  }, [product?.id, product?.sku]);
+    return inventoryPosProductFallbackPath(product.id, productCanonicalSku(product));
+  }, [product]);
 
   if (loading) {
     return (
@@ -151,6 +159,12 @@ const ProductDetailsComponent = () => {
   }
 
   const p = product;
+  const displayName = productDisplayName(p) || "—";
+  const sku = productCanonicalSku(p);
+  const skuOld = productLegacySku(p);
+  const categoryLabel = productCategoryLabel(p) || "—";
+  const brandLabel = productBrandLabel(p) || "—";
+  const longDescription = productLongDescription(p) || "—";
   const editHref = `${route.editproduct}?id=${p.id}`;
 
   return (
@@ -159,7 +173,7 @@ const ProductDetailsComponent = () => {
         <div className="page-header">
           <div className="page-title">
             <h4>Detalle del producto</h4>
-            <h6>{dash(p.name)}</h6>
+            <h6>{dash(displayName)}</h6>
           </div>
           <div className="page-btn d-flex gap-2">
             <Link href={route.productlist} className="btn btn-outline-light">
@@ -190,7 +204,7 @@ const ProductDetailsComponent = () => {
                       alt=""
                     />
                   </div>
-                  <span className="text-muted small ms-2">SKU: {dash(p.sku)}</span>
+                  <span className="text-muted small ms-2">SKU: {dash(sku)}</span>
                   <Link href="#" className="printimg">
                     <i className="ti ti-printer fs-24 text-dark" />
                   </Link>
@@ -199,11 +213,11 @@ const ProductDetailsComponent = () => {
                   <ul className="product-bar">
                     <li>
                       <h4>Producto</h4>
-                      <h6>{dash(p.name)}</h6>
+                      <h6>{dash(displayName)}</h6>
                     </li>
                     <li>
                       <h4>Categoría</h4>
-                      <h6>{dash(p.category)}</h6>
+                      <h6>{dash(categoryLabel)}</h6>
                     </li>
                     <li>
                       <h4>Subcategoría</h4>
@@ -211,7 +225,7 @@ const ProductDetailsComponent = () => {
                     </li>
                     <li>
                       <h4>Marca</h4>
-                      <h6>{dash(p.brand)}</h6>
+                      <h6>{dash(brandLabel)}</h6>
                     </li>
                     <li>
                       <h4>Unidad</h4>
@@ -219,7 +233,7 @@ const ProductDetailsComponent = () => {
                     </li>
                     <li>
                       <h4>SKU</h4>
-                      <h6>{dash(p.sku)}</h6>
+                      <h6>{dash(sku)}</h6>
                     </li>
                     <li>
                       <h4>Cantidad mínima</h4>
@@ -255,7 +269,7 @@ const ProductDetailsComponent = () => {
                     </li>
                     <li>
                       <h4>Descripción</h4>
-                      <h6>{dash(p.description)}</h6>
+                      <h6>{dash(longDescription)}</h6>
                     </li>
                   </ul>
                 </div>
@@ -273,12 +287,13 @@ const ProductDetailsComponent = () => {
                   >
                     <div className="slider-product text-center">
                       <ProductThumb
-                        sku={p.sku ?? ""}
+                        sku={sku}
+                        skuOld={skuOld}
                         fallback={thumbFallback}
                         className="img-fluid rounded"
-                        alt={p.name ?? ""}
+                        alt={displayName}
                       />
-                      <h4 className="text-dark mt-2">{dash(p.sku)}</h4>
+                      <h4 className="text-dark mt-2">{dash(sku)}</h4>
                       <h6 className="text-dark text-muted">
                         Vista previa · Firebase (.webp, p. ej. sufijo _1)
                       </h6>

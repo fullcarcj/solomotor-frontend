@@ -10,7 +10,8 @@ import Addunits from "@/core/modals/inventory/addunits";
 import AddVariant from "@/core/modals/inventory/addvariant";
 import AddVarientNew from "@/core/modals/inventory/addVarientNew";
 import { all_routes } from "@/data/all_routes";
-import { Alert, message } from "antd";
+import { ExclamationCircleOutlined } from "@ant-design/icons";
+import { Alert, message, Modal, Spin } from "antd";
 import {
   ArrowLeft,
   Info,
@@ -19,6 +20,7 @@ import {
   Image,
 } from "react-feather";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -37,10 +39,28 @@ import "yet-another-react-lightbox/styles.css";
 export type InventoryProductDetail = {
   id: number;
   sku: string;
+  /** Nuevo SKU (nomenclatura nueva). Mantener `sku` por compatibilidad. */
+  sku_nuevo?: string | null;
+  /** SKU histórico/legado. */
+  sku_old?: string | null;
+  /** OEM de fabricante para búsqueda técnica. */
+  oem_original?: string | null;
+  barcode?: string | null;
   name: string;
+  /** Nombre corto comercial. Mantener `name` por compatibilidad. */
+  nombre_corto?: string | null;
   description?: string | null;
+  /** Descripción larga e-commerce. Mantener `description` por compatibilidad. */
+  descripcion_larga?: string | null;
   category?: string | null;
+  category_id?: number | string | null;
+  subcategory_id?: number | string | null;
   brand?: string | null;
+  brand_id?: number | string | null;
+  unit_type?: string | null;
+  is_universal?: boolean | null;
+  weight?: string | number | null;
+  dimensions?: string | null;
   unit_price_usd?: string | number | null;
   stock_qty?: string | number | null;
   stock_min?: string | number | null;
@@ -55,6 +75,108 @@ type CategoryProductRow = {
   category_descripcion: string;
   category_ml: string | null;
 };
+
+const SUBCATEGORY_CHOOSE: SelectOption[] = [
+  { value: "choose", label: "Choose" },
+];
+
+/** Respuesta típica GET /api/inventory/subcategories → opciones react-select. */
+function parseSubcategoriesFromApi(body: unknown): SelectOption[] {
+  const b = body as {
+    data?: { subcategories?: unknown[] };
+    subcategories?: unknown[];
+  };
+  const arr = b?.data?.subcategories ?? b?.subcategories;
+  if (!Array.isArray(arr)) return [];
+  const out: SelectOption[] = [];
+  for (const raw of arr) {
+    if (!raw || typeof raw !== "object") continue;
+    const o = raw as Record<string, unknown>;
+    const id = o.id ?? o.subcategory_id;
+    if (id == null) continue;
+    const idStr = String(id).trim();
+    if (!idStr) continue;
+    const labelRaw =
+      o.subcategory_descripcion ??
+      o.name ??
+      o.nombre ??
+      o.label ??
+      o.descripcion;
+    const label =
+      typeof labelRaw === "string" && labelRaw.trim()
+        ? labelRaw.trim()
+        : idStr;
+    out.push({ value: idStr, label });
+  }
+  return out;
+}
+
+function categoryParentIdFromSelect(
+  categoryVal: SelectOption | null,
+  rows: CategoryProductRow[]
+): number | null {
+  const label = (categoryVal?.label ?? categoryVal?.value ?? "").trim();
+  if (!label || label.toLowerCase() === "choose") return null;
+  const row = rows.find(
+    (r) =>
+      (r.category_descripcion ?? "").trim().toLowerCase() ===
+      label.toLowerCase()
+  );
+  return row?.id ?? null;
+}
+
+/** category_id del producto o resolución por nombre desde category_products. */
+function initialCategoryParentId(
+  product: InventoryProductDetail | null,
+  rows: CategoryProductRow[]
+): number | null {
+  const raw = product?.category_id;
+  if (raw != null && String(raw).trim() !== "") {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n > 0) return Math.trunc(n);
+  }
+  const cat = product?.category?.trim();
+  if (!cat || !rows.length) return null;
+  const row = rows.find(
+    (r) =>
+      (r.category_descripcion ?? "").trim().toLowerCase() ===
+      cat.toLowerCase()
+  );
+  return row?.id ?? null;
+}
+
+/** Respuesta 409 PATCH …/identity (y duplicado). */
+type IdentityConflictPayload = {
+  error: { code: string; message: string };
+  product_id: number;
+  sku: string;
+  blocked_fields: string[];
+  duplicate_url?: string | null;
+};
+
+/**
+ * URL local del proxy Next para duplicar.
+ * Si `duplicate_url` viene vacío → null (no se muestra botón Duplicar).
+ */
+function resolveDuplicateFetchPath(
+  duplicateUrl: string | null | undefined
+): string | null {
+  const t = (duplicateUrl ?? "").trim();
+  if (!t) return null;
+  const rel = /\/api\/inventory\/products\/(\d+)\/duplicate\/?(?:\?.*)?$/i.exec(
+    t
+  );
+  if (rel) return `/api/inventory/products/${rel[1]}/duplicate`;
+  try {
+    const u = new URL(t);
+    const pathRel =
+      /\/api\/inventory\/products\/(\d+)\/duplicate\/?$/i.exec(u.pathname);
+    if (pathRel) return `/api/inventory/products/${pathRel[1]}/duplicate`;
+  } catch {
+    if (t.startsWith("/")) return t.split("?")[0] ?? t;
+  }
+  return null;
+}
 
 type SelectOption = { value: string; label: string };
 
@@ -101,21 +223,44 @@ const CATEGORY_CHOOSE: SelectOption[] = [
   { value: "choose", label: "Choose" },
 ];
 
-const BRAND_OPTIONS_BASE: SelectOption[] = [
+const MANUFACTURER_CHOOSE: SelectOption[] = [
   { value: "choose", label: "Choose" },
-  { value: "nike", label: "Nike" },
-  { value: "bolt", label: "Bolt" },
 ];
 
-/** Tienda fija; si en el futuro hay más de una opción, el desplegable se habilita. */
-const STORE_OPTIONS: SelectOption[] = [
-  { value: "FULLCAR CJ CA", label: "FULLCAR CJ CA" },
-];
+/** Fila de fabricantes (Manufacturers): `name` en BD. */
+type ManufacturerRow = {
+  id: number;
+  name: string;
+};
 
-/** Almacén fijo; misma lógica que Store. */
-const WAREHOUSE_OPTIONS: SelectOption[] = [
-  { value: "BELLO_MONTE", label: "BELLO_MONTE" },
-];
+function parseManufacturersFromApi(body: unknown): ManufacturerRow[] {
+  const b = body as {
+    data?: { manufacturers?: unknown[]; items?: unknown[] };
+    manufacturers?: unknown[];
+    items?: unknown[];
+  };
+  const arr =
+    b?.data?.manufacturers ??
+    b?.data?.items ??
+    b?.manufacturers ??
+    b?.items ??
+    [];
+  if (!Array.isArray(arr)) return [];
+  const out: ManufacturerRow[] = [];
+  for (const raw of arr) {
+    if (!raw || typeof raw !== "object") continue;
+    const o = raw as Record<string, unknown>;
+    const id = o.id ?? o.manufacturer_id;
+    const nameRaw = o.name ?? o.manufacturer_name ?? o.label;
+    if (id == null || typeof nameRaw !== "string") continue;
+    const name = nameRaw.trim();
+    if (!name) continue;
+    const n = Number(id);
+    if (!Number.isFinite(n) || n <= 0) continue;
+    out.push({ id: Math.trunc(n), name });
+  }
+  return out;
+}
 
 export type AddProductComponentProps = {
   mode?: "create" | "edit";
@@ -129,12 +274,41 @@ export default function AddProductComponent({
   loadError = null,
 }: AddProductComponentProps = {}) {
   const route = all_routes;
+  const router = useRouter();
   const isEdit = mode === "edit";
 
   const [productName, setProductName] = useState("");
   const [slug, setSlug] = useState("");
   const [sku, setSku] = useState("");
+  const [skuNuevo, setSkuNuevo] = useState("");
+  const [skuOld, setSkuOld] = useState("");
+  const [oemOriginal, setOemOriginal] = useState("");
+  const [barcode, setBarcode] = useState("");
+  const [nombreCorto, setNombreCorto] = useState("");
   const [description, setDescription] = useState("");
+  const [descripcionLarga, setDescripcionLarga] = useState("");
+  const [brandId, setBrandId] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [subcategoryVal, setSubcategoryVal] = useState<SelectOption | null>(
+    null
+  );
+  const [subcategoryOptions, setSubcategoryOptions] = useState<SelectOption[]>(
+    () => [...SUBCATEGORY_CHOOSE]
+  );
+  const [subcategoriesStatus, setSubcategoriesStatus] = useState<
+    "idle" | "loading" | "ok" | "error"
+  >("idle");
+  const [subcategoriesError, setSubcategoriesError] = useState<string | null>(
+    null
+  );
+  const [conflictData, setConflictData] =
+    useState<IdentityConflictPayload | null>(null);
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
+  const [unitType, setUnitType] = useState("");
+  const [isUniversal, setIsUniversal] = useState(false);
+  const [weight, setWeight] = useState("");
+  const [dimensions, setDimensions] = useState("");
   const [stockQty, setStockQty] = useState("");
   const [unitPrice, setUnitPrice] = useState("");
   const [stockMin, setStockMin] = useState("");
@@ -147,11 +321,17 @@ export default function AddProductComponent({
   >("loading");
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
   const [brandVal, setBrandVal] = useState<SelectOption | null>(null);
-  const [storeVal, setStoreVal] = useState<SelectOption | null>(
-    () => STORE_OPTIONS[0] ?? null
+  const [manufacturerRows, setManufacturerRows] = useState<ManufacturerRow[]>(
+    []
   );
-  const [warehouseVal, setWarehouseVal] = useState<SelectOption | null>(
-    () => WAREHOUSE_OPTIONS[0] ?? null
+  const [manufacturersStatus, setManufacturersStatus] = useState<
+    "idle" | "loading" | "ok" | "error"
+  >("loading");
+  const [manufacturersError, setManufacturersError] = useState<string | null>(
+    null
+  );
+  const [manufacturerVal, setManufacturerVal] = useState<SelectOption | null>(
+    null
   );
   const [unitVal, setUnitVal] = useState<SelectOption | null>(null);
   const [pcsUnitVal, setPcsUnitVal] = useState<SelectOption | null>(null);
@@ -163,14 +343,30 @@ export default function AddProductComponent({
   const [predictedMlCategory, setPredictedMlCategory] = useState("");
 
   useEffect(() => {
-    setStoreVal(STORE_OPTIONS[0] ?? null);
-    setWarehouseVal(WAREHOUSE_OPTIONS[0] ?? null);
     if (!initialProduct) return;
     const name = initialProduct.name ?? "";
     setProductName(name);
     setSlug(slugify(name));
     setSku(initialProduct.sku ?? "");
+    setSkuNuevo(initialProduct.sku_nuevo ?? initialProduct.sku ?? "");
+    setSkuOld(initialProduct.sku_old ?? "");
+    setOemOriginal(initialProduct.oem_original ?? "");
+    setBarcode(initialProduct.barcode ?? "");
+    setNombreCorto(initialProduct.nombre_corto ?? initialProduct.name ?? "");
     setDescription(initialProduct.description ?? "");
+    setDescripcionLarga(
+      initialProduct.descripcion_larga ?? initialProduct.description ?? ""
+    );
+    setBrandId(
+      initialProduct.brand_id != null ? String(initialProduct.brand_id) : ""
+    );
+    setCategoryId(
+      initialProduct.category_id != null ? String(initialProduct.category_id) : ""
+    );
+    setUnitType(initialProduct.unit_type ?? "");
+    setIsUniversal(Boolean(initialProduct.is_universal));
+    setWeight(initialProduct.weight != null ? String(initialProduct.weight) : "");
+    setDimensions(initialProduct.dimensions ?? "");
     setStockQty(
       initialProduct.stock_qty != null ? String(initialProduct.stock_qty) : ""
     );
@@ -270,6 +466,44 @@ export default function AddProductComponent({
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setManufacturersStatus("loading");
+      setManufacturersError(null);
+      try {
+        const res = await fetch("/api/inventory/manufacturers", {
+          cache: "no-store",
+        });
+        const body = (await res.json()) as {
+          data?: { manufacturers?: unknown[]; items?: unknown[] };
+          error?: { message?: string; code?: string };
+        };
+        if (cancelled) return;
+        if (!res.ok) {
+          const msg =
+            body?.error?.message ||
+            body?.error?.code ||
+            `Error ${res.status}`;
+          throw new Error(msg);
+        }
+        setManufacturerRows(parseManufacturersFromApi(body));
+        setManufacturersStatus("ok");
+      } catch (e) {
+        if (!cancelled) {
+          setManufacturersStatus("error");
+          setManufacturersError(
+            e instanceof Error ? e.message : "No se pudieron cargar fabricantes"
+          );
+          setManufacturerRows([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const categoryOptions = useMemo(
     () =>
       mergeSelectOption(
@@ -278,6 +512,98 @@ export default function AddProductComponent({
       ),
     [categoryRemoteBase, initialProduct]
   );
+
+  /** ID de categoría padre: selección actual o producto en edición. */
+  const effectiveParentId = useMemo(() => {
+    const fromSelect = categoryParentIdFromSelect(
+      categoryVal,
+      categoryMlRows
+    );
+    if (fromSelect != null) return fromSelect;
+    return initialCategoryParentId(initialProduct, categoryMlRows);
+  }, [categoryVal, categoryMlRows, initialProduct]);
+
+  const initialParentId = useMemo(
+    () => initialCategoryParentId(initialProduct, categoryMlRows),
+    [initialProduct, categoryMlRows]
+  );
+
+  useEffect(() => {
+    const pid = categoryParentIdFromSelect(categoryVal, categoryMlRows);
+    if (pid != null) setCategoryId(String(pid));
+  }, [categoryVal, categoryMlRows]);
+
+  useEffect(() => {
+    const parentId = effectiveParentId;
+    if (!parentId) {
+      setSubcategoryOptions([...SUBCATEGORY_CHOOSE]);
+      setSubcategoryVal(null);
+      setSubcategoriesStatus("idle");
+      setSubcategoriesError(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      setSubcategoriesStatus("loading");
+      setSubcategoriesError(null);
+      try {
+        const res = await fetch(
+          `/api/inventory/subcategories?category_id=${encodeURIComponent(String(parentId))}`,
+          { cache: "no-store" }
+        );
+        const body = (await res.json()) as {
+          data?: { subcategories?: unknown[] };
+          error?: { message?: string; code?: string };
+          subcategories?: unknown[];
+        };
+        if (cancelled) return;
+        if (!res.ok) {
+          const msg =
+            body?.error?.message ||
+            body?.error?.code ||
+            `Error ${res.status}`;
+          throw new Error(msg);
+        }
+        const parsed = parseSubcategoriesFromApi(body);
+        const opts =
+          parsed.length > 0
+            ? [...SUBCATEGORY_CHOOSE, ...parsed]
+            : [...SUBCATEGORY_CHOOSE];
+        setSubcategoryOptions(opts);
+        const restoreSub =
+          initialParentId != null &&
+          parentId === initialParentId &&
+          initialProduct?.subcategory_id != null;
+        if (restoreSub) {
+          const sid = String(initialProduct.subcategory_id).trim();
+          const found = parsed.find((o) => o.value === sid);
+          setSubcategoryVal(
+            found ?? (sid ? { value: sid, label: sid } : null)
+          );
+        } else {
+          setSubcategoryVal(null);
+        }
+        setSubcategoriesStatus("ok");
+      } catch (e) {
+        if (!cancelled) {
+          setSubcategoriesStatus("error");
+          setSubcategoriesError(
+            e instanceof Error ? e.message : "Subcategorías no disponibles"
+          );
+          setSubcategoryOptions([...SUBCATEGORY_CHOOSE]);
+          setSubcategoryVal(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    effectiveParentId,
+    initialParentId,
+    initialProduct?.id,
+    initialProduct?.subcategory_id,
+  ]);
 
   const normalizeMlvHint = useCallback((raw: string) => {
     const t = raw.trim();
@@ -328,15 +654,55 @@ export default function AddProductComponent({
     if (raw) setPredictedMlCategory(normalizeMlvHint(raw));
   }, [initialProduct, categoryMlRows, normalizeMlvHint]);
 
-  const brandOptions = useMemo(
-    () => mergeSelectOption(BRAND_OPTIONS_BASE, initialProduct?.brand ?? null),
-    [initialProduct]
-  );
-  const subcategory = [
-    { value: "choose", label: "Choose" },
-    { value: "lenovo", label: "Lenovo" },
-    { value: "electronics", label: "Electronics" },
-  ];
+  const manufacturerOptions = useMemo(() => {
+    const base: SelectOption[] = [...MANUFACTURER_CHOOSE];
+    const seen = new Set(base.map((o) => o.value));
+    for (const r of manufacturerRows) {
+      const v = String(r.id);
+      if (!seen.has(v)) {
+        seen.add(v);
+        base.push({ value: v, label: r.name });
+      }
+    }
+    const bid = initialProduct?.brand_id;
+    const orphanLabel = initialProduct?.brand?.trim();
+    if (bid != null && orphanLabel && !seen.has(String(bid))) {
+      base.push({ value: String(bid), label: orphanLabel });
+    }
+    return base;
+  }, [manufacturerRows, initialProduct?.brand_id, initialProduct?.brand]);
+
+  useEffect(() => {
+    if (manufacturersStatus !== "ok") return;
+    if (!manufacturerRows.length || !initialProduct) return;
+    const bid = initialProduct.brand_id;
+    if (bid != null) {
+      const row = manufacturerRows.find((r) => String(r.id) === String(bid));
+      if (row) {
+        setManufacturerVal({ value: String(row.id), label: row.name });
+        setBrandId(String(row.id));
+        setBrandVal({ value: row.name, label: row.name });
+        return;
+      }
+    }
+    const nm = initialProduct.brand?.trim();
+    if (nm) {
+      const row = manufacturerRows.find(
+        (r) => r.name.trim().toLowerCase() === nm.toLowerCase()
+      );
+      if (row) {
+        setManufacturerVal({ value: String(row.id), label: row.name });
+        setBrandId(String(row.id));
+        setBrandVal({ value: row.name, label: row.name });
+      }
+    }
+  }, [
+    initialProduct?.id,
+    initialProduct?.brand_id,
+    initialProduct?.brand,
+    manufacturerRows,
+    manufacturersStatus,
+  ]);
 
   const unit = [
     { value: "choose", label: "Choose" },
@@ -565,6 +931,92 @@ export default function AddProductComponent({
     }
   };
 
+  const saveIdentityFields = async (
+    productId: number,
+    fields: {
+      brand_id?: number;
+      subcategory_id?: number;
+      category_id?: number;
+    }
+  ): Promise<{ ok: boolean; conflict: boolean }> => {
+    const res = await fetch(`/api/inventory/products/${productId}/identity`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(fields),
+      cache: "no-store",
+    });
+
+    const rawText = await res.text();
+    let parsed = {} as IdentityConflictPayload & {
+      error?: { message?: string; code?: string };
+    };
+    if (rawText.trim()) {
+      try {
+        parsed = JSON.parse(rawText) as typeof parsed;
+      } catch {
+        parsed = {} as typeof parsed;
+      }
+    }
+
+    if (res.status === 409) {
+      setConflictData(parsed as IdentityConflictPayload);
+      setShowConflictModal(true);
+      return { ok: false, conflict: true };
+    }
+
+    if (!res.ok) {
+      throw new Error(
+        parsed.error?.message ?? "Error al actualizar identidad del producto"
+      );
+    }
+
+    return { ok: true, conflict: false };
+  };
+
+  const handleDuplicate = async () => {
+    if (!conflictData) return;
+    const path = resolveDuplicateFetchPath(conflictData.duplicate_url);
+    if (!path) return;
+    setDuplicating(true);
+    try {
+      const res = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        throw new Error("Error al duplicar el producto");
+      }
+      const raw = (await res.json()) as {
+        data?: { id?: number; sku?: string };
+        id?: number;
+        sku?: string;
+      };
+      const newProduct = raw.data ?? raw;
+      const newId = newProduct.id;
+      const newSku = newProduct.sku ?? "";
+      if (newId == null || !Number.isFinite(Number(newId))) {
+        throw new Error("Respuesta de duplicado sin id válido");
+      }
+      setShowConflictModal(false);
+      setConflictData(null);
+      message.success({
+        content: `Duplicado creado: ${newSku} — está inactivo, editalo antes de activar.`,
+        duration: 6,
+      });
+      router.push(`${all_routes.editproduct}?id=${String(newId)}`);
+    } catch (err) {
+      message.error(
+        err instanceof Error
+          ? err.message
+          : "No se pudo duplicar. Intentá de nuevo."
+      );
+    } finally {
+      setDuplicating(false);
+    }
+  };
+
   const saveEditProductToDb = async () => {
     const id = initialProduct?.id;
     if (id == null || !Number.isFinite(Number(id))) {
@@ -573,6 +1025,17 @@ export default function AddProductComponent({
     const name = productName.trim();
     if (!name) {
       message.error("El nombre del producto es obligatorio.");
+      throw new Error("VALIDATION");
+    }
+    if (oemOriginal.trim() === "") {
+      message.error("El OEM es obligatorio.");
+      throw new Error("VALIDATION");
+    }
+    if (
+      !manufacturerVal ||
+      String(manufacturerVal.value).toLowerCase() === "choose"
+    ) {
+      message.error("La marca del producto es obligatoria.");
       throw new Error("VALIDATION");
     }
     const unit = parseNonNegativeOptional(unitPrice);
@@ -610,6 +1073,28 @@ export default function AddProductComponent({
       category,
       brand,
     };
+    if (skuNuevo.trim() !== "") body.sku_nuevo = skuNuevo.trim();
+    if (skuOld.trim() !== "") body.sku_old = skuOld.trim();
+    body.oem_original =
+      oemOriginal.trim() === "" ? null : oemOriginal.trim();
+    if (barcode.trim() !== "") body.barcode = barcode.trim();
+    if (nombreCorto.trim() !== "") body.nombre_corto = nombreCorto.trim();
+    if (descripcionLarga.trim() !== "") {
+      body.descripcion_larga = descripcionLarga.trim();
+    }
+    if (brandId.trim() !== "") body.brand_id = brandId.trim();
+    if (categoryId.trim() !== "") body.category_id = categoryId.trim();
+    const subRaw = subcategoryVal?.value?.trim();
+    if (
+      subRaw &&
+      subRaw.toLowerCase() !== "choose"
+    ) {
+      body.subcategory_id = subRaw;
+    }
+    if (unitType.trim() !== "") body.unit_type = unitType.trim();
+    body.is_universal = Boolean(isUniversal);
+    if (weight.trim() !== "") body.weight = weight.trim();
+    if (dimensions.trim() !== "") body.dimensions = dimensions.trim();
     if (unit !== undefined) body.unit_price_usd = unit;
     if (sq !== undefined) body.stock_qty = sq;
     if (sm !== undefined) body.stock_min = sm;
@@ -639,6 +1124,49 @@ export default function AddProductComponent({
     if (isEdit && initialProduct?.id != null) {
       setIsSaving(true);
       try {
+        const productId = initialProduct.id;
+        const identityFields: Record<string, number> = {};
+        const bi = Number(brandId.trim());
+        if (brandId.trim() !== "" && Number.isFinite(bi) && bi > 0) {
+          identityFields.brand_id = Math.trunc(bi);
+        }
+        const ci = Number(categoryId.trim());
+        if (categoryId.trim() !== "" && Number.isFinite(ci) && ci > 0) {
+          identityFields.category_id = Math.trunc(ci);
+        }
+        const subRaw = subcategoryVal?.value?.trim();
+        if (
+          subRaw &&
+          subRaw.toLowerCase() !== "choose" &&
+          Number.isFinite(Number(subRaw)) &&
+          Number(subRaw) > 0
+        ) {
+          identityFields.subcategory_id = Math.trunc(Number(subRaw));
+        }
+
+        if (Object.keys(identityFields).length > 0) {
+          try {
+            const result = await saveIdentityFields(
+              productId,
+              identityFields as {
+                brand_id?: number;
+                subcategory_id?: number;
+                category_id?: number;
+              }
+            );
+            if (result.conflict) {
+              return;
+            }
+          } catch (err) {
+            if (err instanceof Error) {
+              message.error(err.message);
+            } else {
+              message.error("Error al actualizar identidad del producto");
+            }
+            return;
+          }
+        }
+
         await saveEditProductToDb();
         await uploadPendingToFirebase({ skipNoopMessage: true });
       } catch (e) {
@@ -717,46 +1245,75 @@ export default function AddProductComponent({
                       <div className="row">
                         <div className="col-sm-6 col-12">
                           <div className="mb-3">
-                            <label className="form-label">
-                              Store<span className="text-danger ms-1">*</span>
+                            <label className="form-label" htmlFor="inventory-oem-original">
+                              OEM
+                              <span className="text-danger ms-1">*</span>
                             </label>
-                            <Select {...reactSelectPortalProps}
-                              instanceId="add-product-store"
-                              className="react-select"
-                              classNamePrefix="react-select"
-                              options={STORE_OPTIONS}
-                              value={storeVal}
-                              onChange={(opt) => {
-                                if (STORE_OPTIONS.length > 1) {
-                                  setStoreVal(opt);
-                                }
-                              }}
-                              isDisabled={STORE_OPTIONS.length <= 1}
-                              isClearable={STORE_OPTIONS.length > 1}
-                              placeholder="Choose"
+                            <input
+                              id="inventory-oem-original"
+                              type="text"
+                              className="form-control"
+                              value={oemOriginal}
+                              onChange={(e) => setOemOriginal(e.target.value)}
+                              placeholder="Código OEM de fabricante"
+                              autoComplete="off"
                             />
                           </div>
                         </div>
                         <div className="col-sm-6 col-12">
                           <div className="mb-3">
-                            <label className="form-label">
-                              Warehouse
-                              <span className="text-danger ms-1">*</span>
-                            </label>
+                            <div className="add-newplus">
+                              <label
+                                className="form-label"
+                                htmlFor="inventory-manufacturer-select"
+                              >
+                                Marca del producto
+                                <span className="text-danger ms-1">*</span>
+                              </label>
+                              <Link
+                                href="#"
+                                data-bs-toggle="modal"
+                                data-bs-target="#add-brand"
+                              >
+                                <PlusCircle
+                                  size={14}
+                                  data-feather="plus-circle"
+                                  className="plus-down-add"
+                                />
+                                <span>Add New</span>
+                              </Link>
+                            </div>
                             <Select {...reactSelectPortalProps}
-                              instanceId="add-product-warehouse"
+                              inputId="inventory-manufacturer-select"
+                              instanceId="add-product-manufacturer"
                               className="react-select"
                               classNamePrefix="react-select"
-                              options={WAREHOUSE_OPTIONS}
-                              value={warehouseVal}
+                              options={manufacturerOptions}
+                              placeholder={
+                                manufacturersStatus === "loading"
+                                  ? "Cargando marcas…"
+                                  : "Choose"
+                              }
+                              value={manufacturerVal}
                               onChange={(opt) => {
-                                if (WAREHOUSE_OPTIONS.length > 1) {
-                                  setWarehouseVal(opt);
+                                const o = opt as SelectOption | null;
+                                setManufacturerVal(o);
+                                if (
+                                  !o ||
+                                  String(o.value).toLowerCase() === "choose"
+                                ) {
+                                  setBrandId("");
+                                  setBrandVal(null);
+                                  return;
                                 }
+                                setBrandId(String(o.value));
+                                setBrandVal({
+                                  value: String(o.label),
+                                  label: String(o.label),
+                                });
                               }}
-                              isDisabled={WAREHOUSE_OPTIONS.length <= 1}
-                              isClearable={WAREHOUSE_OPTIONS.length > 1}
-                              placeholder="Choose"
+                              isDisabled={manufacturersStatus === "loading"}
+                              isLoading={manufacturersStatus === "loading"}
                             />
                           </div>
                         </div>
@@ -867,6 +1424,22 @@ export default function AddProductComponent({
                             message={categoriesError}
                           />
                         ) : null}
+                        {subcategoriesStatus === "error" && subcategoriesError ? (
+                          <Alert
+                            type="warning"
+                            showIcon
+                            className="mb-3"
+                            message={`Subcategorías: ${subcategoriesError}`}
+                          />
+                        ) : null}
+                        {manufacturersStatus === "error" && manufacturersError ? (
+                          <Alert
+                            type="warning"
+                            showIcon
+                            className="mb-3"
+                            message={`Fabricantes: ${manufacturersError}`}
+                          />
+                        ) : null}
                         <div className="row">
                           <div className="col-sm-6 col-12">
                             <div className="mb-3">
@@ -921,8 +1494,24 @@ export default function AddProductComponent({
                               <Select {...reactSelectPortalProps}
                                 instanceId="add-product-subcategory"
                                 className="react-select"
-                                options={subcategory}
-                                placeholder="Choose"
+                                classNamePrefix="react-select"
+                                options={subcategoryOptions}
+                                placeholder={
+                                  !effectiveParentId
+                                    ? "Elige una categoría primero"
+                                    : subcategoriesStatus === "loading"
+                                      ? "Cargando subcategorías…"
+                                      : "Choose"
+                                }
+                                value={subcategoryVal}
+                                onChange={(opt) =>
+                                  setSubcategoryVal(opt as SelectOption | null)
+                                }
+                                isDisabled={
+                                  !effectiveParentId ||
+                                  subcategoriesStatus === "loading"
+                                }
+                                isLoading={subcategoriesStatus === "loading"}
                               />
                             </div>
                           </div>
@@ -930,39 +1519,7 @@ export default function AddProductComponent({
                       </div>
                       <div className="add-product-new">
                         <div className="row">
-                          <div className="col-sm-6 col-12">
-                            <div className="mb-3">
-                              <div className="add-newplus">
-                                <label className="form-label">
-                                  Brand
-                                  <span className="text-danger ms-1">*</span>
-                                </label>
-                                <Link
-                                  href="#"
-                                  data-bs-toggle="modal"
-                                  data-bs-target="#add-brand"
-                                >
-                                  <PlusCircle
-                                    size={14}
-                                    data-feather="plus-circle"
-                                    className="plus-down-add"
-                                  />
-                                  <span>Add New</span>
-                                </Link>
-                              </div>
-                              <Select {...reactSelectPortalProps}
-                                instanceId="add-product-brand"
-                                className="react-select"
-                                options={brandOptions}
-                                placeholder="Choose"
-                                value={brandVal}
-                                onChange={(opt) =>
-                                  setBrandVal(opt as SelectOption | null)
-                                }
-                              />
-                            </div>
-                          </div>
-                          <div className="col-sm-6 col-12">
+                          <div className="col-12">
                             <div className="mb-3 add-product-observation">
                               <label className="form-label">Observación</label>
                               <textarea
@@ -1222,7 +1779,12 @@ export default function AddProductComponent({
                               ? Array.from({ length: 9 }, (_, i) => {
                                   const n = i + 1;
                                   const skuKey = normalizeInventoryImageKey(sku);
+                                  const oldKey = normalizeInventoryImageKey(skuOld);
                                   const stem = `${skuKey}_${n}`;
+                                  const stemAlt =
+                                    oldKey && oldKey !== skuKey
+                                      ? `${oldKey}_${n}`
+                                      : undefined;
                                   const resolved = resolvedSlots[n] ?? null;
                                   const marked = markedForDelete.has(n);
                                   const fallback = inventoryPosProductFallbackPath(
@@ -1251,6 +1813,7 @@ export default function AddProductComponent({
                                       >
                                         <ProductFirebaseSlotImage
                                           stem={stem}
+                                          stemAlt={stemAlt}
                                           fallback={fallback}
                                           onResolved={(has, url) =>
                                             handleSlotResolved(n, has, url)
@@ -1407,6 +1970,97 @@ export default function AddProductComponent({
         slides={lightboxSlides}
         on={{ view: ({ index }) => setLightboxIndex(index) }}
       />
+
+      <Modal
+        open={showConflictModal}
+        onCancel={() => {
+          if (duplicating) return;
+          setShowConflictModal(false);
+          setConflictData(null);
+        }}
+        footer={null}
+        centered
+        width={480}
+        closable={!duplicating}
+        maskClosable={!duplicating}
+        title={null}
+      >
+        {conflictData ? (
+          <div style={{ padding: "8px 0" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                marginBottom: 16,
+              }}
+            >
+              <ExclamationCircleOutlined
+                style={{ fontSize: 24, color: "#faad14" }}
+              />
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
+                No se puede cambiar la identidad del producto
+              </h3>
+            </div>
+
+            <p style={{ color: "#595959", marginBottom: 12 }}>
+              El producto <strong>{conflictData.sku}</strong> tiene movimientos
+              registrados. Su marca, subcategoría y categoría no pueden
+              modificarse.
+            </p>
+
+            <Alert
+              type="info"
+              showIcon
+              message="¿Qué podés hacer?"
+              description="Duplicá el producto para crear uno nuevo con los datos corregidos. El duplicado nace inactivo — editalo y activalo cuando esté listo."
+              style={{ marginBottom: 20 }}
+            />
+
+            <p style={{ fontSize: 12, color: "#8c8c8c", marginBottom: 20 }}>
+              SKU bloqueado: {conflictData.sku} · ID: {conflictData.product_id}
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                justifyContent: "flex-end",
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  if (duplicating) return;
+                  setShowConflictModal(false);
+                  setConflictData(null);
+                }}
+                disabled={duplicating}
+              >
+                Cancelar
+              </button>
+              {resolveDuplicateFetchPath(conflictData.duplicate_url) ? (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => void handleDuplicate()}
+                  disabled={duplicating}
+                >
+                  {duplicating ? (
+                    <>
+                      <Spin size="small" style={{ marginRight: 6 }} />
+                      Duplicando…
+                    </>
+                  ) : (
+                    "Duplicar producto"
+                  )}
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </>
   );
 }

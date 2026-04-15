@@ -14,6 +14,13 @@ import { Alert, Spin, message } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ProductThumb } from "@/components/Inventory/ProductThumb";
 import { inventoryPosProductFallbackPath } from "@/lib/inventoryPosPlaceholderPath";
+import {
+  productBrandLabel,
+  productCanonicalSku,
+  productCategoryLabel,
+  productDisplayName,
+  productLegacySku,
+} from "@/lib/inventoryProductCompat";
 
 /** Id único: en el proyecto hay muchos `#delete-modal`; `getElementById` devolvía otro modal y el ID no coincidía. */
 const INVENTORY_PRODUCT_DELETE_MODAL_ID = "inventory-product-delete-modal";
@@ -23,9 +30,22 @@ type InventoryApiProduct = {
   product_id?: number | string;
   productId?: number | string;
   sku: string;
+  sku_nuevo?: string | null;
+  sku_old?: string | null;
+  oem_original?: string | null;
+  barcode?: string | null;
   name: string;
+  nombre_corto?: string | null;
+  descripcion_larga?: string | null;
   category: string | null;
+  category_id?: number | string | null;
+  subcategory_id?: number | string | null;
   brand: string | null;
+  brand_id?: number | string | null;
+  unit_type?: string | null;
+  is_universal?: boolean | null;
+  weight?: string | number | null;
+  dimensions?: string | null;
   unit_price_usd: string | number | null;
   stock_qty: string | number | null;
   source?: string | null;
@@ -47,10 +67,12 @@ type InventoryListPayload = {
 
 function mapApiProductToRow(p: InventoryApiProduct) {
   const id = parseProductIdFromApi(p);
+  const sku = productCanonicalSku(p);
+  const skuOld = productLegacySku(p);
   const tableRowKey =
     id != null
       ? `id-${id}`
-      : `sku-${encodeURIComponent(String(p.sku ?? "").trim() || "unknown")}`;
+      : `sku-${encodeURIComponent(sku || "unknown")}`;
   const priceNum = Number(p.unit_price_usd);
   const price =
     p.unit_price_usd == null || Number.isNaN(priceNum)
@@ -59,11 +81,12 @@ function mapApiProductToRow(p: InventoryApiProduct) {
   return {
     id,
     tableRowKey,
-    sku: p.sku ?? "",
-    product: p.name ?? "",
-    productImageFallback: inventoryPosProductFallbackPath(id, p.sku),
-    category: p.category ?? "—",
-    brand: p.brand ?? "—",
+    sku,
+    sku_old: skuOld || null,
+    product: productDisplayName(p) || "—",
+    productImageFallback: inventoryPosProductFallbackPath(id, sku),
+    category: productCategoryLabel(p) || "—",
+    brand: productBrandLabel(p) || "—",
     price,
     unit: "—",
     qty: String(p.stock_qty ?? ""),
@@ -288,6 +311,7 @@ export default function ProductListComponent() {
               <Link href="#" className="avatar avatar-md me-2">
                 <ProductThumb
                   sku={record.sku}
+                  skuOld={record.sku_old}
                   fallback={record.productImageFallback}
                 />
               </Link>

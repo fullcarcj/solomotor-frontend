@@ -5,15 +5,35 @@ import Link from "next/link";
 import CartCounter from "@/core/common/counter/counter";
 import { ProductThumb } from "@/components/Inventory/ProductThumb";
 import { inventoryPosProductFallbackPath } from "@/lib/inventoryPosPlaceholderPath";
+import {
+  productBrandLabel,
+  productCanonicalSku,
+  productCategoryLabel,
+  productDisplayName,
+  productLegacySku,
+} from "@/lib/inventoryProductCompat";
 
 export type PosInventoryApiProduct = {
   id?: number | string;
   product_id?: number | string;
   productId?: number | string;
   sku: string;
+  sku_nuevo?: string | null;
+  sku_old?: string | null;
+  oem_original?: string | null;
+  barcode?: string | null;
   name: string;
+  nombre_corto?: string | null;
+  descripcion_larga?: string | null;
   category: string | null;
+  category_id?: number | string | null;
+  subcategory_id?: number | string | null;
   brand: string | null;
+  brand_id?: number | string | null;
+  unit_type?: string | null;
+  is_universal?: boolean | null;
+  weight?: string | number | null;
+  dimensions?: string | null;
   unit_price_usd: string | number | null;
   stock_qty?: string | number | null;
 };
@@ -39,7 +59,7 @@ export function filterPosProductsByTab(
 ): PosInventoryApiProduct[] {
   if (tabId === "all") return products;
   const hay = (p: PosInventoryApiProduct) =>
-    `${p.name ?? ""} ${p.category ?? ""} ${p.brand ?? ""}`.toLowerCase();
+    `${productDisplayName(p)} ${productCategoryLabel(p)} ${productBrandLabel(p)}`.toLowerCase();
   const tabKey = tabId === "headphone" ? "headphones" : tabId;
   const tests: Record<string, RegExp> = {
     headphones: /head|audio|earphone|airpod|headset|audífono|auricular/i,
@@ -101,11 +121,15 @@ export default function PosInventoryProductGrid({
     <div className={rowClass}>
       {products.map((p) => {
         const id = parseProductIdFromApi(p);
+        const sku = productCanonicalSku(p);
+        const skuOld = productLegacySku(p);
         const key =
           id != null
             ? `id-${id}`
-            : `sku-${encodeURIComponent(String(p.sku ?? "").trim() || "unknown")}`;
-        const fallback = inventoryPosProductFallbackPath(id, p.sku);
+            : `sku-${encodeURIComponent(sku || "unknown")}`;
+        const fallback = inventoryPosProductFallbackPath(id, sku);
+        const displayName = productDisplayName(p) || "—";
+        const categoryLabel = productCategoryLabel(p) || "—";
         if (variant === "pos4") {
           const stock = p.stock_qty;
           const stockLabel =
@@ -121,16 +145,17 @@ export default function PosInventoryProductGrid({
               >
                 <Link href="#" className="product-image" onClick={(e) => e.preventDefault()}>
                   <ProductThumb
-                    sku={p.sku ?? ""}
+                    sku={sku}
+                    skuOld={skuOld}
                     fallback={fallback}
                     className="img-fluid w-100"
-                    alt={p.name ?? "Producto"}
+                    alt={displayName || "Producto"}
                   />
                 </Link>
                 <div className="product-content">
                   <h6 className="fs-14 fw-bold mb-1">
                     <Link href="#" onClick={(e) => e.preventDefault()}>
-                      {p.name ?? "—"}
+                      {displayName}
                     </Link>
                   </h6>
                   <div className="d-flex align-items-center justify-content-between">
@@ -153,10 +178,11 @@ export default function PosInventoryProductGrid({
             >
               <Link href="#" className="pro-img" onClick={(e) => e.preventDefault()}>
                 <ProductThumb
-                  sku={p.sku ?? ""}
+                  sku={sku}
+                  skuOld={skuOld}
                   fallback={fallback}
                   className="img-fluid"
-                  alt={p.name ?? "Producto"}
+                  alt={displayName || "Producto"}
                 />
                 <span>
                   <i className="ti ti-circle-check-filled" />
@@ -164,12 +190,12 @@ export default function PosInventoryProductGrid({
               </Link>
               <h6 className="cat-name">
                 <Link href="#" onClick={(e) => e.preventDefault()}>
-                  {p.category ?? "—"}
+                  {categoryLabel}
                 </Link>
               </h6>
               <h6 className="product-name">
                 <Link href="#" onClick={(e) => e.preventDefault()}>
-                  {p.name ?? "—"}
+                  {displayName}
                 </Link>
               </h6>
               <div className="d-flex align-items-center justify-content-between price">

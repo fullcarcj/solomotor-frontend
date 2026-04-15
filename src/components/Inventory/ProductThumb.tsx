@@ -6,11 +6,14 @@ import { resolveProductImageBase } from "@/lib/productImageBaseClient";
 import {
   firebaseProductImageCandidateUrls,
   firebaseProductImageCandidateUrlsForStem,
+  normalizeInventoryImageKey,
   productImageBaseUrl,
 } from "@/lib/productImageUrl";
 
 type Props = {
   sku: string;
+  /** SKU histórico: si las imágenes en Storage usan el nombre anterior, se prueba después del `sku` actual. */
+  skuOld?: string | null;
   fallback: string;
   className?: string;
   alt?: string;
@@ -28,6 +31,7 @@ function rankCandidate(url: string): number {
 /** Resuelve en background la primera URL válida; evita parpadeo y bucles de error. */
 export function ProductThumb({
   sku,
+  skuOld,
   fallback,
   className,
   alt = "",
@@ -47,10 +51,10 @@ export function ProductThumb({
 
   const candidates = useMemo(() => {
     if (!base) return [fallback];
-    const urls = firebaseProductImageCandidateUrls(sku, base);
+    const urls = firebaseProductImageCandidateUrls(sku, base, skuOld);
     const ranked = [...urls].sort((a, b) => rankCandidate(b) - rankCandidate(a));
     return [...ranked, fallback];
-  }, [sku, base, fallback]);
+  }, [sku, skuOld, base, fallback]);
 
   const [src, setSrc] = useState(fallback);
   useEffect(() => {
@@ -91,6 +95,8 @@ export function ProductThumb({
 type SlotProps = {
   /** Stem del objeto en Storage, p. ej. `ABC123_2`. */
   stem: string;
+  /** Stem alternativo (p. ej. código previo en `sku_old`) si la foto aún no se renombró en el bucket. */
+  stemAlt?: string;
   fallback: string;
   className?: string;
   style?: CSSProperties;
@@ -109,6 +115,7 @@ type SlotProps = {
  */
 export function ProductFirebaseSlotImage({
   stem,
+  stemAlt,
   fallback,
   className,
   style,
@@ -130,10 +137,26 @@ export function ProductFirebaseSlotImage({
 
   const candidates = useMemo(() => {
     if (!base) return [fallback];
-    const urls = firebaseProductImageCandidateUrlsForStem(stem, base);
-    const ranked = [...urls].sort((a, b) => rankCandidate(b) - rankCandidate(a));
+    const primary = firebaseProductImageCandidateUrlsForStem(stem, base);
+    const a = normalizeInventoryImageKey(stem);
+    const b = stemAlt ? normalizeInventoryImageKey(stemAlt) : "";
+    const altUrls =
+      stemAlt && b && b !== a
+        ? firebaseProductImageCandidateUrlsForStem(stemAlt, base)
+        : [];
+    const merged: string[] = [];
+    const seen = new Set<string>();
+    const push = (u: string) => {
+      if (!seen.has(u)) {
+        seen.add(u);
+        merged.push(u);
+      }
+    };
+    for (const u of primary) push(u);
+    for (const u of altUrls) push(u);
+    const ranked = [...merged].sort((a, b) => rankCandidate(b) - rankCandidate(a));
     return [...ranked, fallback];
-  }, [stem, base, fallback]);
+  }, [stem, stemAlt, base, fallback]);
 
   const [src, setSrc] = useState(fallback);
 

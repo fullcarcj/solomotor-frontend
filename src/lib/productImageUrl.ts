@@ -157,10 +157,29 @@ function storageFilenameStemsFromSku(skuTrim: string): string[] {
 }
 
 /**
- * URLs candidatas sin duplicados. Si la base es `.../o/productos%2F`, la primera coincide con el enlace de la consola de Firebase.
+ * Claves SKU para resolver imágenes en Storage: primero el canónico (`sku`), luego `sku_old` si difiere (fotos legadas).
  */
-export function firebaseProductImageCandidateUrls(
+export function orderedProductImageSkuKeys(
   sku: string,
+  skuOld?: string | null
+): string[] {
+  const primary = normalizeInventoryImageKey(String(sku));
+  const legacy = normalizeInventoryImageKey(String(skuOld ?? ""));
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const add = (k: string) => {
+    if (!k || seen.has(k)) return;
+    seen.add(k);
+    out.push(k);
+  };
+  add(primary);
+  add(legacy);
+  return out;
+}
+
+/** URLs candidatas para un único SKU ya normalizado (sin mezclar `sku_old`). */
+function firebaseProductImageCandidateUrlsForSkuTrim(
+  skuTrim: string,
   base: string
 ): string[] {
   const list: string[] = [];
@@ -169,12 +188,9 @@ export function firebaseProductImageCandidateUrls(
   };
 
   const b = base.trim();
-  const skuTrim = normalizeInventoryImageKey(String(sku));
   if (!b || !skuTrim) return list;
 
-  /** Stems probados: SKU tal cual, sin espacios, y `SKU_1`…`SKU_9` (fotos numeradas en Storage). */
   const stems = storageFilenameStemsFromSku(skuTrim);
-
   const folderBase = baseUsesEncodedFolderPath(b);
 
   for (const s of stems) {
@@ -188,6 +204,34 @@ export function firebaseProductImageCandidateUrls(
         push(firebaseProductImageUrl(s, b, ext));
         push(firebaseProductImageUrlEncodedFullPath(s, b, ext));
       }
+    }
+  }
+  return list;
+}
+
+/**
+ * URLs candidatas sin duplicados. Si la base es `.../o/productos%2F`, la primera coincide con el enlace de la consola de Firebase.
+ * `sku_old` prueba rutas legadas si las fotos siguen nombradas con el código anterior.
+ */
+export function firebaseProductImageCandidateUrls(
+  sku: string,
+  base: string,
+  skuOld?: string | null
+): string[] {
+  const list: string[] = [];
+  const push = (u: string | null | undefined) => {
+    if (u && !list.includes(u)) list.push(u);
+  };
+
+  const b = base.trim();
+  if (!b) return list;
+
+  const keys = orderedProductImageSkuKeys(sku, skuOld);
+  if (keys.length === 0) return list;
+
+  for (const k of keys) {
+    for (const u of firebaseProductImageCandidateUrlsForSkuTrim(k, b)) {
+      push(u);
     }
   }
   return list;
