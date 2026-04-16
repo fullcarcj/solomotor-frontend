@@ -1153,6 +1153,12 @@ const CollapsedSidebar = () => {
                   <li>
                     <Link href="currency-settings">Currencies</Link>
                   </li>
+                  <li>
+                    <Link href="/pricing-policies">Políticas de Precio</Link>
+                  </li>
+                  <li>
+                    <Link href="/product-prices">Precios Calculados</Link>
+                  </li>
                 </ul>
               </li>
               <li className="submenu">

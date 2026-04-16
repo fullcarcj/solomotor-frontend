@@ -2100,6 +2100,18 @@ export const SidebarData1 = [
             hasSubRoute: false,
             showSubRoute: false,
           },
+          {
+            tittle: 'Políticas de Precio',
+            route: "/pricing-policies",
+            hasSubRoute: false,
+            showSubRoute: false,
+          },
+          {
+            tittle: 'Precios Calculados',
+            route: "/product-prices",
+            hasSubRoute: false,
+            showSubRoute: false,
+          },
         ],
       },
       {

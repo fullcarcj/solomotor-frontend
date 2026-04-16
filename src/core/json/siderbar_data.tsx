@@ -1176,6 +1176,16 @@ export const SidebarData = [
             link: "/currency-settings",
             showSubRoute: false,
           },
+          {
+            label: "Políticas de Precio",
+            link: "/pricing-policies",
+            showSubRoute: false,
+          },
+          {
+            label: "Precios Calculados",
+            link: "/product-prices",
+            showSubRoute: false,
+          },
         ],
       },
       {

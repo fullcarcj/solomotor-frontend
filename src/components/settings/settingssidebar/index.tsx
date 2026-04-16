@@ -11,12 +11,57 @@ const SettingsSideBar = (props: any) => {
   const route = all_routes;
   const pathname = usePathname(); // Use usePathname to get the current route path
 
-  const [isGeneralSettingsOpen, setIsGeneralSettingsOpen] = useState(false);
-  const [isWebsiteSettingsOpen, setIsWebsiteSettingsOpen] = useState(false);
-  const [isAppSettingsOpen, setIsAppSettingsOpen] = useState(false);
-  const [isSystemSettingsOpen, setIsSystemSettingsOpen] = useState(false);
-  const [isFinancialSettingsOpen, setIsFinancialSettingsOpen] = useState(false);
-  const [isOtherSettingsOpen, setIsOtherSettingsOpen] = useState(false);
+  const [isGeneralSettingsOpen, setIsGeneralSettingsOpen] = useState(() =>
+    [
+      route.generalsettings,
+      route.securitysettings,
+      route.notification,
+      route.connectedapps,
+      route.systemsettings,
+    ].includes(pathname)
+  );
+  const [isWebsiteSettingsOpen, setIsWebsiteSettingsOpen] = useState(() =>
+    [
+      route.companysettings,
+      route.localizationsettings,
+      route.prefixes,
+      route.preference,
+      route.appearance,
+      route.socialauthendication,
+      route.languagesettings,
+    ].includes(pathname)
+  );
+  const [isAppSettingsOpen, setIsAppSettingsOpen] = useState(() =>
+    [
+      route.invoicesettings,
+      route.printersettings,
+      route.possettings,
+      route.customfields,
+      route.emailsettings,
+      route.smssettings,
+    ].includes(pathname)
+  );
+  const [isSystemSettingsOpen, setIsSystemSettingsOpen] = useState(() =>
+    [
+      route.systemsettings,
+      route.otpsettings,
+      route.gdbrsettings,
+    ].includes(pathname)
+  );
+  const [isFinancialSettingsOpen, setIsFinancialSettingsOpen] = useState(() =>
+    [
+      route.paymentgateway,
+      route.banksettingslist,
+      route.banksettingsgrid,
+      route.taxrates,
+      route.currencysettings,
+      route.pricingPolicies,
+      route.productPrices,
+    ].includes(pathname)
+  );
+  const [isOtherSettingsOpen, setIsOtherSettingsOpen] = useState(() =>
+    [route.storagesettings, route.banipaddress].includes(pathname)
+  );
   const [isSubmenutwo, setSubmenutwo] = useState(false);
   const [isSms, setSms] = useState(false);
 

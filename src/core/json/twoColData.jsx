@@ -1097,6 +1097,16 @@ export const TowColData = [
                     route: routes.currencies,
                     base: 'currencies',
                   },
+                  {
+                    menuValue: 'Políticas de Precio',
+                    route: '/pricing-policies',
+                    base: 'pricing-policies',
+                  },
+                  {
+                    menuValue: 'Precios Calculados',
+                    route: '/product-prices',
+                    base: 'product-prices',
+                  },
                 ],
               },
               {

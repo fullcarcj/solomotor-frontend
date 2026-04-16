@@ -47,3 +47,18 @@ export function getInventoryManufacturersUpstreamPath(): string {
   }
   return "/api/inventory/manufacturers";
 }
+
+/**
+ * Ruta absoluta (path) en el webhook-receiver para el listado de marcas de vehículo.
+ * Por defecto: `GET /api/crm/brands`.
+ * Personalizable con `VEHICLE_BRANDS_UPSTREAM_PATH` en `.env.local`.
+ */
+export function getVehicleBrandsUpstreamPath(): string {
+  const raw = (process.env.VEHICLE_BRANDS_UPSTREAM_PATH ?? "")
+    .trim()
+    .replace(/\s+/g, "");
+  if (raw) {
+    return raw.startsWith("/") ? raw : `/${raw}`;
+  }
+  return "/api/crm/brands";
+}

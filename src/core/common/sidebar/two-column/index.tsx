@@ -3,13 +3,25 @@
 
 import { all_routes } from '@/data/all_routes';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import React, { useState } from 'react'
 
 
 const TwoColumnSidebar = () => {
-    const [isInventoryMenuOpen, setIsInventoryMenuOpen] = useState(false);
-
     const route = all_routes;
+    const pathname = usePathname();
+
+    const [isInventoryMenuOpen, setIsInventoryMenuOpen] = useState(false);
+    const [isFinancialSettingsOpen, setIsFinancialSettingsOpen] = useState(() =>
+        [
+            route.paymentgateway,
+            route.banksettingsgrid,
+            route.taxrates,
+            route.currencysettings,
+            route.pricingPolicies,
+            route.productPrices,
+        ].includes(pathname)
+    );
 
     return (
         <>
@@ -1202,24 +1214,38 @@ const TwoColumnSidebar = () => {
                                             </ul>
                                         </li>
                                         <li className="submenu">
-                                            <Link href="#">
+                                            <Link
+                                                href="#"
+                                                className={isFinancialSettingsOpen ? 'subdrop' : ''}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    setIsFinancialSettingsOpen((open) => !open);
+                                                }}
+                                                aria-expanded={isFinancialSettingsOpen}
+                                            >
                                                 <span>Financial Settings</span>
                                                 <span className="menu-arrow" />
                                             </Link>
-                                            <ul>
+                                            <ul style={{ display: isFinancialSettingsOpen ? 'block' : 'none' }}>
                                                 <li>
-                                                    <Link href={all_routes.paymentgateway}>
+                                                    <Link href={route.paymentgateway}>
                                                         Payment Gateway
                                                     </Link>
                                                 </li>
                                                 <li>
-                                                    <Link href={route.banipaddress}>Bank Accounts</Link>
+                                                    <Link href={route.banksettingsgrid}>Bank Accounts</Link>
                                                 </li>
                                                 <li>
                                                     <Link href={route.taxrates}>Tax Rates</Link>
                                                 </li>
                                                 <li>
                                                     <Link href={route.currencysettings}>Currencies</Link>
+                                                </li>
+                                                <li>
+                                                    <Link href={route.pricingPolicies}>Políticas de Precio</Link>
+                                                </li>
+                                                <li>
+                                                    <Link href={route.productPrices}>Precios Calculados</Link>
                                                 </li>
                                             </ul>
                                         </li>

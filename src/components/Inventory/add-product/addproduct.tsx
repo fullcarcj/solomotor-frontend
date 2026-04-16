@@ -333,6 +333,13 @@ export default function AddProductComponent({
   const [manufacturerVal, setManufacturerVal] = useState<SelectOption | null>(
     null
   );
+  const [vehicleBrandOptions, setVehicleBrandOptions] = useState<SelectOption[]>(
+    [{ value: "choose", label: "Choose" }]
+  );
+  const [vehicleBrandsStatus, setVehicleBrandsStatus] = useState<
+    "idle" | "loading" | "ok" | "error"
+  >("loading");
+  const [vehicleBrandVal, setVehicleBrandVal] = useState<SelectOption | null>(null);
   const [unitVal, setUnitVal] = useState<SelectOption | null>(null);
   const [pcsUnitVal, setPcsUnitVal] = useState<SelectOption | null>(null);
   /** Filas completas del catálogo (descripción + category_ml para MLV). */
@@ -496,6 +503,59 @@ export default function AddProductComponent({
             e instanceof Error ? e.message : "No se pudieron cargar fabricantes"
           );
           setManufacturerRows([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setVehicleBrandsStatus("loading");
+      try {
+        const res = await fetch("/api/inventory/vehicle-brands", {
+          cache: "no-store",
+        });
+        const body = (await res.json()) as
+          | unknown[]
+          | {
+              data?: unknown[] | null;
+              items?: unknown[];
+              brands?: unknown[];
+              error?: { message?: string; code?: string };
+            };
+        if (cancelled) return;
+        if (!res.ok) {
+          const err = body as { error?: { message?: string; code?: string } };
+          throw new Error(
+            err?.error?.message || err?.error?.code || `Error ${res.status}`
+          );
+        }
+        let arr: unknown[] = [];
+        if (Array.isArray(body)) {
+          arr = body;
+        } else {
+          const b = body as Record<string, unknown>;
+          const d = b.data ?? b.items ?? b.brands;
+          arr = Array.isArray(d) ? d : [];
+        }
+        const opts: SelectOption[] = [{ value: "choose", label: "Choose" }];
+        for (const raw of arr) {
+          if (!raw || typeof raw !== "object") continue;
+          const o = raw as Record<string, unknown>;
+          const name = o.name ?? o.brand_name ?? o.label;
+          if (typeof name !== "string" || !name.trim()) continue;
+          opts.push({ value: name.trim(), label: name.trim() });
+        }
+        setVehicleBrandOptions(opts);
+        setVehicleBrandsStatus("ok");
+      } catch (e) {
+        if (!cancelled) {
+          setVehicleBrandsStatus("error");
+          setVehicleBrandOptions([{ value: "choose", label: "Choose" }]);
         }
       }
     })();
@@ -1243,7 +1303,7 @@ export default function AddProductComponent({
                   >
                     <div className="accordion-body border-top">
                       <div className="row">
-                        <div className="col-sm-6 col-12">
+                        <div className="col-sm-4 col-12">
                           <div className="mb-3">
                             <label className="form-label" htmlFor="inventory-oem-original">
                               OEM
@@ -1260,7 +1320,36 @@ export default function AddProductComponent({
                             />
                           </div>
                         </div>
-                        <div className="col-sm-6 col-12">
+                        <div className="col-sm-4 col-12">
+                          <div className="mb-3">
+                            <label
+                              className="form-label"
+                              htmlFor="inventory-vehicle-brand-select"
+                            >
+                              Marca de vehículo
+                            </label>
+                            <Select {...reactSelectPortalProps}
+                              inputId="inventory-vehicle-brand-select"
+                              instanceId="add-product-vehicle-brand"
+                              className="react-select"
+                              classNamePrefix="react-select"
+                              options={vehicleBrandOptions}
+                              placeholder={
+                                vehicleBrandsStatus === "loading"
+                                  ? "Cargando marcas…"
+                                  : "Choose"
+                              }
+                              value={vehicleBrandVal}
+                              onChange={(opt) =>
+                                setVehicleBrandVal(opt as SelectOption | null)
+                              }
+                              isDisabled={vehicleBrandsStatus === "loading"}
+                              isLoading={vehicleBrandsStatus === "loading"}
+                              isClearable
+                            />
+                          </div>
+                        </div>
+                        <div className="col-sm-4 col-12">
                           <div className="mb-3">
                             <div className="add-newplus">
                               <label
@@ -1320,7 +1409,7 @@ export default function AddProductComponent({
                       </div>
                       {isEdit ? (
                         <div className="row">
-                          <div className="col-sm-6 col-12">
+                          <div className="col-sm-4 col-12">
                             <div className="mb-3">
                               <label className="form-label">
                                 Product Name
@@ -1334,7 +1423,7 @@ export default function AddProductComponent({
                               />
                             </div>
                           </div>
-                          <div className="col-sm-6 col-12">
+                          <div className="col-sm-4 col-12">
                             <div className="mb-3">
                               <label className="form-label">
                                 SKU<span className="text-danger ms-1">*</span>
@@ -1344,6 +1433,17 @@ export default function AddProductComponent({
                                 className="form-control"
                                 value={sku}
                                 onChange={(e) => setSku(e.target.value)}
+                                readOnly
+                              />
+                            </div>
+                          </div>
+                          <div className="col-sm-4 col-12">
+                            <div className="mb-3">
+                              <label className="form-label">SKU_FILEMAKER</label>
+                              <input
+                                type="text"
+                                className="form-control"
+                                value={skuOld}
                                 readOnly
                               />
                             </div>
@@ -1441,7 +1541,7 @@ export default function AddProductComponent({
                           />
                         ) : null}
                         <div className="row">
-                          <div className="col-sm-6 col-12">
+                          <div className="col-sm-4 col-12">
                             <div className="mb-3">
                               <div className="add-newplus">
                                 <label
@@ -1485,7 +1585,7 @@ export default function AddProductComponent({
                               />
                             </div>
                           </div>
-                          <div className="col-sm-6 col-12">
+                          <div className="col-sm-4 col-12">
                             <div className="mb-3">
                               <label className="form-label">
                                 Sub Category
@@ -1513,6 +1613,33 @@ export default function AddProductComponent({
                                 }
                                 isLoading={subcategoriesStatus === "loading"}
                               />
+                            </div>
+                          </div>
+                          <div className="col-sm-4 col-12">
+                            <div className="mb-3">
+                              <label
+                                className="form-label"
+                                htmlFor="predicted-ml-category"
+                              >
+                                Categoria Predicha Mercadolibre
+                              </label>
+                              <div className="input-group">
+                                <input
+                                  id="predicted-ml-category"
+                                  type="text"
+                                  className="form-control"
+                                  readOnly
+                                  value={predictedMlCategory}
+                                  placeholder="Ej. MLV-…"
+                                />
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-primary"
+                                  onClick={() => refreshPredictedMlCategory()}
+                                >
+                                  Actualizar
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -1605,67 +1732,8 @@ export default function AddProductComponent({
                               />
                             </div>
                           </div>
-                        ) : (
-                          <div className="col-sm-6 col-12">
-                            <div className="mb-3">
-                              <label
-                                className="form-label"
-                                htmlFor="predicted-ml-category"
-                              >
-                                Categoria Predicha Mercadolibre
-                              </label>
-                              <div className="input-group">
-                                <input
-                                  id="predicted-ml-category"
-                                  type="text"
-                                  className="form-control"
-                                  readOnly
-                                  value={predictedMlCategory}
-                                  placeholder="Ej. MLV-… (Actualizar tras Category)"
-                                />
-                                <button
-                                  type="button"
-                                  className="btn btn-outline-primary"
-                                  onClick={() => refreshPredictedMlCategory()}
-                                >
-                                  Actualizar
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        )}
+                        ) : null}
                       </div>
-                      {showPcsUnit ? (
-                        <div className="row">
-                          <div className="col-12">
-                            <div className="mb-3">
-                              <label
-                                className="form-label"
-                                htmlFor="predicted-ml-category"
-                              >
-                                Categoria Predicha Mercadolibre
-                              </label>
-                              <div className="input-group">
-                                <input
-                                  id="predicted-ml-category"
-                                  type="text"
-                                  className="form-control"
-                                  readOnly
-                                  value={predictedMlCategory}
-                                  placeholder="Ej. MLV-… (Actualizar tras Category)"
-                                />
-                                <button
-                                  type="button"
-                                  className="btn btn-outline-primary"
-                                  onClick={() => refreshPredictedMlCategory()}
-                                >
-                                  Actualizar
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ) : null}
                       <div className="row">
                         <div className="col-lg-4 col-sm-6 col-12">
                           <div className="mb-3">
