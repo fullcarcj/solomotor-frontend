@@ -16,6 +16,7 @@ const FORWARD_KEYS = [
   "from",
   "to",
   "include_completed",
+  "customer_id",
 ] as const;
 
 export async function GET(req: NextRequest) {

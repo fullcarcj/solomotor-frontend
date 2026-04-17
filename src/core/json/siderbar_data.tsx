@@ -246,20 +246,16 @@ export const SidebarData = [
       {
         label: "MercadoLibre",
         link: "#",
-        icon: "brand-instagram",
+        icon: "brand-tabler",
         submenu: true,
         showSubRoute: false,
         submenuItems: [
-          { label: "Panel ML",          link: route.mlDashboard,        icon: "layout-dashboard", showSubRoute: false, submenu: false },
-          { label: "Estado OAuth",      link: route.mlTokenStatus,      icon: "key",              showSubRoute: false, submenu: false },
-          { label: "Cola de webhooks",  link: route.mlWebhookQueue,     icon: "webhook",          showSubRoute: false, submenu: false },
-          { label: "Publicaciones",     link: route.mlListings,         icon: "list",             showSubRoute: false, submenu: false },
-          { label: "Mapeo de SKUs",     link: route.mlSkuMapping,       icon: "arrows-exchange",  showSubRoute: false, submenu: false },
-          { label: "SKUs sin mapear",   link: route.mlUnmappedSkus,     icon: "alert-triangle",   showSubRoute: false, submenu: false },
-          { label: "Precios ML",        link: route.mlPriceSync,        icon: "currency-dollar",  showSubRoute: false, submenu: false },
-          { label: "Picking y Packing", link: route.mlPicking,          icon: "package",          showSubRoute: false, submenu: false },
-          { label: "Etiquetas Envios",  link: route.mlLabels,           icon: "tag",              showSubRoute: false, submenu: false },
-          { label: "Conciliacion MP",   link: route.mlMpReconciliation, icon: "balance",          showSubRoute: false, submenu: false },
+          { label: "Central ML",        link: route.mercadolibre,             icon: "layout-dashboard", showSubRoute: false, submenu: false },
+          { label: "Preguntas",         link: route.mercadolibrePreguntas,    icon: "message-question", showSubRoute: false, submenu: false },
+          { label: "Mensajes",          link: route.mercadolibreMensajes,     icon: "messages",         showSubRoute: false, submenu: false },
+          { label: "Mapeo de SKUs",     link: route.mercadolibreMapeo,        icon: "arrows-exchange",  showSubRoute: false, submenu: false },
+          { label: "Precios ML",        link: route.mercadolibrePrecios,      icon: "currency-dollar",  showSubRoute: false, submenu: false },
+          { label: "Reputación",        link: route.mercadolibreReputacion,   icon: "star",             showSubRoute: false, submenu: false },
         ],
       },
     ],
@@ -565,11 +561,16 @@ export const SidebarData = [
         submenu: true,
         showSubRoute: false,
         submenuItems: [
-          // ── Nuevas entradas: Banking ─────────────────────────────────────
-          { label: "Panel Banesco",         link: route.bankingBanesco,        icon: "building-bank",  showSubRoute: false, submenu: false },
-          { label: "Conciliacion Bancaria", link: route.bankingReconciliation, icon: "arrows-exchange",showSubRoute: false, submenu: false },
-          { label: "Comprobantes Recibidos",link: route.bankingReceipts,       icon: "receipt",        showSubRoute: false, submenu: false },
+          // ── Finanzas ERP ─────────────────────────────────────────────────
+          { label: "Caja y Resumen",        link: route.finanzasCaja,          icon: "cash",           showSubRoute: false, submenu: false },
+          { label: "Banesco",               link: route.finanzasBanesco,       icon: "building-bank",  showSubRoute: false, submenu: false },
+          { label: "Comprobantes WA",       link: route.finanzasComprobantes,  icon: "receipt",        showSubRoute: false, submenu: false },
+          { label: "IGTF",                  link: route.finanzasIgtf,          icon: "file-percent",   showSubRoute: false, submenu: false },
           { label: "Utilidad Real (P&L)",   link: route.finanzasUtilidad,      icon: "chart-bar",      showSubRoute: false, submenu: false },
+          // ── Banking (legacy) ─────────────────────────────────────────────
+          { label: "Panel Banesco (legacy)", link: route.bankingBanesco,        icon: "building-bank",  showSubRoute: false, submenu: false },
+          { label: "Conciliacion Bancaria",  link: route.bankingReconciliation, icon: "arrows-exchange",showSubRoute: false, submenu: false },
+          { label: "Comprobantes Recibidos", link: route.bankingReceipts,       icon: "receipt",        showSubRoute: false, submenu: false },
           {
             label: "Gastos",
             submenu: true,

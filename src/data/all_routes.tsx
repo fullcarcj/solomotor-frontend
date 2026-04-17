@@ -321,6 +321,13 @@ export const all_routes = {
   mlPicking:                "/ml/picking",
   mlLabels:                 "/ml/labels",
   mlMpReconciliation:       "/ml/mp-reconciliation",
+  /** Central MercadoLibre ERP — §4 */
+  mercadolibre:             "/mercadolibre",
+  mercadolibrePreguntas:    "/mercadolibre/preguntas",
+  mercadolibreMensajes:     "/mercadolibre/mensajes",
+  mercadolibreMapeo:        "/mercadolibre/mapeo",
+  mercadolibrePrecios:      "/mercadolibre/precios",
+  mercadolibreReputacion:   "/mercadolibre/reputacion",
 
   // ── Ventas (nuevas) ───────────────────────────────────────────────────────
   invoices:                 "/invoices",
@@ -363,9 +370,17 @@ export const all_routes = {
   /** Equivalencias y compatibilidades por vehículo */
   inventarioSkus:           "/inventario/skus",
 
-  // ── Finanzas — P&L ───────────────────────────────────────────────────────
+  // ── Finanzas — P&L y módulo completo ────────────────────────────────────
   /** Pantalla de Utilidad Real / P&L básico */
   finanzasUtilidad:         "/finanzas/utilidad",
+  /** Caja y resumen financiero del día */
+  finanzasCaja:             "/finanzas/caja",
+  /** Estados de cuenta Banesco + justificación de débitos */
+  finanzasBanesco:          "/finanzas/banesco",
+  /** Comprobantes WhatsApp procesados por IA */
+  finanzasComprobantes:     "/finanzas/comprobantes",
+  /** Declaraciones IGTF */
+  finanzasIgtf:             "/finanzas/igtf",
 
   // ── Logística / WMS ──────────────────────────────────────────────────────
   logisticaPicking:         "/logistica/picking",

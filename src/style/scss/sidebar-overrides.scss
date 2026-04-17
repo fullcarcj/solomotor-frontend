@@ -33,3 +33,53 @@
   background-color: #198754;
   color: white;
 }
+
+/* ── Bandeja workspace 3 columnas ─────────────────────────────────── */
+
+.bandeja-workspace {
+  display: grid;
+  grid-template-columns: 280px 1fr 300px;
+  height: calc(100vh - 60px);
+  overflow: hidden;
+}
+
+@media (max-width: 992px) {
+  .bandeja-workspace {
+    grid-template-columns: 1fr;
+  }
+  .bw-list    { display: none !important; }
+  .bw-context { display: none !important; }
+}
+
+.bw-list {
+  border-right: 0.5px solid var(--bs-border-color);
+  overflow-y: auto;
+  flex-direction: column;
+}
+
+.bw-chat {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 0.5px solid var(--bs-border-color);
+}
+
+.bw-context {
+  flex-direction: column;
+  overflow-y: auto;
+  background: var(--bs-light, #f8f9fa);
+}
+
+/* Banner de acción activa en el chat */
+.chat-action-banner {
+  background: var(--bs-info-bg-subtle, #cff4fc);
+  color: var(--bs-info-text-emphasis, #055160);
+  padding: 6px 16px;
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 0.5px solid var(--bs-info-border-subtle, #9eeaf9);
+  flex-shrink: 0;
+}
+

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { Sale, SalesMeta } from "@/types/sales";
 import SaleSourceBadge from "./SaleSourceBadge";
 import SaleStatusBadge from "./SaleStatusBadge";
@@ -70,13 +71,14 @@ export default function SalesTable({
                 <th>Vendedor</th>
                 <th>Fecha</th>
                 {onRequestDispatch && <th>Despacho</th>}
+                <th>Chat</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 Array.from({ length: 10 }).map((_, i) => (
                   <tr key={`sk-${i}`}>
-                    {Array.from({ length: onRequestDispatch ? 8 : 7 }).map((__, j) => (
+                    {Array.from({ length: onRequestDispatch ? 9 : 8 }).map((__, j) => (
                       <td key={j} className="py-3">
                         <p className="placeholder-glow mb-0">
                           <span className="placeholder col-12 rounded" />
@@ -87,7 +89,7 @@ export default function SalesTable({
                 ))
               ) : sales.length === 0 ? (
                 <tr>
-                  <td colSpan={onRequestDispatch ? 8 : 7} className="text-center py-5 text-muted">
+                  <td colSpan={onRequestDispatch ? 9 : 8} className="text-center py-5 text-muted">
                     No hay ventas con estos filtros
                   </td>
                 </tr>
@@ -130,6 +132,17 @@ export default function SalesTable({
                         ) : null}
                       </td>
                     )}
+                    <td onClick={(e) => e.stopPropagation()}>
+                      {s.chat_id != null && (
+                        <Link
+                          href={`/bandeja/${s.chat_id}`}
+                          className="btn btn-sm btn-outline-info py-0"
+                          title="Ver chat de origen"
+                        >
+                          <i className="ti ti-message" />
+                        </Link>
+                      )}
+                    </td>
                   </tr>
                 ))
               )}

@@ -16,6 +16,7 @@ export interface InboxChat {
   ml_order_id:       string | null;
   assigned_to:       number | null;
   customer_name:     string | null;
+  customer_id:       number | string | null;
   order:             InboxOrder | null;
 }
 

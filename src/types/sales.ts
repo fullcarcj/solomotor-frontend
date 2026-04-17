@@ -3,6 +3,7 @@ export interface Sale {
   source: string;
   external_order_id: string | null;
   customer_id: number | null;
+  chat_id: number | string | null;
   status: string;
   order_total_amount: number | string;
   total_amount_usd: number | string;
