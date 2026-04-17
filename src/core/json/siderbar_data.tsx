@@ -158,6 +158,7 @@ export const SidebarData = [
         submenuItems: [
           // ── Nuevas entradas al inicio ────────────────────────────────────
           { label: "Pedidos y Ventas",     link: route.ventasPedidos,      icon: "list-details",   showSubRoute: false, submenu: false },
+          { label: "Historial de pedidos", link: route.ventasHistorial,    icon: "history",        showSubRoute: false, submenu: false },
           { label: "Todas las Ordenes",   link: route.orders,             icon: "list",           showSubRoute: false, submenu: false },
           { label: "Apertura/Cierre Caja",link: route.posCashRegister,    icon: "cash-register",  showSubRoute: false, submenu: false },
           {

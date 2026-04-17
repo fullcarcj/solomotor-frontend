@@ -337,6 +337,8 @@ export const all_routes = {
   ventasCotizaciones:       "/ventas/cotizaciones",
   /** Historial de ventas omnicanal — GET /api/sales */
   ventasPedidos:            "/ventas/pedidos",
+  /** Pedidos procesados/cerrados — GET /api/sales?include_completed=1 */
+  ventasHistorial:          "/ventas/historial",
   /** POS mostrador — POST /api/pos/sales */
   ventasNueva:              "/ventas/nueva",
   posCashRegister:          "/pos/cash-register",
