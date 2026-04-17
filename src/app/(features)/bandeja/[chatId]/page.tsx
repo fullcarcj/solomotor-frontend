@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import type { InboxChat } from "@/types/inbox";
 import { useChatMessages } from "@/hooks/useChatMessages";
@@ -30,6 +30,31 @@ export default function ChatDetailPage() {
   const [chatLoading, setChatLoading] = useState(true);
   const [chatError, setChatError]     = useState<string | null>(null);
   const [activeAction, setActiveAction] = useState<ActionType>(null);
+
+  /* Resize de la columna de lista */
+  const [listWidth, setListWidth] = useState(360);
+  const isResizing = useRef(false);
+
+  const startResize = useCallback((e: React.MouseEvent) => {
+    isResizing.current = true;
+    const startX = e.clientX;
+    const startWidth = listWidth;
+
+    const onMove = (ev: MouseEvent) => {
+      if (!isResizing.current) return;
+      const delta = ev.clientX - startX;
+      setListWidth(Math.min(Math.max(startWidth + delta, 240), 520));
+    };
+
+    const onUp = () => {
+      isResizing.current = false;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, [listWidth]);
 
   const {
     messages, loading: msgLoading, loadingMore, error: msgError,
@@ -67,11 +92,31 @@ export default function ChatDetailPage() {
   return (
     <div className="page-wrapper" style={{ overflow: "hidden" }}>
       <div className="content p-0">
-        <div className="bandeja-workspace">
+        <div
+          className="bandeja-workspace"
+          style={{ gridTemplateColumns: `${listWidth}px 1fr 300px` }}
+        >
 
           {/* Col 1 — Lista de chats */}
           <div className="bw-list d-none d-lg-flex">
             <ChatList activeChatId={chatId} />
+
+            {/* Handle de resize */}
+            <div
+              onMouseDown={startResize}
+              style={{
+                position: "absolute",
+                right: 0,
+                top: 0,
+                bottom: 0,
+                width: 4,
+                cursor: "col-resize",
+                background: "transparent",
+                zIndex: 10,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = "var(--bs-primary, #0d6efd)"; e.currentTarget.style.opacity = "0.35"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.opacity = "1"; }}
+            />
           </div>
 
           {/* Col 2 — Ventana de mensajes */}

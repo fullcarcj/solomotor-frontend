@@ -6,6 +6,8 @@ import ChatListItem from "./ChatListItem";
 
 interface Props {
   activeChatId?: string | number;
+  initialSrc?:   string;
+  initialFilter?: string;
 }
 
 function SkeletonItem() {
@@ -21,8 +23,10 @@ function SkeletonItem() {
   );
 }
 
-export default function ChatList({ activeChatId }: Props) {
-  const { chats, nextCursor, total, loading, loadingMore, error, filters, setFilters, loadMore } = useInbox();
+export default function ChatList({ activeChatId, initialSrc = "", initialFilter = "" }: Props) {
+  const { chats, nextCursor, total, loading, loadingMore, error, filters, setFilters, loadMore } = useInbox(
+    initialSrc || initialFilter ? { src: initialSrc, filter: initialFilter } : undefined
+  );
 
   return (
     <div className="d-flex flex-column h-100" style={{ borderRight: "1px solid var(--bs-border-color)" }}>

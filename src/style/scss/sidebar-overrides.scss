@@ -38,7 +38,7 @@
 
 .bandeja-workspace {
   display: grid;
-  grid-template-columns: 280px 1fr 300px;
+  grid-template-columns: 360px 1fr 300px;
   height: calc(100vh - 60px);
   overflow: hidden;
 }
@@ -52,6 +52,7 @@
 }
 
 .bw-list {
+  position: relative;
   border-right: 0.5px solid var(--bs-border-color);
   overflow-y: auto;
   flex-direction: column;

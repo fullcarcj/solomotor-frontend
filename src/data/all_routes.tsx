@@ -348,10 +348,22 @@ export const all_routes = {
   bankingReconciliation:    "/banking/reconciliation",
   bankingReceipts:          "/banking/receipts",
 
+  // ── Automatizaciones ─────────────────────────────────────────────────────
+  /** Automatizaciones ML (logs A/B/C/D + config post-venta) */
+  mlAutomatizaciones:       "/mercadolibre/automatizaciones",
+  /** Automatizaciones WhatsApp (logs E/F/H + config Wasender) */
+  configAutomatizaciones:   "/config/automatizaciones",
+
   // ── Reportes (nuevos) ────────────────────────────────────────────────────
   reportsSalesByChannel:    "/reports/sales-by-channel",
   reportsMarginByChannel:   "/reports/margin-by-channel",
   reportsCommissions:       "/reports/commissions",
+
+  /** Reportes operativos ERP (stats unificadas) */
+  reportesVentas:           "/reportes/ventas",
+  reportesInventario:       "/reportes/inventario",
+  reportesClientes:         "/reportes/clientes",
+  reportesProductos:        "/reportes/productos",
 
   // ── Configuración (nuevas integraciones) ─────────────────────────────────
   settingsMlConnect:        "/settings/ml-connect",
@@ -392,6 +404,12 @@ export const all_routes = {
   clientesDirectorio:       "/clientes/directorio",
   /** Historial de compras por cliente */
   clientesHistorial:        "/clientes/historial",
+
+  // ── Configuración ERP (ADMIN / SUPERUSER) ─────────────────────────────────
+  configEmpresa:            "/config/empresa",
+  configSucursales:         "/config/sucursales",
+  configUsuarios:           "/config/usuarios",
+  configIntegraciones:      "/config/integraciones",
 
   // ── Compras a proveedores ─────────────────────────────────────────────────
   /** Directorio de proveedores */

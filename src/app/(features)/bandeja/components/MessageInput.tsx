@@ -23,6 +23,12 @@ export default function MessageInput({ chatId: _chatId, sourceType, onSend }: Pr
     if (!trimmed || sending || isDisabled) return;
     setSending(true);
     setError(null);
+    if (process.env.NODE_ENV === "development") {
+      // eslint-disable-next-line no-console
+      console.log("[MessageInput] POST body:", { text: trimmed, sent_by: String(username), chatId: _chatId });
+      // eslint-disable-next-line no-console
+      console.log("[MessageInput] URL:", `/api/bandeja/${_chatId}/messages`);
+    }
     const ok = await onSend(trimmed, String(username));
     if (ok) {
       setText("");

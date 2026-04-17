@@ -256,6 +256,7 @@ export const SidebarData = [
           { label: "Mapeo de SKUs",     link: route.mercadolibreMapeo,        icon: "arrows-exchange",  showSubRoute: false, submenu: false },
           { label: "Precios ML",        link: route.mercadolibrePrecios,      icon: "currency-dollar",  showSubRoute: false, submenu: false },
           { label: "Reputación",        link: route.mercadolibreReputacion,   icon: "star",             showSubRoute: false, submenu: false },
+          { label: "Automatizaciones",  link: route.mlAutomatizaciones,       icon: "robot",            showSubRoute: false, submenu: false },
         ],
       },
     ],
@@ -771,6 +772,13 @@ export const SidebarData = [
         showSubRoute: false,
         submenuItems: [
           {
+            label: "Reportes ERP",
+            link: route.reportesVentas,
+            icon: "chart-area",
+            showSubRoute: false,
+            submenu: false,
+          },
+          {
             label: "Reporte de Ventas",
             icon: "chart-bar",
             showSubRoute: false,
@@ -1157,6 +1165,19 @@ export const SidebarData = [
         submenu: true,
         showSubRoute: false,
         submenuItems: [
+      {
+        label: "ERP — Configuración",
+        submenu: true,
+        showSubRoute: false,
+        icon: "adjustments",
+        submenuItems: [
+          { label: "Empresa",                link: route.configEmpresa,          icon: "building",        showSubRoute: false, submenu: false },
+          { label: "Sucursales",             link: route.configSucursales,       icon: "map-pin",         showSubRoute: false, submenu: false },
+          { label: "Usuarios y Roles",       link: route.configUsuarios,         icon: "users",           showSubRoute: false, submenu: false },
+          { label: "Integraciones",          link: route.configIntegraciones,    icon: "plug-connected",  showSubRoute: false, submenu: false },
+          { label: "Mensajes automáticos WA",link: route.configAutomatizaciones, icon: "brand-whatsapp",  showSubRoute: false, submenu: false },
+        ],
+      },
       {
         label: "Configuración General",
         submenu: true,

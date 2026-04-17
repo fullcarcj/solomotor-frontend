@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { Customer, CustomerHistoryFilters } from "@/types/customers";
 import { useCustomerHistory } from "@/hooks/useCustomerHistory";
@@ -22,6 +23,15 @@ function parseCustomers(json: unknown): Customer[] {
   if (Array.isArray((raw as Record<string, unknown>)?.customers))
     return (raw as Record<string, unknown>).customers as Customer[];
   return [];
+}
+
+function parseCustomerOne(json: unknown): Customer | null {
+  if (!json || typeof json !== "object") return null;
+  const o = json as Record<string, unknown>;
+  const raw = (o.data as Record<string, unknown>) ?? o;
+  if (typeof raw.id === "number" && typeof raw.full_name === "string")
+    return raw as Customer;
+  return null;
 }
 
 /* ── Buscador de cliente ─────────────────────────────────────────────────── */
@@ -239,7 +249,28 @@ function CustomerHeader({
 /* ── Página principal ─────────────────────────────────────────────────────── */
 
 export default function ClientesHistorialPage() {
+  const searchParams = useSearchParams();
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+
+  const idFromUrl = searchParams.get("id");
+
+  useEffect(() => {
+    if (!idFromUrl) return;
+    const id = Number(idFromUrl);
+    if (!Number.isFinite(id) || id <= 0) return;
+    let cancelled = false;
+    fetch(`/api/clientes/directorio/${id}`, { credentials: "include", cache: "no-store" })
+      .then((r) => r.json().then((j) => ({ r, j })))
+      .then(({ r, j }) => {
+        if (cancelled || !r.ok) return;
+        const c = parseCustomerOne(j);
+        if (c) setSelectedCustomer(c);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [idFromUrl]);
 
   const { orders, pagination, loading, error, filters, setFilters, refetch } =
     useCustomerHistory(selectedCustomer?.id ?? null);

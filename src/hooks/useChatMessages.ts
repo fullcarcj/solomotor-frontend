@@ -86,15 +86,25 @@ export function useChatMessages(chatId: string | number | null) {
 
   const sendMessage = useCallback(async (text: string, sentBy?: string): Promise<boolean> => {
     if (!chatId) return false;
+    const url = `/api/bandeja/${encodeURIComponent(String(chatId))}/messages`;
+    const payload = { text, sent_by: sentBy ?? "agent" };
     try {
-      const res = await fetch(`/api/bandeja/${encodeURIComponent(String(chatId))}/messages`, {
+      if (process.env.NODE_ENV === "development") {
+        // eslint-disable-next-line no-console
+        console.log("[useChatMessages] POST", { url, body: payload });
+      }
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ text, sent_by: sentBy ?? "agent" }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({})) as Record<string, unknown>;
+        if (process.env.NODE_ENV === "development") {
+          // eslint-disable-next-line no-console
+          console.error("[useChatMessages] POST failed", res.status, d);
+        }
         throw new Error((d.error as string) ?? `HTTP ${res.status}`);
       }
       /* optimistic: add locally */
@@ -107,7 +117,11 @@ export function useChatMessages(chatId: string | number | null) {
       };
       setMessages(prev => [...prev, optimistic]);
       return true;
-    } catch {
+    } catch (e) {
+      if (process.env.NODE_ENV === "development") {
+        // eslint-disable-next-line no-console
+        console.error("[useChatMessages] sendMessage error:", e);
+      }
       return false;
     }
   }, [chatId]);

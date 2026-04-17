@@ -20,8 +20,11 @@ function parseChats(raw: unknown): { chats: InboxChat[]; nextCursor: string | nu
   };
 }
 
-export function useInbox() {
-  const [filters, setFiltersState] = useState<InboxFilters>(DEFAULT_FILTERS);
+export function useInbox(initialFilters?: Partial<InboxFilters>) {
+  const [filters, setFiltersState] = useState<InboxFilters>(() => ({
+    ...DEFAULT_FILTERS,
+    ...initialFilters,
+  }));
   const [chats, setChats]           = useState<InboxChat[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [total, setTotal]           = useState(0);
@@ -75,7 +78,9 @@ export function useInbox() {
     });
   }, [load]);
 
-  useEffect(() => { void load(DEFAULT_FILTERS); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const initFilters = { ...DEFAULT_FILTERS, ...initialFilters };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void load(initFilters); }, []);
 
   const loadMore = useCallback(() => {
     if (nextCursor) void load(filters, nextCursor);

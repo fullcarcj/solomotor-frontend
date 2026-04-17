@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import CommonFooter from "@/core/common/footer/commonFooter";
 import {
   useProducts,
@@ -11,9 +12,16 @@ import ProductTable from "./components/ProductTable";
 import SummaryCards from "./components/SummaryCards";
 
 export default function InventarioProductosPage() {
+  const searchParams = useSearchParams();
   const [filters, setFilters] = useState<PF>({ limit: 50, offset: 0 });
   const { products, pagination, summary, loading, error } =
     useProducts(filters);
+
+  useEffect(() => {
+    const q = searchParams.get("search")?.trim();
+    if (!q) return;
+    setFilters((f) => (f.search === q ? f : { ...f, search: q, offset: 0 }));
+  }, [searchParams]);
 
   const onPageChange = useCallback((offset: number) => {
     setFilters((f) => ({ ...f, offset }));
