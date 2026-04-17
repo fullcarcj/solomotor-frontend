@@ -76,7 +76,7 @@ export const SidebarData = [
                 submenu: true,
                 submenuItems: [
                   { label: "Productos", link: "/products" },
-                  { label: "Pedidos", link: "/orders" },
+                  { label: "Pedidos", link: route.ventasPedidos },
                   { label: "Clientes", link: "/customers" },
                   { label: "Carrito", link: "/cart" },
                   { label: "Finalizar Compra", link: "/checkout" },

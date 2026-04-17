@@ -243,7 +243,8 @@ export const all_routes = {
   incomecategory: "/income-category",
   product: "/products",
   productdetails: "/product-details",
-  orders: "/orders",
+  /** Antes `/orders` (legacy); ahora mismo destino que pedidos ERP */
+  orders: "/ventas/pedidos",
   cart: "/cart",
   checkout: "/checkout",
   wishlist: "/wishlist",
@@ -340,7 +341,8 @@ export const all_routes = {
   ventasNueva:              "/ventas/nueva",
   posCashRegister:          "/pos/cash-register",
   salesReps:                "/sales-reps",
-  ordersPendingApproval:    "/orders/pending-approval",
+  /** Legacy `/orders/pending-approval` redirige en next.config */
+  ordersPendingApproval:    "/ventas/pedidos",
   commissions:              "/commissions",
 
   // ── Finanzas — Banking ───────────────────────────────────────────────────
