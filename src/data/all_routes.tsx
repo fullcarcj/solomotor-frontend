@@ -355,6 +355,10 @@ export const all_routes = {
   mlAutomatizaciones:       "/mercadolibre/automatizaciones",
   /** Automatizaciones WhatsApp (logs E/F/H + config Wasender) */
   configAutomatizaciones:   "/config/automatizaciones",
+  /** Duplicados CRM — revisión manual (GET /api/dedup/candidates) */
+  configDedup:              "/config/dedup",
+  /** Historial de fusiones CRM (GET /api/dedup/merge-log) */
+  configDedupHistorial:     "/config/dedup/historial",
 
   // ── Reportes (nuevos) ────────────────────────────────────────────────────
   reportsSalesByChannel:    "/reports/sales-by-channel",

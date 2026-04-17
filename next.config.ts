@@ -32,6 +32,8 @@ const nextConfig = {
 
   async redirects() {
     return [
+      /** Raíz: solo App Router `(auth)/signin` — no usar rewrites a /pages (evita mezcla con manifiestos). */
+      { source: "/", destination: "/signin", permanent: false },
       {
         source: "/admin-dashboard-two",
         destination: "/admin-dashboard",
@@ -46,18 +48,9 @@ const nextConfig = {
       },
     ];
   },
-
-   async rewrites() {
-    return [
-      {
-        source: '/', // the URL you want in browser
-        destination: '/signin',   // actual page under /pages/index.tsx
-      },
-     ];
-  },
-  // Explicitly set the workspace root to avoid "multiple lockfiles" warning
-  // Adjust this if your real monorepo root is different.
-  outputFileTracingRoot: path.join(__dirname),
+  // Raíz del workspace: este directorio (mismo que `package-lock.json` del frontend).
+  // Evita que Next infiera otra raíz si existe otro lockfile en carpetas padre (p. ej. C:\Users\Javier\).
+  outputFileTracingRoot: path.resolve(__dirname),
 
   eslint: {
     ignoreDuringBuilds: true,
@@ -68,24 +61,20 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
 
-  webpack: (config:any) => {
-    // Fix: Prevent Webpack from trying to serialize warnings (causing your issue)
-    config.cache = {
-      type: "memory", // prevents "No serializer registered for Warning"
-    };
+  webpack: (config: any) => {
+    if (process.env.NODE_ENV === "production") {
+      config.cache = false;
+    }
 
-    // Keep your current ignored warnings
     config.ignoreWarnings = [
-      {
-        module: /customStyle\.scss/,
-      },
-      {
-        message: /No serializer registered for Warning/,
-      },
+      { module: /customStyle\.scss/ },
+      { message: /No serializer registered for Warning/ },
+      { message: /autoprefixer/ },
+      { message: /postcss-url-parser/ },
+      { message: /Sass.*@import/ },
     ];
 
     return config;
- 
   },
 };
 
