@@ -2,10 +2,14 @@
 import { useRef, useState } from "react";
 import { useAppSelector } from "@/store/hooks";
 
+export type MessageSendResult =
+  | boolean
+  | { success: boolean; errorMessage?: string };
+
 interface Props {
   chatId:       string | number;
   sourceType:   string;
-  onSend:       (text: string, sentBy: string) => Promise<boolean>;
+  onSend:       (text: string, sentBy: string) => Promise<MessageSendResult>;
 }
 
 export default function MessageInput({ chatId: _chatId, sourceType, onSend }: Props) {
@@ -28,12 +32,14 @@ export default function MessageInput({ chatId: _chatId, sourceType, onSend }: Pr
       // eslint-disable-next-line no-console
       console.log("[MessageInput] URL:", `/api/bandeja/${_chatId}/messages`);
     }
-    const ok = await onSend(trimmed, String(username));
+    const raw = await onSend(trimmed, String(username));
+    const ok = typeof raw === "boolean" ? raw : raw.success;
+    const customMsg = typeof raw === "boolean" ? undefined : raw.errorMessage;
     if (ok) {
       setText("");
       textareaRef.current?.focus();
     } else {
-      setError("No se pudo enviar el mensaje. Intenta de nuevo.");
+      setError(customMsg ?? "No se pudo enviar el mensaje. Intenta de nuevo.");
     }
     setSending(false);
   }

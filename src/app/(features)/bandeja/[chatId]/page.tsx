@@ -57,8 +57,73 @@ export default function ChatDetailPage() {
 
   const {
     messages, loading: msgLoading, loadingMore, error: msgError,
-    loadMore, sendMessage,
+    loadMore, sendMessage, refetch,
   } = useChatMessages(chatId);
+
+  const sendMessageForChat = useCallback(
+    async (
+      text: string,
+      sentBy: string
+    ): Promise<{ success: boolean; errorMessage?: string }> => {
+      if (chat?.source_type !== "ml_message") {
+        const ok = await sendMessage(text, sentBy);
+        return {
+          success: ok,
+          errorMessage: ok ? undefined : "No se pudo enviar el mensaje. Intenta de nuevo.",
+        };
+      }
+
+      try {
+        const res = await fetch(
+          `/api/inbox/${encodeURIComponent(String(chatId))}/ml-message/reply`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ text, answered_by: sentBy }),
+          }
+        );
+        const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+
+        if (!res.ok) {
+          const errObj = data.error;
+          const code =
+            (typeof errObj === "string" && errObj) ||
+            (errObj && typeof errObj === "object" && "code" in errObj
+              ? String((errObj as { code?: string }).code ?? "")
+              : "") ||
+            (typeof data.code === "string" ? data.code : "");
+
+          if (res.status === 502 || code === "ML_SEND_FAILED") {
+            return {
+              success: false,
+              errorMessage:
+                "Error al enviar por ML. Verifica que la orden esté activa.",
+            };
+          }
+          const msg =
+            typeof errObj === "string"
+              ? errObj
+              : errObj && typeof errObj === "object" && "message" in errObj
+                ? String((errObj as { message?: string }).message ?? "")
+                : typeof data.message === "string"
+                  ? data.message
+                  : `Error ${res.status}`;
+          return { success: false, errorMessage: msg || "No se pudo enviar el mensaje." };
+        }
+
+        await refetch();
+        return { success: true };
+      } catch {
+        return {
+          success: false,
+          errorMessage:
+            "Error al enviar por ML. Verifica que la orden esté activa.",
+        };
+      }
+    },
+    [chat?.source_type, chatId, sendMessage, refetch]
+  );
 
   const customerId = chat?.customer_id ?? null;
   const customerName = chat?.customer_name ?? null;
@@ -152,7 +217,7 @@ export default function ChatDetailPage() {
             <MessageInput
               chatId={chatId}
               sourceType={chat?.source_type ?? ""}
-              onSend={sendMessage}
+              onSend={sendMessageForChat}
             />
           </div>
 
