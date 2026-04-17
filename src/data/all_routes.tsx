@@ -3,6 +3,8 @@ export const all_routes = {
   newdashboard: "/admin-dashboard",
   /** Home tras login / logos: mismo que Admin Dashboard (evitar admin-dashboard-two). */
   dashboard: "/admin-dashboard",
+  /** Dashboard ERP — KPIs, alertas, tiempo real */
+  erpDashboard: "/dashboard",
   admindashboardtwo: "/admin-dashboard-two",
   productlist: "/product-list",
   addproduct: "/add-product",
@@ -300,4 +302,87 @@ export const all_routes = {
   layoutBoxed:"/layout-boxed",
   layoutRtl:"/layout-rtl",
   layoutDark:"/layout-dark",
+
+  // ── Bandeja (Inbox) ──────────────────────────────────────────────────────
+  inbox:                    "/inbox",
+  inboxHistory:             "/inbox/history",
+  /** Bandeja omnicanal ERP — WhatsApp + ML */
+  bandeja:                  "/bandeja",
+  bandejaChatId:            "/bandeja/[chatId]",
+
+  // ── MercadoLibre ─────────────────────────────────────────────────────────
+  mlDashboard:              "/ml/dashboard",
+  mlTokenStatus:            "/ml/token-status",
+  mlWebhookQueue:           "/ml/webhook-queue",
+  mlListings:               "/ml/listings",
+  mlSkuMapping:             "/ml/sku-mapping",
+  mlUnmappedSkus:           "/ml/unmapped-skus",
+  mlPriceSync:              "/ml/price-sync",
+  mlPicking:                "/ml/picking",
+  mlLabels:                 "/ml/labels",
+  mlMpReconciliation:       "/ml/mp-reconciliation",
+
+  // ── Ventas (nuevas) ───────────────────────────────────────────────────────
+  invoices:                 "/invoices",
+  quotations:               "/quotations",
+  /** Cotizaciones globales (inventario_presupuesto) */
+  ventasCotizaciones:       "/ventas/cotizaciones",
+  /** Historial de ventas omnicanal — GET /api/sales */
+  ventasPedidos:            "/ventas/pedidos",
+  /** POS mostrador — POST /api/pos/sales */
+  ventasNueva:              "/ventas/nueva",
+  posCashRegister:          "/pos/cash-register",
+  salesReps:                "/sales-reps",
+  ordersPendingApproval:    "/orders/pending-approval",
+  commissions:              "/commissions",
+
+  // ── Finanzas — Banking ───────────────────────────────────────────────────
+  bankingBanesco:           "/banking/banesco",
+  bankingReconciliation:    "/banking/reconciliation",
+  bankingReceipts:          "/banking/receipts",
+
+  // ── Reportes (nuevos) ────────────────────────────────────────────────────
+  reportsSalesByChannel:    "/reports/sales-by-channel",
+  reportsMarginByChannel:   "/reports/margin-by-channel",
+  reportsCommissions:       "/reports/commissions",
+
+  // ── Configuración (nuevas integraciones) ─────────────────────────────────
+  settingsMlConnect:        "/settings/ml-connect",
+  settingsWasender:         "/settings/wasender",
+  settingsBanescoApi:       "/settings/banesco-api",
+  settingsChannels:         "/settings/channels",
+  settingsWaTemplates:      "/settings/wa-templates",
+
+  // ── Monitor ───────────────────────────────────────────────────────────────
+  channelsMonitor:          "/channels-monitor",
+
+  /** Inventario ERP — listado con stock unificado (webhook-receiver). */
+  inventarioProductos:      "/inventario/productos",
+  /** Historial de movimientos WMS */
+  inventarioMovimientos:    "/inventario/movimientos",
+  /** Equivalencias y compatibilidades por vehículo */
+  inventarioSkus:           "/inventario/skus",
+
+  // ── Finanzas — P&L ───────────────────────────────────────────────────────
+  /** Pantalla de Utilidad Real / P&L básico */
+  finanzasUtilidad:         "/finanzas/utilidad",
+
+  // ── Logística / WMS ──────────────────────────────────────────────────────
+  logisticaPicking:         "/logistica/picking",
+  logisticaDespachos:       "/logistica/despachos",
+  logisticaHistorial:       "/logistica/historial",
+
+  // ── CRM / Clientes ───────────────────────────────────────────────────────
+  /** Directorio unificado de clientes */
+  clientesDirectorio:       "/clientes/directorio",
+  /** Historial de compras por cliente */
+  clientesHistorial:        "/clientes/historial",
+
+  // ── Compras a proveedores ─────────────────────────────────────────────────
+  /** Directorio de proveedores */
+  comprasProveedores:       "/compras/proveedores",
+  /** Historial de órdenes de compra / recepciones */
+  comprasOrdenes:           "/compras/ordenes",
+  /** Registrar nueva recepción de mercancía */
+  comprasRecepcion:         "/compras/recepcion",
 };

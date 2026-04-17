@@ -5,59 +5,40 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React, { useState, useEffect } from "react";
 
-import { SidebarData } from "../../json/siderbar_data";
 import { all_routes } from "@/data/all_routes";
+import { useMenu } from "@/hooks/useMenu";
+import type { MenuSection } from "@/store/menuSlice";
+import GroupSeparator from "./GroupSeparator";
+import SidebarSection from "./SidebarSection";
 import { ChevronsLeft } from "react-feather";
 import PerfectScrollbar from 'react-perfect-scrollbar';
 import 'react-perfect-scrollbar/dist/css/styles.css';
 
-/** Recoge todos los `link` de un árbol de submenú (rutas activas / resaltado del padre). */
-function collectSubmenuLinks(nodes: any[] | undefined): string[] {
-  const acc: string[] = [];
-  const walk = (list: any[] | undefined) => {
-    if (!list) return;
-    for (const n of list) {
-      if (
-        n?.link &&
-        typeof n.link === "string" &&
-        n.link.length > 0 &&
-        n.link !== "#"
-      ) {
-        acc.push(n.link);
-      }
-      if (n?.submenuItems?.length) walk(n.submenuItems);
+function orderedGroupKeys(sections: MenuSection[]): string[] {
+  const order: string[] = [];
+  const seen = new Set<string>();
+  for (const s of sections) {
+    if (!seen.has(s.group)) {
+      seen.add(s.group);
+      order.push(s.group);
     }
-  };
-  walk(nodes);
-  return acc;
+  }
+  return order;
 }
 
 export default function Sidebar() {
   const route = all_routes;
   const pathname = usePathname();
+  const { menu, loading, error } = useMenu();
+
+  useEffect(() => {
+    if (error) console.error("[sidebar] menú:", error);
+  }, [error]);
   // const { t } = useTranslation();
 
-  const [subOpen, setSubopen] = useState("");
-  const [subsidebar, setSubsidebar] = useState("");
   const [toggle, SetToggle] = useState(false);
   const [expandMenus, setExpandMenus] = useState(false); // Local state for expandMenus
   const [dataLayout, setDataLayout] = useState("default"); // Local state for dataLayout
-
-  const toggleSidebar = (title: string): void => {
-    if (title === subOpen) {
-      setSubopen("");
-    } else {
-      setSubopen(title);
-    }
-  };
-
-  const toggleSubsidebar = (subitem: string): void => {
-    if (subitem === subsidebar) {
-      setSubsidebar("");
-    } else {
-      setSubsidebar(subitem);
-    }
-  };
 
   const handlesidebar = (): void => {
     document.body.classList.toggle("mini-sidebar");
@@ -149,170 +130,53 @@ export default function Sidebar() {
         <PerfectScrollbar>
           <div className="sidebar-inner slimscroll">
             <div id="sidebar-menu" className="sidebar-menu">
-              <ul>
-                {SidebarData?.map((mainLabel: any, index: any) => {
-                  const topItems = mainLabel?.submenuItems ?? [];
-                  const hideSectionHdr =
-                    topItems.length === 1 &&
-                    topItems[0]?.submenu === true &&
-                    topItems[0]?.label === mainLabel?.label;
-                  return (
-                  <li className="submenu-open" key={index}>
-                    {!hideSectionHdr ? (
-                      <h6 className="submenu-hdr">{mainLabel?.label}</h6>
-                    ) : null}
+              {loading && (
+                <div className="placeholder-glow px-3 py-2">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <div key={i} style={{ padding: "8px 16px" }}>
+                      <span className="placeholder col-7 d-block" />
+                    </div>
+                  ))}
+                </div>
+              )}
+              {error && !loading && (
+                <ul>
+                  <li className="submenu-open">
+                    <h6 className="submenu-hdr">Menú</h6>
                     <ul>
-                      {mainLabel?.submenuItems?.map((title: any, i: any) => {
-                        title.links = collectSubmenuLinks(title?.submenuItems);
-                        return (
-                          <React.Fragment key={i}>
-                            <li
-                              className={`submenu ${
-                                !title?.submenu && pathname === title?.link
-                                  ? "custom-active-hassubroute-false"
-                                  : ""
-                              }`}
-                            >
-                              <Link
-                                href={title?.link || "#"}
-                                target={title?.target || undefined}
-                                rel={
-                                  title?.target === "_blank"
-                                    ? "noopener noreferrer"
-                                    : undefined
-                                }
-                                onClick={(e) => {
-                                  if (
-                                    title?.submenu &&
-                                    (!title?.link || title.link === "#")
-                                  ) {
-                                    e.preventDefault();
-                                  }
-                                  toggleSidebar(title?.label);
-                                }}
-                                className={`${
-                                  subOpen === title?.label ? "subdrop" : ""
-                                } ${
-                                  title?.links?.includes(pathname)
-                                    ? "active"
-                                    : ""
-                                }`}
-                              >
-                                <i className={`ti ti-${title.icon} me-2`}></i>
-                                <span className="custom-active-span">
-                                  {(title?.label)}
-                                </span>
-                                {title?.submenu && (
-                                  <span className="menu-arrow" />
-                                )}
-                              </Link>
-                              <ul
-                                style={{
-                                  display:
-                                    subOpen === title?.label ? "block" : "none",
-                                }}
-                              >
-                                {title?.submenuItems?.map(
-                                  (item: any, titleIndex: any) => (
-                                    <li
-                                      className="submenu submenu-two"
-                                      key={titleIndex}
-                                    >
-                                      <Link
-                                        href={item?.link || "#"}
-                                        className={`${
-                                          collectSubmenuLinks(
-                                            item?.submenuItems
-                                          ).includes(pathname) ||
-                                          item?.link === pathname
-                                            ? "active"
-                                            : ""
-                                        } ${
-                                          subsidebar === item?.label
-                                            ? "subdrop"
-                                            : ""
-                                        }${
-                                          item?.icon
-                                            ? " submenu-link-with-icon"
-                                            : ""
-                                        }`}
-                                        target={item?.target || undefined}
-                                        rel={
-                                          item?.target === "_blank"
-                                            ? "noopener noreferrer"
-                                            : undefined
-                                        }
-                                        onClick={(e) => {
-                                          if (
-                                            item?.submenu &&
-                                            (!item?.link || item.link === "#")
-                                          ) {
-                                            e.preventDefault();
-                                          }
-                                          toggleSubsidebar(item?.label);
-                                        }}
-                                      >
-                                        {item?.icon ? (
-                                          <i
-                                            className={`ti ti-${item.icon} me-2`}
-                                          />
-                                        ) : null}
-                                        <span>{item?.label}</span>
-                                        {item?.submenu && (
-                                          <span className="menu-arrow inside-submenu" />
-                                        )}
-                                      </Link>
-                                      <ul
-                                        style={{
-                                          display:
-                                            subsidebar === item?.label
-                                              ? "block"
-                                              : "none",
-                                        }}
-                                      >
-                                        {item?.submenuItems?.map(
-                                          (items: any, subIndex: any) => (
-                                            <li key={subIndex}>
-                                              <Link
-                                                href={items?.link || "#"}
-                                                className={`${
-                                                  subsidebar === items?.label
-                                                    ? "submenu-two subdrop"
-                                                    : "submenu-two"
-                                                } ${
-                                                  collectSubmenuLinks(
-                                                    items?.submenuItems
-                                                  ).includes(pathname) ||
-                                                  items?.link === pathname
-                                                    ? "active"
-                                                    : ""
-                                                }`}
-                                                target={items?.target || undefined}
-                                                rel={
-                                                  items?.target === "_blank"
-                                                    ? "noopener noreferrer"
-                                                    : undefined
-                                                }
-                                              >
-                                                {items?.label}
-                                              </Link>
-                                            </li>
-                                          )
-                                        )}
-                                      </ul>
-                                    </li>
-                                  )
-                                )}
-                              </ul>
-                            </li>
-                          </React.Fragment>
-                        );
-                      })}
+                      <li>
+                        <Link href={route.signin} className="active">
+                          <i className="ti ti-logout me-2" />
+                          <span>Iniciar sesión</span>
+                        </Link>
+                      </li>
                     </ul>
                   </li>
-                );
-                })}
-              </ul>
+                </ul>
+              )}
+              {!loading && !error && menu !== null && menu.length === 0 && (
+                <p className="text-muted small px-3 py-2 mb-0">
+                  No hay ítems de menú para tu rol.
+                </p>
+              )}
+              {!loading && !error && menu !== null && menu.length > 0 && (
+                <ul>
+                  {orderedGroupKeys(menu).map((g) => (
+                    <React.Fragment key={g}>
+                      <GroupSeparator label={g} />
+                      {menu
+                        .filter((s) => s.group === g)
+                        .map((section) => (
+                          <SidebarSection
+                            key={section.id}
+                            section={section}
+                            pathname={pathname}
+                          />
+                        ))}
+                    </React.Fragment>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         </PerfectScrollbar>

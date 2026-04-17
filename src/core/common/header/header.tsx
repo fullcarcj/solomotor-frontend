@@ -5,10 +5,30 @@ import { all_routes } from "@/data/all_routes";
 import { ChevronsLeft, Search } from "react-feather";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAppDispatch } from "@/store/hooks";
+import { clearCredentials } from "@/store/authSlice";
+import { clearMenu } from "@/store/menuSlice";
 
 export default function Header() {
   const route = all_routes;
+  const router = useRouter();
+  const dispatch = useAppDispatch();
+
+  const handleLogout = async (): Promise<void> => {
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+      });
+    } catch {
+      /* seguir limpiando store aunque falle el BFF */
+    }
+    dispatch(clearCredentials());
+    dispatch(clearMenu());
+    router.replace(route.signin);
+  };
   const [toggle, SetToggle] = useState(false);
   const [flagImage, setFlagImage] = useState("assets/img/flags/us-flag.svg");
   const pathname = usePathname(); // Use Next.js hook for current route
@@ -560,7 +580,11 @@ export default function Header() {
                   Settings
                 </Link>
                 <hr className="my-2" />
-                <Link className="dropdown-item logout pb-0" href={route.signin}>
+                <Link
+                  className="dropdown-item logout pb-0"
+                  href={route.signin}
+                  onClick={handleLogout}
+                >
                   <i className="ti ti-logout me-2" />
                   Logout
                 </Link>
@@ -585,7 +609,7 @@ export default function Header() {
               <Link className="dropdown-item" href="generalsettings">
                 Settings
               </Link>
-              <Link className="dropdown-item" href="signin">
+              <Link className="dropdown-item" href="signin" onClick={handleLogout}>
                 Logout
               </Link>
             </div>

@@ -8,6 +8,7 @@ import "../style/icons/fontawesome/css/all.min.css";
 import "../style/fonts/feather/css/iconfont.css";
 import AntdReact19Patch from "../components/AntdReact19Patch";
 import BootstrapJs from "../components/bootstrap-js/bootstrapjs";
+import { Providers } from "@/components/Providers";
 
 export const metadata = {
   title: "Dreams POS - Inventory Management & Admin Dashboard Template",
@@ -33,7 +34,7 @@ export default function RootLayout({
       <body>
         <>
           <AntdReact19Patch />
-          <>{children}</>
+          <Providers>{children}</Providers>
           <BootstrapJs />
         </>
       </body>

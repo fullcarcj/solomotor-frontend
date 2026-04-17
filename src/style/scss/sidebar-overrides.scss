@@ -1,0 +1,35 @@
+/* Sidebar dinámico — solo clases nuevas (prompt v4) */
+
+.sidebar-group-sep {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.45;
+  padding: 12px 16px 4px;
+  pointer-events: none;
+  display: block;
+}
+
+.sidebar-item--pending,
+.sidebar-item--future {
+  opacity: 0.4;
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+
+.sidebar-item--future {
+  opacity: 0.3;
+  font-style: italic;
+}
+
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.badge-live {
+  animation: pulse-live 2s infinite;
+  background-color: #198754;
+  color: white;
+}

@@ -62,3 +62,17 @@ export function getVehicleBrandsUpstreamPath(): string {
   }
   return "/api/crm/brands";
 }
+
+/**
+ * Listado global de cotizaciones en el webhook-receiver.
+ * Si el GET no existe en `/api/inbox/quotations`, define la ruta real, p. ej. `QUOTATIONS_UPSTREAM_PATH=/api/quotations`
+ */
+export function getQuotationsUpstreamPath(): string {
+  const raw = (process.env.QUOTATIONS_UPSTREAM_PATH ?? "")
+    .trim()
+    .replace(/\s+/g, "");
+  if (raw) {
+    return raw.startsWith("/") ? raw : `/${raw}`;
+  }
+  return "/api/inbox/quotations";
+}

@@ -1,31 +1,92 @@
 "use client";
-{/* eslint-disable-next-line @next/next/no-img-element */}
+/* eslint-disable-next-line @next/next/no-img-element */
+
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { all_routes } from "../../../data/all_routes";
+import { useAppDispatch } from "@/store/hooks";
+import { setCredentials } from "@/store/authSlice";
 
 export default function Login() {
   const route = all_routes;
+  const router = useRouter();
+  const dispatch = useAppDispatch();
+
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [isPasswordVisible, setPasswordVisible] = useState(false);
 
   const togglePasswordVisibility = () => {
     setPasswordVisible((prevState) => !prevState);
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ username, password }),
+      });
+
+      let data: unknown = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = {};
+      }
+
+      if (!res.ok) {
+        const d = data as { message?: string; error?: string };
+        setError(
+          d.message ??
+            (typeof d.error === "string" ? d.error : null) ??
+            "Credenciales incorrectas"
+        );
+        return;
+      }
+
+      const d = data as {
+        token?: string;
+        user?: { role?: string | null; canal?: string | null };
+      };
+
+      dispatch(
+        setCredentials({
+          token: "cookie",
+          role: d.user?.role ?? null,
+          canal: d.user?.canal ?? null,
+        })
+      );
+      /* El menú lo carga solo el sidebar (useMenu → fetchMenu) para una llamada y skeleton visible. */
+      router.push(route.newdashboard);
+    } catch {
+      setError("Error de conexión. Intentá de nuevo.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <>
-      {/* Main Wrapper */}
       <div className="main-wrapper">
         <div className="account-content">
           <div className="login-wrapper bg-img">
             <div className="login-content authent-content">
-              <form>
+              <form onSubmit={handleSubmit}>
                 <div className="login-userset">
                   <div className="login-logo logo-normal">
                     <img src="assets/img/logo.png" alt="img" />
                   </div>
                   <Link
-                    href={route.dashboard}
+                    href={route.newdashboard}
                     className="login-logo logo-white"
                   >
                     <img src="assets/img/logo-white.png" alt="Img" />
@@ -33,39 +94,61 @@ export default function Login() {
                   <div className="login-userheading">
                     <h3>Sign In</h3>
                     <h4 className="fs-16">
-                      Access the Dreamspos panel using your email and passcode.
+                      Accedé al panel con usuario y contraseña.
                     </h4>
                   </div>
+                  {error && (
+                    <div className="alert alert-danger py-2 small mb-3" role="alert">
+                      {error}
+                    </div>
+                  )}
                   <div className="mb-3">
                     <label className="form-label">
-                      Email <span className="text-danger"> *</span>
+                      Usuario <span className="text-danger"> *</span>
                     </label>
                     <div className="input-group">
                       <input
                         type="text"
-                        defaultValue=""
+                        name="username"
+                        autoComplete="username"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
                         className="form-control border-end-0"
+                        required
+                        disabled={loading}
                       />
                       <span className="input-group-text border-start-0">
-                        <i className="ti ti-mail" />
+                        <i className="ti ti-user" />
                       </span>
                     </div>
                   </div>
                   <div className="mb-3">
                     <label className="form-label">
-                      Password <span className="text-danger"> *</span>
+                      Contraseña <span className="text-danger"> *</span>
                     </label>
                     <div className="pass-group">
                       <input
                         type={isPasswordVisible ? "text" : "password"}
+                        name="password"
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
                         className="pass-input form-control"
+                        required
+                        disabled={loading}
                       />
                       <span
                         className={`text-gray-9 ti toggle-password ${
                           isPasswordVisible ? "ti-eye" : "ti-eye-off"
                         }`}
                         onClick={togglePasswordVisibility}
-                      ></span>
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(ev) => {
+                          if (ev.key === "Enter" || ev.key === " ")
+                            togglePasswordVisibility();
+                        }}
+                      />
                     </div>
                   </div>
                   <div className="form-login authentication-check">
@@ -90,12 +173,13 @@ export default function Login() {
                     </div>
                   </div>
                   <div className="form-login">
-                    <Link
-                      href={route.newdashboard}
+                    <button
+                      type="submit"
                       className="btn btn-primary w-100"
+                      disabled={loading}
                     >
-                      Sign In
-                    </Link>
+                      {loading ? "Ingresando…" : "Sign In"}
+                    </button>
                   </div>
                   <div className="signinform">
                     <h4>
@@ -158,7 +242,6 @@ export default function Login() {
           </div>
         </div>
       </div>
-      {/* /Main Wrapper */}
     </>
   );
 }
