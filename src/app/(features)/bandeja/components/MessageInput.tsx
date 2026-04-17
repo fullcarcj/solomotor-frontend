@@ -15,7 +15,6 @@ export default function MessageInput({ chatId: _chatId, sourceType, onSend }: Pr
   const [error, setError]   = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  /* ML questions have their own flow — disable input */
   const isDisabled = sourceType === "ml_question";
 
   async function handleSend() {
@@ -47,35 +46,42 @@ export default function MessageInput({ chatId: _chatId, sourceType, onSend }: Pr
   }
 
   return (
-    <div className="border-top bg-white px-3 py-2">
-      {error && <div className="alert alert-danger py-1 mb-2 small">{error}</div>}
+    <div className="d-flex flex-column flex-shrink-0">
+      {error && (
+        <div className="alert bandeja-wa-alert py-2 px-3 mb-0 small border-0 rounded-0">{error}</div>
+      )}
       {isDisabled && (
-        <div className="alert alert-warning py-1 mb-2 small">
+        <div className="alert bandeja-wa-alert-warn py-2 px-3 mb-0 small border-0 rounded-0">
           <i className="ti ti-info-circle me-1" />
           Las preguntas de MercadoLibre se responden desde el panel de ML.
         </div>
       )}
-      <div className="d-flex gap-2 align-items-end">
+      <div className="bandeja-msg-input-bar">
+        <span className="bandeja-msg-input-icon" aria-hidden>😊</span>
         <textarea
           ref={textareaRef}
           className="form-control"
           rows={2}
-          placeholder={isDisabled ? "Respuesta gestionada por MercadoLibre" : "Escribir mensaje… (Enter para enviar)"}
+          placeholder={isDisabled ? "Respuesta gestionada por MercadoLibre" : "Escribir un mensaje…"}
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={isDisabled || sending}
-          style={{ resize: "none", fontSize: "0.875rem" }}
+          style={{ resize: "none" }}
+          aria-label="Escribir mensaje"
         />
+        <span className="bandeja-msg-input-icon d-none d-sm-inline" aria-hidden>🎤</span>
         <button
-          className="btn btn-primary d-flex align-items-center gap-1 flex-shrink-0"
+          type="button"
+          className="btn btn-primary d-flex align-items-center justify-content-center flex-shrink-0 px-3"
           onClick={() => void handleSend()}
           disabled={isDisabled || sending || !text.trim()}
-          style={{ height: 56 }}
+          style={{ minWidth: 48, height: 48 }}
+          aria-label="Enviar"
         >
           {sending
             ? <span className="spinner-border spinner-border-sm" />
-            : <><i className="ti ti-send" /><span className="d-none d-sm-inline">Enviar</span></>}
+            : <i className="ti ti-send" />}
         </button>
       </div>
     </div>

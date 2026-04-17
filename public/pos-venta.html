@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nueva venta POS</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --card: #fff;
+      --border: #dee2e6;
+      --danger: #dc3545;
+      --success: #198754;
+      --warn: #ffc107;
+      --muted: #6c757d;
+      --orange: #fd7e14;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      background: var(--bg);
+      color: #212529;
+      line-height: 1.45;
+      font-size: 15px;
+    }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 1rem 1.25rem 2rem; }
+    h1 { font-size: 1.35rem; margin: 0 0 1rem; }
+    h2 { font-size: 1.05rem; margin: 0 0 0.75rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.1rem;
+      margin-bottom: 1rem;
+    }
+    label { display: block; font-weight: 600; font-size: 0.82rem; margin-bottom: 0.25rem; color: #495057; }
+    .row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; }
+    .field { flex: 1 1 200px; }
+    select, input[type="text"], input[type="number"] {
+      width: 100%;
+      padding: 0.45rem 0.55rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.95rem;
+    }
+    select:disabled, input:disabled { opacity: 0.65; cursor: not-allowed; background: #e9ecef; }
+    .input-valid { border-color: var(--success) !important; box-shadow: 0 0 0 1px rgba(25, 135, 84, 0.25); }
+    .input-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px rgba(220, 53, 69, 0.25); }
+    .hint-ok { color: var(--success); font-size: 0.8rem; margin-top: 0.25rem; display: flex; align-items: center; gap: 0.35rem; }
+    .hint-err { color: var(--danger); font-size: 0.8rem; margin-top: 0.25rem; }
+    .checkbox-row { display: flex; align-items: flex-start; gap: 0.5rem; margin-top: 0.75rem; }
+    .checkbox-row input { margin-top: 0.2rem; }
+    .warn-box {
+      display: none;
+      margin-top: 0.75rem;
+      padding: 0.6rem 0.75rem;
+      background: #fff3cd;
+      border: 1px solid #ffecb5;
+      border-radius: 6px;
+      font-size: 0.88rem;
+    }
+    .warn-box.show { display: block; }
+    .banner {
+      display: none;
+      padding: 0.65rem 0.85rem;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+      font-size: 0.92rem;
+    }
+    .banner.show { display: block; }
+    .banner.ok { background: #d1e7dd; border: 1px solid #badbcc; color: #0f5132; }
+    .banner.err { background: #f8d7da; border: 1px solid #f5c2c7; color: #842029; }
+    .banner.warn { background: #fff3cd; border: 1px solid #ffecb5; color: #664d03; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th, td { border: 1px solid var(--border); padding: 0.45rem 0.5rem; text-align: left; }
+    th { background: #e9ecef; font-weight: 600; }
+    .tag { display: inline-block; padding: 0.15rem 0.45rem; border-radius: 4px; font-size: 0.78rem; font-weight: 600; }
+    .tag-cf { background: #e9ecef; color: #495057; }
+    .tag-warn { background: #ffe5d0; color: #9a3412; }
+    .mono { font-family: ui-monospace, monospace; font-size: 0.85rem; }
+    button.primary {
+      background: #0d6efd;
+      color: #fff;
+      border: none;
+      padding: 0.55rem 1.2rem;
+      border-radius: 6px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    button.primary:disabled { opacity: 0.55; cursor: not-allowed; }
+    button.secondary {
+      background: #fff;
+      border: 1px solid var(--border);
+      padding: 0.45rem 0.75rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.88rem;
+    }
+    .flex { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+    .muted { color: var(--muted); font-size: 0.85rem; }
+    #valIndicator { min-height: 1.5rem; }
+    .search-banner {
+      display: none;
+      background: #cfe2ff;
+      border: 1px solid #9ec5fe;
+      color: #052c65;
+      padding: 0.5rem 0.65rem;
+      border-radius: 6px;
+      font-size: 0.88rem;
+      margin-top: 0.35rem;
+    }
+    .search-banner.show { display: block; }
+    .hint-muted { color: var(--muted); font-size: 0.82rem; margin-top: 0.25rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Nueva venta — mostrador (POS)</h1>
+    <p class="muted">POST <span class="mono">/api/pos/sales</span> · Misma sesión (cookies) que el panel.</p>
+
+    <div id="bannerOk" class="banner ok" role="status"></div>
+    <div id="bannerErr" class="banner err" role="alert"></div>
+    <div id="bannerWarn" class="banner warn" role="alert"></div>
+
+    <div class="card">
+      <h2>Datos del cliente</h2>
+      <div class="row">
+        <div class="field">
+          <label for="docType">Tipo de documento</label>
+          <select id="docType" autocomplete="off">
+            <option value="">— (sin documento)</option>
+            <option value="V">V</option>
+            <option value="E">E</option>
+            <option value="J">J</option>
+            <option value="G">G</option>
+            <option value="P">P</option>
+          </select>
+        </div>
+        <div class="field" style="flex: 2 1 260px;">
+          <label for="docNumber">Número de documento</label>
+          <input type="text" id="docNumber" placeholder="Ej: 12345678" autocomplete="off" disabled />
+          <div id="valIndicator"></div>
+          <div id="docSearchMsg"></div>
+        </div>
+        <div class="field">
+          <label for="phone">Teléfono</label>
+          <input type="text" id="phone" name="phone" placeholder="Ej: 04141234567" autocomplete="tel" />
+        </div>
+      </div>
+      <div class="row" style="margin-top: 0.5rem;">
+        <div class="field" style="flex: 1 1 100%;">
+          <label for="customerName">Nombre del cliente</label>
+          <input
+            type="text"
+            id="customerName"
+            name="customer_name"
+            placeholder="Se completa al identificar por documento"
+            autocomplete="name"
+          />
+          <input type="hidden" id="customerId" name="customer_id" value="" />
+          <input type="hidden" id="companyId" name="company_id" value="1" />
+        </div>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="consumidorFinal" />
+        <label for="consumidorFinal" style="margin: 0; font-weight: 500;">
+          Venta sin identificación (consumidor final)
+        </label>
+      </div>
+      <div id="cfNotice" class="warn-box">
+        Esta venta no se vinculará a ningún cliente registrado.
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Líneas (demo)</h2>
+      <p class="muted" style="margin-top: 0;">
+        Ajustá SKU, cantidad y precio. El backend debe aceptar <span class="mono">lines[]</span> como en el contrato POS.
+      </p>
+      <table id="linesTable">
+        <thead>
+          <tr>
+            <th>SKU</th>
+            <th>Cant.</th>
+            <th>Precio USD</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><input type="text" class="line-sku" value="DEMO-SKU-1" /></td>
+            <td><input type="number" class="line-qty" min="1" step="1" value="1" /></td>
+            <td><input type="number" class="line-price" min="0" step="0.01" value="1.00" /></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="flex" style="margin-top: 0.75rem;">
+        <button type="button" class="secondary" id="btnAddLine">+ Línea</button>
+      </p>
+      <div class="field" style="margin-top: 0.75rem; max-width: 280px;">
+        <label for="payCode">Pago (código)</label>
+        <input type="text" id="payCode" value="EFECTIVO" placeholder="EFECTIVO" />
+      </div>
+    </div>
+
+    <div class="flex" style="margin-bottom: 1rem;">
+      <button type="button" class="primary" id="btnSubmit" disabled>Guardar venta</button>
+      <button type="button" class="secondary" id="btnReloadSales">Actualizar tabla del día</button>
+    </div>
+
+    <div class="card">
+      <h2>Ventas recientes (hoy)</h2>
+      <p class="muted" style="margin-top: 0;">GET <span class="mono">/api/ventas/pedidos?from=&amp;to=</span></p>
+      <div style="overflow-x: auto;">
+        <table id="salesTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Hora</th>
+              <th>Total USD</th>
+              <th>Cliente</th>
+            </tr>
+          </thead>
+          <tbody id="salesTbody">
+            <tr><td colspan="4" class="muted">Cargando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+(function () {
+  "use strict";
+
+  /** Reglas S1-FE-B (solo formato, sin fetch) */
+  function validateVenezuelanId(type, raw) {
+    var v = String(raw || "").trim();
+    if (!type) return { ok: true, reason: "" };
+    if (type === "V" || type === "E") {
+      if (!/^\d+$/.test(v)) return { ok: false, reason: "solo se permiten dígitos" };
+      if (v.length < 6 || v.length > 8) return { ok: false, reason: "debe tener entre 6 y 8 dígitos" };
+      return { ok: true, reason: "" };
+    }
+    if (type === "J" || type === "G") {
+      if (!/^\d+$/.test(v)) return { ok: false, reason: "solo se permiten dígitos" };
+      if (v.length < 8 || v.length > 9) return { ok: false, reason: "debe tener entre 8 y 9 dígitos" };
+      return { ok: true, reason: "" };
+    }
+    if (type === "P") {
+      if (!/^[a-zA-Z0-9]+$/.test(v)) return { ok: false, reason: "solo caracteres alfanuméricos" };
+      if (v.length < 5 || v.length > 20) return { ok: false, reason: "debe tener entre 5 y 20 caracteres" };
+      return { ok: true, reason: "" };
+    }
+    return { ok: false, reason: "tipo no soportado" };
+  }
+
+  function maxLenForType(t) {
+    if (t === "V" || t === "E") return 8;
+    if (t === "J" || t === "G") return 9;
+    if (t === "P") return 20;
+    return 20;
+  }
+
+  function hideBanners() {
+    ["bannerOk", "bannerErr", "bannerWarn"].forEach(function (id) {
+      var el = document.getElementById(id);
+      el.classList.remove("show");
+      el.textContent = "";
+    });
+  }
+
+  function showBanner(kind, html) {
+    hideBanners();
+    var id = kind === "ok" ? "bannerOk" : kind === "err" ? "bannerErr" : "bannerWarn";
+    var el = document.getElementById(id);
+    el.innerHTML = html;
+    el.classList.add("show");
+  }
+
+  var docType = document.getElementById("docType");
+  var docNumber = document.getElementById("docNumber");
+  var phone = document.getElementById("phone");
+  var customerName = document.getElementById("customerName");
+  var customerId = document.getElementById("customerId");
+  var companyId = document.getElementById("companyId");
+  var docSearchMsg = document.getElementById("docSearchMsg");
+  var consumidorFinal = document.getElementById("consumidorFinal");
+  var cfNotice = document.getElementById("cfNotice");
+  var valIndicator = document.getElementById("valIndicator");
+  var btnSubmit = document.getElementById("btnSubmit");
+  var payCode = document.getElementById("payCode");
+  var searchTimer = null;
+
+  function clearResolvedCustomer() {
+    customerId.value = "";
+    docSearchMsg.innerHTML = "";
+  }
+
+  function syncDocFieldState() {
+    var t = docType.value;
+    var cf = consumidorFinal.checked;
+    if (cf) {
+      docType.disabled = true;
+      docNumber.disabled = true;
+      phone.disabled = true;
+      customerName.disabled = true;
+      cfNotice.classList.add("show");
+      valIndicator.innerHTML = "";
+      docNumber.classList.remove("input-valid", "input-invalid");
+      clearResolvedCustomer();
+      return;
+    }
+    docType.disabled = false;
+    phone.disabled = false;
+    customerName.disabled = false;
+    cfNotice.classList.remove("show");
+    if (!t) {
+      docNumber.disabled = true;
+      docNumber.value = "";
+      docNumber.classList.remove("input-valid", "input-invalid");
+      valIndicator.innerHTML = "";
+      docNumber.removeAttribute("maxlength");
+      return;
+    }
+    docNumber.disabled = false;
+    docNumber.maxLength = maxLenForType(t);
+  }
+
+  function runValidationUI() {
+    var t = docType.value;
+    var cf = consumidorFinal.checked;
+    if (cf || !t) {
+      valIndicator.innerHTML = "";
+      docNumber.classList.remove("input-valid", "input-invalid");
+      return { docInvalid: false, showIndicator: false };
+    }
+    var num = docNumber.value.trim();
+    if (!num) {
+      valIndicator.innerHTML = "";
+      docNumber.classList.remove("input-valid", "input-invalid");
+      return { docInvalid: false, showIndicator: false };
+    }
+    var res = validateVenezuelanId(t, num);
+    if (!res.ok) {
+      docNumber.classList.add("input-invalid");
+      docNumber.classList.remove("input-valid");
+      valIndicator.innerHTML =
+        '<div class="hint-err">Formato inválido para tipo ' + t + ": " + res.reason + "</div>";
+      return { docInvalid: true, showIndicator: true };
+    }
+    docNumber.classList.add("input-valid");
+    docNumber.classList.remove("input-invalid");
+    valIndicator.innerHTML = '<div class="hint-ok"><span aria-hidden="true">✓</span> Documento válido</div>';
+    return { docInvalid: false, showIndicator: true };
+  }
+
+  function canSubmit() {
+    if (consumidorFinal.checked) return true;
+    var t = docType.value;
+    var num = docNumber.value.trim();
+    var v = runValidationUI();
+    if (v.docInvalid) return false;
+    if (t && num) {
+      var r = validateVenezuelanId(t, num);
+      return r.ok;
+    }
+    /* sin tipo: permitir enviar (backend puede 422) */
+    if (!t) return true;
+    /* tipo sin número: no enviar hasta completar o CF */
+    if (t && !num) return false;
+    return true;
+  }
+
+  function updateSubmitButton() {
+    var linesOk = collectLines().length > 0;
+    btnSubmit.disabled = !linesOk || !canSubmit();
+  }
+
+  function collectLines() {
+    var rows = document.querySelectorAll("#linesTable tbody tr");
+    var out = [];
+    rows.forEach(function (tr) {
+      var sku = tr.querySelector(".line-sku");
+      var qty = tr.querySelector(".line-qty");
+      var price = tr.querySelector(".line-price");
+      if (!sku || !qty || !price) return;
+      var s = String(sku.value || "").trim();
+      var q = parseInt(String(qty.value || "0"), 10);
+      var p = parseFloat(String(price.value || "0").replace(",", "."));
+      if (!s || !Number.isFinite(q) || q < 1 || !Number.isFinite(p)) return;
+      out.push({ product_sku: s, quantity: q, unit_price_usd: p });
+    });
+    return out;
+  }
+
+  function buildPayload() {
+    var lines = collectLines();
+    var total = lines.reduce(function (s, l) {
+      return s + l.quantity * l.unit_price_usd;
+    }, 0);
+    var code = String(payCode.value || "EFECTIVO").trim() || "EFECTIVO";
+    var cf = consumidorFinal.checked;
+    var t = docType.value || null;
+    var num = String(docNumber.value || "").trim();
+    var ph = String(phone.value || "").trim();
+    var cidStr = String(customerId.value || "").trim();
+    var cid = cidStr ? parseInt(cidStr, 10) : NaN;
+
+    var notesParts = [];
+    if (cf) notesParts.push("[consumidor_final]");
+    /* Contrato backend S1: id_type / id_number (no document_*) */
+    var payload = {
+      lines: lines,
+      payments: [{ payment_method_code: code, amount_usd: total }],
+      status: "PAID",
+      consumidor_final: cf,
+      id_type: cf ? null : t || null,
+      id_number: cf || !t ? "" : num,
+      phone: cf ? "" : ph,
+      notes: notesParts.length ? notesParts.join(" ") : undefined,
+    };
+    if (!cf && Number.isFinite(cid)) payload.customer_id = cid;
+    return payload;
+  }
+
+  function runCustomerLookup() {
+    var cf = consumidorFinal.checked;
+    var t = docType.value;
+    var num = String(docNumber.value || "").trim();
+    docSearchMsg.innerHTML = "";
+    if (cf || !t || !num) return;
+    var v = validateVenezuelanId(t, num);
+    if (!v.ok) return;
+    var co = String(companyId.value || "1").trim() || "1";
+    var url =
+      "/api/clientes/buscar?id_type=" +
+      encodeURIComponent(t) +
+      "&id_number=" +
+      encodeURIComponent(num) +
+      "&company_id=" +
+      encodeURIComponent(co);
+    fetch(url, { credentials: "include", headers: { Accept: "application/json" } })
+      .then(function (res) {
+        return res.json().then(function (json) {
+          return { res: res, json: json };
+        });
+      })
+      .then(function (_ref) {
+        var res = _ref.res;
+        var json = _ref.json;
+        if (res.status === 404) {
+          customerId.value = "";
+          docSearchMsg.innerHTML =
+            '<p class="hint-muted mb-0">Cliente nuevo — se registrará al guardar</p>';
+          return;
+        }
+        if (!res.ok) {
+          customerId.value = "";
+          docSearchMsg.innerHTML =
+            '<p class="hint-muted mb-0">No se pudo verificar — continúe normalmente</p>';
+          return;
+        }
+        var root = json && typeof json === "object" ? json : {};
+        var d = root.data !== undefined ? root.data : root;
+        var c = null;
+        if (d && typeof d === "object") {
+          c = d.customer || (d.id != null ? d : null);
+        }
+        if (c && c.id != null) {
+          customerId.value = String(c.id);
+          var nombre =
+            c.full_name || c.name || c.razon_social || c.label || "";
+          if (nombre && !String(customerName.value || "").trim()) {
+            customerName.value = String(nombre);
+          }
+          var tel = c.phone || c.telefono || c.mobile;
+          if (tel && !String(phone.value || "").trim()) {
+            phone.value = String(tel);
+          }
+          var label = nombre || "#" + String(c.id);
+          docSearchMsg.innerHTML =
+            '<div class="search-banner show" role="status">✓ Cliente encontrado: ' +
+            escapeHtml(label) +
+            " — venta se vinculará automáticamente</div>";
+        } else {
+          customerId.value = "";
+          docSearchMsg.innerHTML =
+            '<p class="hint-muted mb-0">Cliente nuevo — se registrará al guardar</p>';
+        }
+      })
+      .catch(function () {
+        customerId.value = "";
+        docSearchMsg.innerHTML =
+          '<p class="hint-muted mb-0">No se pudo verificar — continúe normalmente</p>';
+      });
+  }
+
+  function escapeHtml(s) {
+    var d = document.createElement("div");
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  docType.addEventListener("change", function () {
+    clearResolvedCustomer();
+    syncDocFieldState();
+    runValidationUI();
+    updateSubmitButton();
+  });
+
+  docNumber.addEventListener("input", function () {
+    clearResolvedCustomer();
+    runValidationUI();
+    updateSubmitButton();
+  });
+
+  docNumber.addEventListener("blur", function () {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(runCustomerLookup, 300);
+  });
+
+  consumidorFinal.addEventListener("change", function () {
+    syncDocFieldState();
+    runValidationUI();
+    updateSubmitButton();
+  });
+
+  phone.addEventListener("input", updateSubmitButton);
+
+  document.getElementById("linesTable").addEventListener("input", updateSubmitButton);
+
+  document.getElementById("btnAddLine").addEventListener("click", function () {
+    var tb = document.querySelector("#linesTable tbody");
+    var tr = document.createElement("tr");
+    tr.innerHTML =
+      '<td><input type="text" class="line-sku" value="" placeholder="SKU" /></td>' +
+      '<td><input type="number" class="line-qty" min="1" step="1" value="1" /></td>' +
+      '<td><input type="number" class="line-price" min="0" step="0.01" value="1" /></td>';
+    tb.appendChild(tr);
+    updateSubmitButton();
+  });
+
+  btnSubmit.addEventListener("click", function () {
+    hideBanners();
+    var payload = buildPayload();
+    if (payload.lines.length === 0) {
+      showBanner("warn", "Agregá al menos una línea con SKU válido.");
+      return;
+    }
+
+    fetch("/api/pos/sales", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(payload),
+    })
+      .then(function (res) {
+        return res.text().then(function (text) {
+          var data = {};
+          if (text.trim()) {
+            try {
+              data = JSON.parse(text);
+            } catch (e) {
+              data = { _raw: text };
+            }
+          }
+          return { res: res, data: data };
+        });
+      })
+      .then(function (_ref) {
+        var res = _ref.res;
+        var data = _ref.data;
+        if (res.ok && res.status === 200) {
+          var d = data.data || data;
+          var cust = d.customer || d.cliente;
+          var name =
+            cust &&
+            (cust.full_name ||
+              cust.name ||
+              cust.razon_social ||
+              cust.id_number ||
+              cust.document_number);
+          var extra = "";
+          if (name) extra = "<br/><strong>Cliente:</strong> " + String(name);
+          showBanner("ok", "<strong>Venta registrada correctamente</strong>" + extra);
+          loadTodaySales();
+          return;
+        }
+
+        var err = data && data.error;
+        var code = "";
+        var reason = "";
+        if (err && typeof err === "object") {
+          code = String(err.code || "");
+          reason = String(err.reason || err.message || "");
+        }
+        if (!code && data.code) code = String(data.code);
+        if (!reason) reason = String(data.reason || data.message || "");
+
+        if (res.status === 422 && code === "MISSING_IDENTITY_MOSTRADOR") {
+          showBanner(
+            "err",
+            "Debe ingresar cédula/RIF o teléfono, o marcar consumidor final"
+          );
+          return;
+        }
+        if (res.status === 422 && code === "INVALID_ID_FORMAT") {
+          showBanner("err", "Documento inválido: " + (reason || "formato no válido"));
+          docNumber.focus();
+          return;
+        }
+
+        if (res.status >= 500 || res.status === 0) {
+          console.error("[pos-venta] Error servidor / red:", data);
+          showBanner(
+            "warn",
+            "Error al guardar. Intente de nuevo o contacte soporte."
+          );
+          return;
+        }
+
+        showBanner("err", String(reason || "No se pudo guardar la venta (" + res.status + ")."));
+      })
+      .catch(function (e) {
+        console.error("[pos-venta]", e);
+        showBanner(
+          "warn",
+          "Error al guardar. Intente de nuevo o contacte soporte."
+        );
+      });
+  });
+
+  function parseSalesJson(json) {
+    var o = json || {};
+    var data = o.data || o;
+    var raw =
+      (Array.isArray(data) ? data : null) ||
+      data.sales ||
+      data.items ||
+      (Array.isArray(o.data) ? o.data : null) ||
+      [];
+    return Array.isArray(raw) ? raw : [];
+  }
+
+  function customerCell(row) {
+    var cid = row.customer_id;
+    var notes = row.notes != null ? String(row.notes) : "";
+    var cf =
+      /\[consumidor_final\]/i.test(notes) ||
+      /consumidor_final\s*:\s*true/i.test(notes) ||
+      /"consumidor_final"\s*:\s*true/.test(notes);
+    var name =
+      row.customer_name ||
+      row.cliente_nombre ||
+      (row.customer && (row.customer.full_name || row.customer.name));
+
+    if (cf) return '<span class="tag tag-cf">Consumidor final</span>';
+    if (cid != null && cid !== "") {
+      var label = name ? String(name) : "#" + String(cid);
+      return escapeHtml(label);
+    }
+    return '<span class="tag tag-warn">Sin identificar</span>';
+  }
+
+  function escapeHtml(s) {
+    var d = document.createElement("div");
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function fmtTime(iso) {
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return "—";
+      return d.toLocaleTimeString("es-VE", { hour: "2-digit", minute: "2-digit" });
+    } catch (e) {
+      return "—";
+    }
+  }
+
+  function todayISO() {
+    var d = new Date();
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, "0");
+    var day = String(d.getDate()).padStart(2, "0");
+    return y + "-" + m + "-" + day;
+  }
+
+  function loadTodaySales() {
+    var day = todayISO();
+    var url =
+      "/api/ventas/pedidos?from=" +
+      encodeURIComponent(day) +
+      "&to=" +
+      encodeURIComponent(day) +
+      "&limit=30&offset=0";
+    var tbody = document.getElementById("salesTbody");
+    tbody.innerHTML = '<tr><td colspan="4" class="muted">Cargando…</td></tr>';
+
+    fetch(url, { credentials: "include", headers: { Accept: "application/json" } })
+      .then(function (r) {
+        return r.json().then(function (j) {
+          return { ok: r.ok, json: j };
+        });
+      })
+      .then(function (_ref2) {
+        var json = _ref2.json;
+        var list = parseSalesJson(json);
+        if (list.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" class="muted">Sin ventas hoy</td></tr>';
+          return;
+        }
+        tbody.innerHTML = list
+          .map(function (row) {
+            var id = row.id != null ? row.id : "—";
+            var total = row.total_usd != null ? row.total_usd : row.order_total_amount;
+            return (
+              "<tr>" +
+              '<td class="mono">' +
+              escapeHtml(String(id)) +
+              "</td>" +
+              "<td>" +
+              fmtTime(row.created_at) +
+              "</td>" +
+              '<td class="mono">' +
+              escapeHtml(String(total != null ? total : "—")) +
+              "</td>" +
+              "<td>" +
+              customerCell(row) +
+              "</td>" +
+              "</tr>"
+            );
+          })
+          .join("");
+      })
+      .catch(function () {
+        tbody.innerHTML =
+          '<tr><td colspan="4" class="muted">No se pudo cargar la tabla</td></tr>';
+      });
+  }
+
+  document.getElementById("btnReloadSales").addEventListener("click", loadTodaySales);
+
+  syncDocFieldState();
+  runValidationUI();
+  updateSubmitButton();
+  loadTodaySales();
+})();
+  </script>
+</body>
+</html>

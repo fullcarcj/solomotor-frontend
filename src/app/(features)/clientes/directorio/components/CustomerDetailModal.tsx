@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CustomerDetail, CustomerHistoryItem } from "@/types/customers";
 import CustomerStatusBadge from "./CustomerStatusBadge";
 import CustomerTypeBadge from "./CustomerTypeBadge";
+import CustomerLinkedIdentities from "./CustomerLinkedIdentities";
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
@@ -220,6 +221,8 @@ export default function CustomerDetailModal({ customerId, onClose }: Props) {
 
               {detail && !loadingDetail && (
                 <>
+                  <CustomerLinkedIdentities customerId={customerId} />
+
                   {/* Datos de contacto */}
                   <h6 className="fw-semibold text-muted text-uppercase small mb-2">
                     Datos de Contacto

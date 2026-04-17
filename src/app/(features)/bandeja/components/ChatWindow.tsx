@@ -3,7 +3,6 @@ import { useEffect, useRef } from "react";
 import type { ChatMessage } from "@/types/inbox";
 import MessageBubble from "./MessageBubble";
 
-/* ── date separator helpers ── */
 function dayKey(iso: string): string {
   try { return new Date(iso).toDateString(); } catch { return iso; }
 }
@@ -46,7 +45,6 @@ export default function ChatWindow({ messages, loading, loadingMore, error, onLo
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevLen   = useRef(0);
 
-  /* auto-scroll when new messages arrive (not when loading older) */
   useEffect(() => {
     if (messages.length > prevLen.current) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -56,16 +54,16 @@ export default function ChatWindow({ messages, loading, loadingMore, error, onLo
 
   if (loading) {
     return (
-      <div className="flex-grow-1 d-flex align-items-center justify-content-center">
-        <div className="spinner-border text-primary" />
+      <div className="bandeja-chat-window flex-grow-1 d-flex align-items-center justify-content-center">
+        <div className="spinner-border text-primary" role="status" aria-label="Cargando" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex-grow-1 d-flex align-items-center justify-content-center p-3">
-        <div className="alert alert-danger w-100 text-center">{error}</div>
+      <div className="bandeja-chat-window flex-grow-1 d-flex align-items-center justify-content-center p-3">
+        <div className="alert bandeja-wa-alert w-100 text-center mb-0">{error}</div>
       </div>
     );
   }
@@ -73,11 +71,20 @@ export default function ChatWindow({ messages, loading, loadingMore, error, onLo
   const groups = buildGroups(messages);
 
   return (
-    <div className="flex-grow-1 overflow-auto py-2" style={{ minHeight: 0 }}>
-      {/* Load older messages */}
+    <div className="bandeja-chat-window flex-grow-1">
       {messages.length >= 50 && (
         <div className="text-center py-2">
-          <button className="btn btn-sm btn-outline-secondary" onClick={onLoadMore} disabled={loadingMore}>
+          <button
+            type="button"
+            className="btn btn-sm"
+            style={{
+              background: "var(--wa-bg-secondary)",
+              color: "var(--wa-text-primary)",
+              border: "1px solid var(--wa-border)",
+            }}
+            onClick={onLoadMore}
+            disabled={loadingMore}
+          >
             {loadingMore ? <span className="spinner-border spinner-border-sm me-1" /> : <i className="ti ti-arrow-up me-1" />}
             Mensajes anteriores
           </button>
@@ -85,8 +92,8 @@ export default function ChatWindow({ messages, loading, loadingMore, error, onLo
       )}
 
       {messages.length === 0 && (
-        <div className="text-center text-muted py-5">
-          <i className="ti ti-message-off fs-2 d-block mb-2" />
+        <div className="text-center py-5" style={{ color: "var(--wa-text-secondary)" }}>
+          <i className="ti ti-message-off fs-2 d-block mb-2 opacity-50" />
           Sin mensajes en este chat
         </div>
       )}
@@ -94,11 +101,9 @@ export default function ChatWindow({ messages, loading, loadingMore, error, onLo
       {groups.map((item, i) => {
         if (item.type === "separator") {
           return (
-            <div key={`sep-${i}`} className="d-flex align-items-center gap-2 px-3 py-1">
+            <div key={`sep-${i}`} className="bandeja-day-sep">
               <div className="flex-grow-1 border-top" />
-              <small className="text-muted flex-shrink-0 px-2 py-1 rounded" style={{ background: "rgba(0,0,0,.04)", fontSize: "0.7rem" }}>
-                {item.label}
-              </small>
+              <small>{item.label}</small>
               <div className="flex-grow-1 border-top" />
             </div>
           );

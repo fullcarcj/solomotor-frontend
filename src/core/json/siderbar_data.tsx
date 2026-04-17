@@ -116,21 +116,21 @@ export const SidebarData = [
       },
     ],
   },
-  // ── BANDEJA ──────────────────────────────────────────────────────────────
+  // ── SPACEWORK (inbox /bandeja) ───────────────────────────────────────────
   {
-    label: "Bandeja",
+    label: "Spacework",
     submenuOpen: false,
     showSubRoute: false,
-    submenuHdr: "Bandeja",
+    submenuHdr: "Spacework",
     submenuItems: [
       {
-        label: "Bandeja",
+        label: "Spacework",
         link: "#",
         icon: "inbox",
         submenu: true,
         showSubRoute: false,
         submenuItems: [
-          { label: "Bandeja unificada",            link: route.bandeja,                      icon: "messages",       showSubRoute: false, submenu: false },
+          { label: "Omnicanal",                  link: route.bandeja,                      icon: "messages",       showSubRoute: false, submenu: false },
           { label: "Sin leer",                 link: `${route.bandeja}?filter=unread`,   icon: "bell",           showSubRoute: false, submenu: false },
           { label: "Pago pendiente",           link: `${route.bandeja}?filter=payment_pending`, icon: "clock-hour-3", showSubRoute: false, submenu: false },
           { label: "Cotizar",                  link: `${route.bandeja}?filter=quote`,    icon: "file-invoice",   showSubRoute: false, submenu: false },

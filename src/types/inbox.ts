@@ -33,6 +33,10 @@ export interface ChatMessageContent {
   caption:   string | null;
   mediaUrl:  string | null;
   mimeType:  string | null;
+  /** Duración del adjunto de audio en segundos (si el backend la envía) */
+  duration?: number;
+  /** URL de miniatura para poster de video (opcional) */
+  thumbnailUrl?: string | null;
 }
 
 export interface ChatMessage {

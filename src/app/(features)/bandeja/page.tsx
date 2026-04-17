@@ -18,16 +18,17 @@ function BandejaInner() {
 
 function ChatListSkeleton() {
   return (
-    <div className="d-flex flex-column h-100" style={{ borderRight: "1px solid var(--bs-border-color)" }}>
-      <div className="px-3 pt-2 pb-1 border-bottom d-flex justify-content-between align-items-center">
-        <span className="fw-semibold">Bandeja</span>
+    <div className="d-flex flex-column h-100">
+      <div className="bandeja-wa-top-header">
+        <div className="bandeja-wa-avatar-sm placeholder-glow bg-secondary" style={{ opacity: 0.4 }} />
+        <span className="placeholder col-4 rounded bandeja-wa-title" style={{ height: 18, opacity: 0.4 }} />
       </div>
-      <div className="overflow-auto flex-grow-1 placeholder-glow">
+      <div className="bandeja-chat-list-scroll placeholder-glow px-2">
         {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="d-flex align-items-start gap-2 px-3 py-2 border-bottom">
-            <div className="rounded-circle bg-secondary placeholder flex-shrink-0" style={{ width: 40, height: 40 }} />
+          <div key={i} className="d-flex align-items-start gap-2 py-3 border-bottom border-secondary border-opacity-25">
+            <div className="rounded-circle bg-secondary placeholder flex-shrink-0" style={{ width: 42, height: 42 }} />
             <div className="flex-grow-1">
-              <div className="placeholder col-6 rounded mb-1" style={{ height: 14 }} />
+              <div className="placeholder col-6 rounded mb-2" style={{ height: 14 }} />
               <div className="placeholder col-9 rounded" style={{ height: 12 }} />
             </div>
           </div>
@@ -40,24 +41,17 @@ function ChatListSkeleton() {
 export default function BandejaPage() {
   return (
     <div className="page-wrapper">
-      <div className="content p-0" style={{ height: "calc(100vh - 60px)", overflow: "hidden" }}>
-        <div className="row g-0 h-100">
-          {/* Lista de chats */}
-          <div className="col-12 col-md-4 h-100">
+      <div className="content p-0">
+        <div className="bandeja-shell">
+          <div className="bandeja-panel-left">
             <Suspense fallback={<ChatListSkeleton />}>
               <BandejaInner />
             </Suspense>
           </div>
 
-          {/* Panel vacío — desktop */}
-          <div
-            className="col-md-8 d-none d-md-flex align-items-center justify-content-center h-100"
-            style={{ borderLeft: "1px solid var(--bs-border-color)", background: "#f8f9fa" }}
-          >
-            <div className="text-center text-muted">
-              <i className="ti ti-message-2 d-block mb-3" style={{ fontSize: "3rem", opacity: 0.3 }} />
-              <p className="mb-0">Seleccioná una conversación para ver los mensajes</p>
-            </div>
+          <div className="bandeja-panel-right--empty d-none d-md-flex flex-column text-center px-4">
+            <i className="ti ti-message-2 d-block mb-3" style={{ fontSize: "3rem" }} />
+            <p className="mb-0">Seleccioná una conversación para ver los mensajes</p>
           </div>
         </div>
       </div>

@@ -16,31 +16,35 @@ interface Props {
 export default function ChatFilters({ filters, onChange }: Props) {
   const isDirty = filters.search || filters.src;
   return (
-    <div className="px-2 py-2 border-bottom">
-      <div className="d-flex gap-2">
+    <div className="bandeja-wa-filters-block">
+      <div className="bandeja-wa-search-row">
         <div className="input-group input-group-sm flex-grow-1">
-          <span className="input-group-text bg-transparent border-end-0 border-secondary-subtle">
-            <i className="ti ti-search text-muted" style={{ fontSize: "0.9rem" }} />
+          <span className="input-group-text border-0">
+            <i className="ti ti-search" aria-hidden />
           </span>
           <input
             type="text"
-            className="form-control form-control-sm border-start-0 border-secondary-subtle"
-            placeholder="Nombre o teléfono…"
+            className="form-control border-0"
+            placeholder="Buscar o filtrar por nombre o teléfono…"
             value={filters.search}
             onChange={e => onChange({ search: e.target.value })}
+            aria-label="Buscar conversación"
           />
         </div>
+      </div>
+      <div className="bandeja-wa-source-row">
         <select
-          className="form-select form-select-sm"
-          style={{ maxWidth: 140 }}
+          className="form-select form-select-sm flex-grow-1"
           value={filters.src}
           onChange={e => onChange({ src: e.target.value })}
+          aria-label="Fuente"
         >
           {SOURCES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
         {isDirty && (
           <button
-            className="btn btn-sm btn-outline-secondary"
+            type="button"
+            className="btn btn-sm btn-outline-secondary flex-shrink-0"
             onClick={() => onChange({ search: "", src: "" })}
             title="Limpiar filtros"
           >

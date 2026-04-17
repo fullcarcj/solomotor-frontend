@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { SaleDetail } from "@/types/sales";
 import SaleSourceBadge from "./SaleSourceBadge";
 import SaleStatusBadge from "./SaleStatusBadge";
+import SaleResolvedCustomerBlock from "./SaleResolvedCustomerBlock";
 
 function fmtDate(iso: string): string {
   const d = new Date(iso);
@@ -208,6 +209,13 @@ export default function SaleDetailModal({
                     </dl>
                   </div>
                 </div>
+
+                {detail.source === "mercadolibre" && (
+                  <div className="mb-3">
+                    <h6 className="mb-2">Comprador</h6>
+                    <SaleResolvedCustomerBlock saleId={detail.id} />
+                  </div>
+                )}
 
                 <h6 className="mb-2">Ítems</h6>
                 <div className="table-responsive mb-3">

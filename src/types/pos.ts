@@ -25,6 +25,13 @@ export interface TodayRate {
 export interface PosSalePayload {
   company_id?: number;
   customer_id?: number;
+  /** Identidad mostrador (backend S1) — usar id_type/id_number, no document_* */
+  id_type?: string | null;
+  id_number?: string;
+  phone?: string;
+  consumidor_final?: boolean;
+  /** Si el POS resolvió el cliente vía GET /api/clientes/buscar (S2) */
+  customer_id?: number;
   lines: {
     product_sku: string;
     quantity: number;

@@ -304,10 +304,10 @@ export const all_routes = {
   layoutRtl:"/layout-rtl",
   layoutDark:"/layout-dark",
 
-  // ── Bandeja (Inbox) ──────────────────────────────────────────────────────
+  // ── Spacework / inbox (rutas legacy /inbox y /bandeja) ───────────────────
   inbox:                    "/inbox",
   inboxHistory:             "/inbox/history",
-  /** Bandeja omnicanal ERP — WhatsApp + ML */
+  /** Spacework (omnicanal) — WhatsApp + ML */
   bandeja:                  "/bandeja",
   bandejaChatId:            "/bandeja/[chatId]",
 

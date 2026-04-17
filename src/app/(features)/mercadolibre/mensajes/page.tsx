@@ -45,10 +45,10 @@ export default function MensajesPage() {
           <div className="card-body text-center py-5">
             <i className="ti ti-messages d-block mb-3" style={{ fontSize: "3rem", color: "#F5A623" }} />
             <h5 className="mb-2">Las conversaciones post-venta de MercadoLibre</h5>
-            <p className="text-muted mb-4">se gestionan desde la Bandeja omnicanal.</p>
+            <p className="text-muted mb-4">se gestionan desde Spacework (omnicanal).</p>
             <Link href="/bandeja?src=ml_message" className="btn btn-warning btn-lg d-inline-flex align-items-center gap-2">
               <i className="ti ti-inbox" />
-              Ir a Bandeja ML →
+              Ir a Spacework (ML) →
             </Link>
           </div>
         </div>

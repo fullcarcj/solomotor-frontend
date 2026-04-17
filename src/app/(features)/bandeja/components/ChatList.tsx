@@ -12,8 +12,8 @@ interface Props {
 
 function SkeletonItem() {
   return (
-    <div className="d-flex align-items-start gap-2 px-3 py-2 border-bottom placeholder-glow">
-      <div className="rounded-circle bg-secondary placeholder flex-shrink-0" style={{ width: 40, height: 40 }} />
+    <div className="d-flex align-items-start gap-2 px-3 py-2 border-bottom border-secondary border-opacity-25 placeholder-glow">
+      <div className="rounded-circle bg-secondary placeholder flex-shrink-0" style={{ width: 42, height: 42 }} />
       <div className="flex-grow-1">
         <div className="placeholder col-6 rounded mb-1" style={{ height: 14 }} />
         <div className="placeholder col-9 rounded" style={{ height: 12 }} />
@@ -29,29 +29,35 @@ export default function ChatList({ activeChatId, initialSrc = "", initialFilter 
   );
 
   return (
-    <div className="d-flex flex-column h-100" style={{ borderRight: "1px solid var(--bs-border-color)" }}>
-      {/* Sticky header */}
-      <div className="bg-white" style={{ position: "sticky", top: 0, zIndex: 10 }}>
-        <div className="px-3 pt-2 pb-1 border-bottom d-flex justify-content-between align-items-center">
-          <span className="fw-semibold">Bandeja</span>
-          {total > 0 && <small className="text-muted">{total} conversaciones</small>}
+    <div className="d-flex flex-column h-100 min-h-0">
+      <div className="bandeja-wa-top-header">
+        <div className="bandeja-wa-avatar-sm" aria-hidden>SM</div>
+        <div className="flex-grow-1 min-w-0">
+          <h2 className="bandeja-wa-title">Spacework</h2>
+          {total > 0 && (
+            <span className="bandeja-wa-header-meta d-block">{total} conversaciones</span>
+          )}
         </div>
-        <InboxCountBadges activeFilter={filters.filter} onFilter={(f) => setFilters({ filter: f })} />
-        <ChatFilters filters={filters} onChange={setFilters} />
+        <button type="button" className="btn btn-link p-0 border-0" style={{ color: "var(--wa-icon)" }} aria-label="Menú" tabIndex={-1}>
+          <i className="ti ti-dots-vertical fs-5" />
+        </button>
       </div>
 
-      {/* List */}
-      <div className="overflow-auto flex-grow-1">
+      <InboxCountBadges activeFilter={filters.filter} onFilter={(f) => setFilters({ filter: f })} />
+
+      <ChatFilters filters={filters} onChange={setFilters} />
+
+      <div className="bandeja-chat-list-scroll bandeja-chat-list">
         {error && (
-          <div className="alert alert-danger m-2 py-2 small">{error}</div>
+          <div className="alert bandeja-wa-alert m-2 py-2 small">{error}</div>
         )}
 
         {loading
           ? Array.from({ length: 8 }).map((_, i) => <SkeletonItem key={i} />)
           : chats.length === 0
           ? (
-            <div className="text-center text-muted py-5">
-              <i className="ti ti-inbox fs-2 d-block mb-2" />
+            <div className="text-center py-5 px-3" style={{ color: "var(--wa-text-secondary)" }}>
+              <i className="ti ti-inbox fs-2 d-block mb-2 opacity-50" />
               No hay conversaciones
             </div>
           )
@@ -66,7 +72,13 @@ export default function ChatList({ activeChatId, initialSrc = "", initialFilter 
         {nextCursor && !loading && (
           <div className="text-center py-3">
             <button
-              className="btn btn-sm btn-outline-secondary"
+              type="button"
+              className="btn btn-sm"
+              style={{
+                background: "var(--wa-bg-hover)",
+                color: "var(--wa-text-primary)",
+                border: "1px solid var(--wa-border)",
+              }}
               onClick={loadMore}
               disabled={loadingMore}
             >

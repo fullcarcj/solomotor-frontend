@@ -47,21 +47,24 @@ export default function InboxCountBadges({ activeFilter, onFilter }: Props) {
   }
 
   return (
-    <div className="d-flex flex-wrap gap-1 px-2 pt-2 pb-1">
+    <div className="bandeja-inbox-tabs" role="tablist">
       {BADGES.map(b => {
         const count = getCount(b.key);
         const isActive = activeFilter === b.key;
         return (
           <button
             key={b.key}
-            className={`btn btn-sm d-flex align-items-center gap-1 ${isActive ? "btn-primary" : "btn-light"}`}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            className={`btn btn-sm d-flex align-items-center gap-1 ${isActive ? "active" : ""}`}
             style={{ fontSize: "0.75rem" }}
             onClick={() => onFilter(b.key)}
           >
             <i className={`ti ${b.icon}`} />
             {b.label}
             {count !== null && (
-              <span className={`badge rounded-pill ms-1 ${isActive ? "bg-white text-primary" : "bg-secondary text-white"}`}>
+              <span className="badge rounded-pill ms-1">
                 {count}
               </span>
             )}
