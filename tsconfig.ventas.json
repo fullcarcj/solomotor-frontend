@@ -19,6 +19,7 @@
     "src/app/api/bandeja/**/*.ts",
     "src/app/api/inbox/**/*.ts",
     "src/types/inbox.ts",
+    "src/types/supervisor.ts",
     "src/types/sales.ts",
     "src/types/customers.ts",
     "src/hooks/useChatMessages.ts",
