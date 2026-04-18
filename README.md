@@ -34,3 +34,31 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+---
+
+## Convenciones del proyecto
+
+### TypeScript estricto en código nuevo (scoped)
+
+El build global del repo tiene `ignoreBuildErrors: true` (`next.config.ts`) por deuda
+heredada del template Dreams POS. El código nuevo del **módulo ventas + bandeja**
+corre con TS estricto en un tsconfig propio:
+
+```bash
+npm run tsc:ventas
+```
+
+Ejecutar **antes de cada commit** que toque:
+
+- `src/app/(features)/ventas/**`
+- `src/app/(features)/bandeja/**`
+- `src/app/api/ventas/**`, `src/app/api/bandeja/**`, `src/app/api/inbox/**`
+- `src/types/inbox.ts`, `src/types/sales.ts`, `src/types/customers.ts`
+- `src/hooks/use{Chat,Inbox,Sales}*.ts`
+
+Si aparecen errores nuevos, arreglarlos en el mismo PR. Usar `@ts-ignore`
+solo con comentario explicando la razón y un issue de seguimiento.
+
+Ver también [`docs/frontend/UI_CONVENTIONS.md`](./docs/frontend/UI_CONVENTIONS.md)
+para convenciones de UI (librerías, formularios, alertas, enums del backend).

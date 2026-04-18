@@ -293,11 +293,15 @@ export default function VentasHistorialPage() {
       const raw: unknown = await res.json().catch(() => ({}));
       if (!res.ok) {
         const o = raw as Record<string, unknown>;
-        const msg =
-          (typeof o.error === "string" && o.error) ||
-          (o.error && typeof o.error === "object" && String((o.error as { message?: string }).message)) ||
-          (typeof o.message === "string" && o.message) ||
-          "Error al cargar historial";
+        let msg = "Error al cargar historial";
+        if (typeof o.error === "string" && o.error) {
+          msg = o.error;
+        } else if (o.error && typeof o.error === "object") {
+          const errMsg = (o.error as { message?: unknown }).message;
+          if (typeof errMsg === "string" && errMsg) msg = errMsg;
+        } else if (typeof o.message === "string" && o.message) {
+          msg = o.message;
+        }
         setError(msg);
         setPayload(null);
         return;

@@ -14,12 +14,14 @@ function parseRate(json: unknown): TodayRate | null {
   const active_rate =
     data.active_rate ?? data.activeRate ?? data.bcv_rate ?? "";
   if (!rate_date && active_rate === "") return null;
+  const bcv_rate = data.bcv_rate ?? data.bcvRate ?? "";
+  const binance_rate = data.binance_rate ?? data.binanceRate ?? "";
   return {
     rate_date,
     active_rate_type,
     active_rate: active_rate as number | string,
-    bcv_rate: data.bcv_rate ?? data.bcvRate ?? "",
-    binance_rate: data.binance_rate ?? data.binanceRate ?? "",
+    bcv_rate: bcv_rate as number | string,
+    binance_rate: binance_rate as number | string,
   };
 }
 

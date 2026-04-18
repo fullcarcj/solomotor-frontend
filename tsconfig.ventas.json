@@ -1,0 +1,30 @@
+{
+  "//": "TypeScript estricto SCOPED al módulo ventas + bandeja + sus APIs y tipos. Sprint 1.5 FE.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": [
+    "src/app/(features)/ventas/**/*.ts",
+    "src/app/(features)/ventas/**/*.tsx",
+    "src/app/(features)/bandeja/**/*.ts",
+    "src/app/(features)/bandeja/**/*.tsx",
+    "src/app/api/ventas/**/*.ts",
+    "src/app/api/bandeja/**/*.ts",
+    "src/app/api/inbox/**/*.ts",
+    "src/types/inbox.ts",
+    "src/types/sales.ts",
+    "src/types/customers.ts",
+    "src/hooks/useChatMessages.ts",
+    "src/hooks/useChatContext.ts",
+    "src/hooks/useInbox.ts",
+    "src/hooks/useSales.ts"
+  ],
+  "exclude": ["node_modules", ".next", "dist"]
+}

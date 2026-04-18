@@ -209,7 +209,7 @@ function DispatchPanel({
 
 /* ─── Contenedor principal ─────────────────────── */
 export default function ChatActionSlideOver({
-  action, chatId, customerId, customerName, recentOrders, onClose, onSuccess,
+  action, chatId: _chatId, customerId, customerName, recentOrders, onClose, onSuccess,
 }: Props) {
   if (!action) return null;
 

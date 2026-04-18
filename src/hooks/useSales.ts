@@ -42,6 +42,7 @@ function normalizeSale(raw: Record<string, unknown>): Sale {
     external_order_id:
       raw.external_order_id == null ? null : String(raw.external_order_id),
     customer_id: raw.customer_id == null ? null : Number(raw.customer_id),
+    chat_id: raw.chat_id == null ? null : Number(raw.chat_id),
     status: String(raw.status ?? ""),
     order_total_amount: (raw.order_total_amount as number | string) ?? 0,
     total_amount_usd: (raw.total_amount_usd as number | string) ?? 0,
