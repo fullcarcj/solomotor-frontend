@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback } from 'react';
 import Link from 'next/link';
 import Swal from 'sweetalert2';
 
@@ -16,25 +17,85 @@ import { ExceptionsPanel } from './components/ExceptionsPanel';
 
 import './tablero.scss';
 
+// Acciones primarias que disparan resolve real en backend.
+// El resto (CHAT, VER FOTO, LLAMAR, EDITAR) solo abre un alert informativo
+// hasta que aparezca necesidad concreta (deuda priorizable post-Paso 5).
+const RESOLVE_LABELS = new Set(['REVISAR', 'RESOLVER', 'APROBAR']);
+
 export default function VentasTableroPage() {
-  const { kpis, loading: loadingKpis, error: errorKpis } = useSupervisorKPIs();
+  const { kpis, loading: loadingKpis, error: errorKpis, refetch: refetchKpis } =
+    useSupervisorKPIs();
   const { waiting } = useSupervisorWaiting();
-  const { exceptions } = useSupervisorExceptions();
+  const { exceptions, refetch: refetchExceptions } = useSupervisorExceptions();
 
-  function handleExceptionAction(exc: SupervisorException, which: 'primary' | 'secondary') {
-    const actionLabel =
-      which === 'primary'
-        ? exc.primary_action.label
-        : exc.secondary_action?.label;
-    if (!actionLabel) return;
+  const handleExceptionAction = useCallback(
+    async (exc: SupervisorException, which: 'primary' | 'secondary') => {
+      const action = which === 'primary' ? exc.primary_action : exc.secondary_action;
+      const label = action?.label;
+      if (!label) return;
 
-    // TODO · Commit 3 · cablear PATCH /api/ventas/exceptions/[id]/resolve
-    void Swal.fire({
-      title: `Acción: ${actionLabel}`,
-      text: `Excepción: ${exc.title}`,
-      icon: 'info',
-    });
-  }
+      // Acción informativa · no hay backend aún para CHAT/VER FOTO/LLAMAR/EDITAR
+      if (which !== 'primary' || !RESOLVE_LABELS.has(label)) {
+        void Swal.fire({
+          title: `Acción: ${label}`,
+          text: exc.title,
+          icon: 'info',
+        });
+        return;
+      }
+
+      // Flujo resolve · PATCH real a backend con nota opcional
+      const confirmed = await Swal.fire({
+        title: `${label} excepción`,
+        html:
+          `<div style="text-align:left"><p><strong>${exc.title}</strong></p>` +
+          `<p style="font-size:12px;color:#6e6f64">${exc.detail}</p></div>`,
+        input: 'textarea',
+        inputLabel: 'Nota de resolución (opcional)',
+        inputPlaceholder: 'Ej: pago verificado contra extracto bancario…',
+        showCancelButton: true,
+        confirmButtonText: label,
+        cancelButtonText: 'Cancelar',
+        reverseButtons: true,
+      });
+      if (!confirmed.isConfirmed) return;
+
+      const note =
+        typeof confirmed.value === 'string' && confirmed.value.trim()
+          ? confirmed.value.trim()
+          : null;
+
+      try {
+        const res = await fetch(
+          `/api/ventas/exceptions/${encodeURIComponent(String(exc.id))}/resolve`,
+          {
+            method: 'PATCH',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ resolution_note: note }),
+          }
+        );
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error(text || `HTTP ${res.status}`);
+        }
+        await Promise.all([refetchExceptions(), refetchKpis()]);
+        void Swal.fire({
+          icon: 'success',
+          title: 'Excepción resuelta',
+          timer: 1500,
+          showConfirmButton: false,
+        });
+      } catch (err) {
+        void Swal.fire({
+          icon: 'error',
+          title: 'No se pudo resolver',
+          text: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+    [refetchExceptions, refetchKpis]
+  );
 
   // Carga inicial · solo bloquea si no hay KPIs aún
   if (loadingKpis && !kpis) {
