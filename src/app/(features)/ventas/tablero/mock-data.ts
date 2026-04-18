@@ -5,9 +5,17 @@ import type {
 } from '@/types/supervisor';
 
 /**
- * Mock data basado en el mockup oficial solomotorx-v3-automatizado.html.
- * Se reemplaza por fetch real en Paso 5 de la secuencia cuando backend
- * entregue GET /api/sales/supervisor/kpis, /waiting, /exceptions.
+ * Mock data del Paso 4 (esqueleto visual) — basado en el mockup oficial
+ * solomotorx-v3-automatizado.html.
+ *
+ * DEV-ONLY · el Paso 5 ya reemplazó estos mocks por fetch real a través de
+ * los hooks useSupervisorKPIs / useSupervisorWaiting / useSupervisorExceptions
+ * (endpoints backend GET /api/sales/supervisor/{kpis,waiting,exceptions}).
+ *
+ * Se mantiene en el repo únicamente como referencia para desarrollo local
+ * sin backend (por ejemplo cuando el webhook-receiver está caído). NO
+ * importar desde page.tsx ni componentes productivos — producción usa
+ * datos reales de la BD.
  */
 
 export const MOCK_KPIS: SupervisorKPIs = {
