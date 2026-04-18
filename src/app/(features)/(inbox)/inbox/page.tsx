@@ -1,17 +1,10 @@
-import { Suspense } from "react";
-import InboxPage from "@/components/inbox/InboxPage";
+import { redirect } from "next/navigation";
 
-/** Bandeja omnicanal — layout 4 columnas; datos vía proxy Next → webhook-receiver (`/api/inbox`, etc.). */
-export default function InboxRoutePage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="page-wrapper d-flex align-items-center justify-content-center p-5 text-muted">
-          Cargando bandeja…
-        </div>
-      }
-    >
-      <InboxPage />
-    </Suspense>
-  );
+/**
+ * Ruta legacy `/inbox` — la bandeja canónica vive en `/bandeja`.
+ * `next.config.ts` también emite 308 permanente hacia `/bandeja`.
+ * Esta página evita compilar el monolito eliminado (`src/components/inbox/`).
+ */
+export default function LegacyInboxRedirectPage() {
+  redirect("/bandeja");
 }
