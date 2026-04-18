@@ -52,8 +52,9 @@ export interface WaitingItem {
   bot_log: string;
   amount_usd: number;
   since_iso: string;
-  chat_id?: number;
-  order_id?: number;
+  /** Deuda conocida (Paso 5): backend devuelve null hasta que orders tengan chat_id real. */
+  chat_id?: number | null;
+  order_id?: number | null;
 }
 
 export type ExceptionKind =
@@ -84,7 +85,7 @@ export interface SupervisorException {
     label: string;
     kind: 'primary' | 'secondary';
   };
-  chat_id?: number;
-  order_id?: number;
+  chat_id?: number | null;
+  order_id?: number | null;
   created_at: string;
 }

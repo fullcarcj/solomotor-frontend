@@ -25,7 +25,10 @@
     "src/hooks/useChatMessages.ts",
     "src/hooks/useChatContext.ts",
     "src/hooks/useInbox.ts",
-    "src/hooks/useSales.ts"
+    "src/hooks/useSales.ts",
+    "src/hooks/useSupervisorKPIs.ts",
+    "src/hooks/useSupervisorWaiting.ts",
+    "src/hooks/useSupervisorExceptions.ts"
   ],
   "exclude": ["node_modules", ".next", "dist"]
 }
