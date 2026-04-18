@@ -2,7 +2,7 @@
 
 **Scope:** módulo ventas (`/ventas/**`), bandeja/Spacework (`/bandeja/**`) y código nuevo en general.
 **Objetivo:** mantener consistencia visual y técnica, evitar introducir dependencias redundantes y cerrar atajos que históricamente generaron deuda en el repo.
-**Última actualización:** Sprint 1.5 FE · 2026-04-18.
+**Última actualización:** Paso 4 vista supervisor · 2026-04-18.
 
 > La realidad del código manda. Si algo en este documento contradice una
 > implementación existente y esa implementación tiene razones válidas,
@@ -169,7 +169,60 @@ La trampa clásica es tener dos fuentes de verdad (el famoso caso `productos` vs
 
 ---
 
-## 9 · Referencias
+## 9 · Vista Supervisor vs Bandeja
+
+A partir de ADR-009, `/ventas/tablero` es la **vista principal del vendedor**
+según el mockup `solomotorx-v3-automatizado.html`.
+
+### Estructura de la vista supervisor
+
+- Header con título + indicador "Bot activo 24/7"
+- 4 KPIs agregados en fila:
+  - BOT resolvió (% y contadores del día)
+  - Esperando comprador (N + desglose por etapa)
+  - Excepciones (N · requieren decisión)
+  - Cerradas hoy (N + monto)
+- Split 2 paneles:
+  - Panel "Esperando" (chats donde el bot ya hizo su parte · solo info · no acción masiva en Paso 4)
+  - Panel "Excepciones" (casos que requieren decisión · botones de acción; mock + SweetAlert hasta Paso 5)
+- Footer con link a `/bandeja` como vista secundaria (`all_routes.bandeja` + `next/link`)
+
+### `/bandeja` queda como vista secundaria
+
+`/bandeja` sigue funcional para casos donde se necesita entrar al chat específico
+(manual handoff, revisar conversación completa, debug). **NO es el foco del
+trabajo diario del vendedor** según ADR-009.
+
+### NO hay Kanban visual
+
+El mockup no tiene Kanban. La lista de "Esperando" es una **lista plana ordenada
+por tiempo**, no columnas por etapa. Si en algún momento aparece pedido explícito
+de Kanban, revisar contra ADR-009 antes de construir.
+
+### Integración con endpoints reales
+
+La vista arranca con mock data (Paso 4 de la secuencia). Paso 5 reemplaza mocks
+con fetch real a endpoints backend:
+
+- `GET /api/sales/supervisor/kpis`
+- `GET /api/sales/supervisor/waiting`
+- `GET /api/sales/supervisor/exceptions`
+
+### Paleta
+
+Vista oscura con paleta extraída del mockup original:
+
+- Fondo: `#0e0f0c`
+- Paneles: `#151611`
+- Texto principal: `#efeadb`
+- Acento bot (morado): `#b98cff`
+- Acento humano (azul): `#6ab6ff`
+- Acento warning (naranja): `#ff6a3d`
+- Acento OK (verde): `#7fd67f`
+
+---
+
+## 10 · Referencias
 
 - Auditoría inbox/bandeja: [`INBOX_BANDEJA_AUDIT.md`](./INBOX_BANDEJA_AUDIT.md)
 - Tipos canónicos del dominio bandeja: `src/types/inbox.ts`
