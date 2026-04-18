@@ -137,7 +137,8 @@ export const SidebarData = [
           { label: "Despachar",                link: `${route.bandeja}?filter=dispatch`, icon: "truck",          showSubRoute: false, submenu: false },
           { label: "WhatsApp",                 link: `${route.bandeja}?src=wa`,          icon: "brand-whatsapp", showSubRoute: false, submenu: false },
           { label: "MercadoLibre",             link: `${route.bandeja}?src=ml`,          icon: "shopping-cart",  showSubRoute: false, submenu: false },
-          { label: "Historial",                link: route.inboxHistory,                 icon: "history",        showSubRoute: false, submenu: false },
+          // "Historial" eliminado en FE-1.5.3 — era placeholder ComingSoon sin lógica.
+          // Reincorporar cuando exista una vista real (ruta nueva p.ej. /bandeja/historial).
         ],
       },
     ],
@@ -158,6 +159,7 @@ export const SidebarData = [
         submenuItems: [
           // ── Nuevas entradas al inicio ────────────────────────────────────
           { label: "Pedidos y Ventas",     link: route.ventasPedidos,      icon: "list-details",   showSubRoute: false, submenu: false },
+          { label: "Tablero",              link: route.ventasTablero,      icon: "layout-kanban",  showSubRoute: false, submenu: false },
           { label: "Historial de pedidos", link: route.ventasHistorial,    icon: "history",        showSubRoute: false, submenu: false },
           { label: "Todas las Ordenes",   link: route.orders,             icon: "list",           showSubRoute: false, submenu: false },
           { label: "Apertura/Cierre Caja",link: route.posCashRegister,    icon: "cash-register",  showSubRoute: false, submenu: false },

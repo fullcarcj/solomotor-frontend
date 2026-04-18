@@ -305,7 +305,9 @@ export const all_routes = {
   layoutDark:"/layout-dark",
 
   // ── Spacework / inbox (rutas legacy /inbox y /bandeja) ───────────────────
+  /** @deprecated FE-1.5.3 · /inbox redirige 308 a /bandeja. Usar `bandeja`. */
   inbox:                    "/inbox",
+  /** @deprecated FE-1.5.3 · /inbox/history redirige 308 a /bandeja. */
   inboxHistory:             "/inbox/history",
   /** Spacework (omnicanal) — WhatsApp + ML */
   bandeja:                  "/bandeja",
@@ -339,6 +341,8 @@ export const all_routes = {
   ventasPedidos:            "/ventas/pedidos",
   /** Pedidos procesados/cerrados — GET /api/sales?include_completed=1 */
   ventasHistorial:          "/ventas/historial",
+  /** Tablero Kanban del ciclo de venta — esqueleto en Sprint 1.5 FE, implementación en Sprint 3 */
+  ventasTablero:            "/ventas/tablero",
   /** POS mostrador — POST /api/pos/sales */
   ventasNueva:              "/ventas/nueva",
   posCashRegister:          "/pos/cash-register",

@@ -332,7 +332,7 @@ export default function NewDashboard() {
                 </div>
                 <div className="d-flex align-items-center justify-content-between">
                   <p className="mb-0 text-muted small">WhatsApp hoy</p>
-                  <Link href={route.inbox} className="text-decoration-underline fs-13 fw-medium">
+                  <Link href={route.bandeja} className="text-decoration-underline fs-13 fw-medium">
                     Spacework
                   </Link>
                 </div>

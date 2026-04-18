@@ -46,6 +46,14 @@ const nextConfig = {
         destination: "/ventas/pedidos",
         permanent: false,
       },
+      /**
+       * Sprint 1.5 FE · /inbox → /bandeja (308 permanent).
+       * Según audit INBOX_BANDEJA_AUDIT.md: URL canónica `/bandeja`.
+       * No se agrega /inbox/:chatId porque /inbox nunca tuvo ruta dinámica
+       * (la selección era state interno del monolito InboxPage).
+       */
+      { source: "/inbox", destination: "/bandeja", permanent: true },
+      { source: "/inbox/history", destination: "/bandeja", permanent: true },
     ];
   },
   // Raíz del workspace: este directorio (mismo que `package-lock.json` del frontend).
