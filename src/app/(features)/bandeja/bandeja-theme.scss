@@ -757,22 +757,33 @@
   }
 
   &__close {
-    position: absolute;
-    top: -40px;
-    right: 0;
-    background: none;
-    border: none;
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(30, 30, 30, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.25);
     color: #fff;
-    font-size: 24px;
-    cursor: pointer;
-    opacity: 0.8;
-    transition: opacity 0.15s;
-    z-index: 1;
+    font-size: 28px;
     line-height: 1;
-    padding: 4px;
+    cursor: pointer;
+    opacity: 1;
+    transition: background 0.15s, transform 0.15s;
+    z-index: 10000;
+    padding: 0;
+    display: grid;
+    place-items: center;
+
+    .media-modal__close-mark {
+      display: block;
+      margin-top: -2px;
+    }
 
     &:hover {
-      opacity: 1;
+      background: rgba(50, 50, 50, 0.98);
+      transform: scale(1.05);
     }
   }
 
@@ -800,5 +811,57 @@
 
   to {
     opacity: 1;
+  }
+}
+
+/* ── ChatStageSection: pipeline visual de etapas (G1) ────────────────── */
+.chat-stage-pipeline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chat-stage-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+
+  .chat-stage-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #d9d9d9;
+    flex-shrink: 0;
+    transition: background 0.2s;
+  }
+
+  .chat-stage-label {
+    color: #bfbfbf;
+    transition: color 0.2s;
+  }
+
+  &.past {
+    .chat-stage-dot  { background: #52c41a; }
+    .chat-stage-label { color: #8c8c8c; text-decoration: line-through; }
+  }
+
+  &.current {
+    .chat-stage-dot  { background: #1677ff; box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.18); }
+    .chat-stage-label { color: #1677ff; font-weight: 600; }
+  }
+
+  &.future {
+    .chat-stage-label { color: #bfbfbf; }
+  }
+}
+
+/* ── IdentifyCustomerSection: candidatos de cliente (G2) ─────────────── */
+.identify-customer-section {
+  .ant-alert {
+    font-size: 12px;
+
+    .ant-alert-message     { font-size: 12px; }
+    .ant-alert-description { font-size: 11px; }
   }
 }

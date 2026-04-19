@@ -121,7 +121,7 @@ function MediaModal({ open, url, type, onClose }: MediaModalProps) {
     <div className="media-modal__overlay" onClick={onClose} role="presentation">
       <div className="media-modal__container" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
         <button type="button" className="media-modal__close" onClick={onClose} aria-label="Cerrar">
-          <i className="ti ti-x" />
+          <span className="media-modal__close-mark" aria-hidden>×</span>
         </button>
 
         {type === "image" && (

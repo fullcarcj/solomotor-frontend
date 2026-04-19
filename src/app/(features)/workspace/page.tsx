@@ -41,6 +41,8 @@ import {
   stageToTagClass,
 } from './workspace-helpers';
 
+import Swal from 'sweetalert2';
+
 import './workspace.scss';
 
 const INBOX_TABS: { label: string; filter: string }[] = [
@@ -55,6 +57,7 @@ export default function WorkspacePage() {
   const [selectedChatId, setSelectedChatId] = useState<string | number | null>(null);
   const [searchDraft, setSearchDraft] = useState('');
   const [composerDraft, setComposerDraft] = useState('');
+  const attachInputRef = useRef<HTMLInputElement>(null);
 
   const {
     chats,
@@ -144,6 +147,19 @@ export default function WorkspacePage() {
       nearBottomRef.current = true;
     }
   }, [composerDraft, sendMessage]);
+
+  const handleAttachChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !selectedChatId) return;
+    void Swal.fire({
+      icon: 'info',
+      title: 'Adjunto seleccionado',
+      html: `<p style="margin:0 0 8px"><strong>${file.name}</strong></p><p style="margin:0;font-size:14px;opacity:.85">El envío de archivos por API se alineará con la bandeja en la siguiente iteración.</p>`,
+      confirmButtonText: 'Entendido',
+      confirmButtonColor: '#c8e632',
+    });
+  }, [selectedChatId]);
 
   const stage = selected?.chat_stage as ChatStage | undefined;
   const miniPm = useMemo(() => miniPipelineFromStage(stage), [stage]);
@@ -366,7 +382,27 @@ export default function WorkspacePage() {
                   </div>
 
                   <div className="composer">
-                    <div className="input">
+                    <span className="composer-emoji" title="Emoji" aria-hidden>
+                      😊
+                    </span>
+                    <input
+                      ref={attachInputRef}
+                      type="file"
+                      hidden
+                      accept="image/*,application/pdf,.pdf,.doc,.docx"
+                      onChange={handleAttachChange}
+                    />
+                    <button
+                      type="button"
+                      className="composer-attach"
+                      title="Adjuntar archivo"
+                      aria-label="Adjuntar archivo"
+                      disabled={!selectedChatId}
+                      onClick={() => attachInputRef.current?.click()}
+                    >
+                      📎
+                    </button>
+                    <div className="composer-field">
                       <input
                         type="text"
                         value={composerDraft}
@@ -377,27 +413,30 @@ export default function WorkspacePage() {
                             void handleSend();
                           }
                         }}
-                        placeholder="Escribe un mensaje… · Los precios solo se envían vía cotización formal"
+                        placeholder="Escribir un mensaje…"
                         disabled={!selectedChatId}
-                        style={{
-                          width: '100%',
-                          background: 'transparent',
-                          border: 'none',
-                          outline: 'none',
-                          color: 'inherit',
-                          font: 'inherit',
-                        }}
+                        autoComplete="off"
+                        aria-label="Escribir mensaje"
                       />
                     </div>
-                    <div className="quick">/ plantillas</div>
-                    <div className="quick">+ adjuntar</div>
+                    <span className="composer-mic" title="Nota de voz" aria-hidden>
+                      🎤
+                    </span>
                     <button
                       type="button"
-                      className="quick primary"
+                      className="composer-templates"
+                      title="Plantillas (próximamente)"
+                    >
+                      / tpl
+                    </button>
+                    <button
+                      type="button"
+                      className="composer-send"
                       disabled={!selectedChatId || !composerDraft.trim()}
                       onClick={() => void handleSend()}
+                      aria-label="Enviar mensaje"
                     >
-                      → ENVIAR
+                      Enviar
                     </button>
                   </div>
                 </section>
