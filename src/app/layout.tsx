@@ -9,6 +9,14 @@ import "../style/fonts/feather/css/iconfont.css";
 import AntdReact19Patch from "../components/AntdReact19Patch";
 import BootstrapJs from "../components/bootstrap-js/bootstrapjs";
 import { Providers } from "@/components/Providers";
+import type { Viewport } from "next";
+
+/** Barra de estado / tema en móvil (Chrome + Safari modernos). */
+export const viewport: Viewport = {
+  themeColor: "#0e0f0c",
+  width: "device-width",
+  initialScale: 1,
+};
 
 export const metadata = {
   title: "Solomotorx · Ventas",
@@ -26,7 +34,6 @@ export const metadata = {
   },
   other: {
     "mobile-web-app-capable": "yes",
-    "theme-color": "#0e0f0c",
   },
 };
 
