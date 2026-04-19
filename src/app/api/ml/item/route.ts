@@ -18,13 +18,13 @@ function hdr(req: NextRequest) {
   };
 }
 
-type RouteCtx = { params: Promise<{ chatId: string }> };
-
-/** BFF → GET /api/inbox/:chatId/ml-question (detalle pregunta ML + item_id, etc.) */
-export async function GET(req: NextRequest, ctx: RouteCtx) {
-  const { chatId } = await ctx.params;
+/** BFF → GET /api/ml/item?item_id=… (datos públicos del ítem ML) */
+export async function GET(req: NextRequest) {
   const qs = req.nextUrl.searchParams.toString();
-  const targetUrl = `${base()}/api/inbox/${encodeURIComponent(chatId)}/ml-question${qs ? `?${qs}` : ""}`;
+  if (!req.nextUrl.searchParams.get("item_id")) {
+    return NextResponse.json({ error: "item_id requerido" }, { status: 400 });
+  }
+  const targetUrl = `${base()}/api/ml/item${qs ? `?${qs}` : ""}`;
 
   try {
     const up = await fetch(targetUrl, { method: "GET", headers: hdr(req), cache: "no-store" });
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
     }
     return NextResponse.json(data, { status: up.status });
   } catch (e) {
-    console.error("[BFF inbox/ml-question GET]", e);
+    console.error("[BFF ml/item]", e);
     return NextResponse.json({ error: "Error de red." }, { status: 502 });
   }
 }

@@ -19,11 +19,16 @@ export default function MessageInput({ chatId: _chatId, sourceType, onSend }: Pr
   const [error, setError]   = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const isDisabled = sourceType === "ml_question";
+  const placeholder =
+    sourceType === "ml_question"
+      ? "Responder pregunta en ML..."
+      : sourceType === "ml_message"
+        ? "Enviar mensaje por ML..."
+        : "Escribir un mensaje…";
 
   async function handleSend() {
     const trimmed = text.trim();
-    if (!trimmed || sending || isDisabled) return;
+    if (!trimmed || sending) return;
     setSending(true);
     setError(null);
     if (process.env.NODE_ENV === "development") {
@@ -56,23 +61,17 @@ export default function MessageInput({ chatId: _chatId, sourceType, onSend }: Pr
       {error && (
         <div className="alert bandeja-wa-alert py-2 px-3 mb-0 small border-0 rounded-0">{error}</div>
       )}
-      {isDisabled && (
-        <div className="alert bandeja-wa-alert-warn py-2 px-3 mb-0 small border-0 rounded-0">
-          <i className="ti ti-info-circle me-1" />
-          Las preguntas de MercadoLibre se responden desde el panel de ML.
-        </div>
-      )}
       <div className="bandeja-msg-input-bar">
         <span className="bandeja-msg-input-icon" aria-hidden>😊</span>
         <textarea
           ref={textareaRef}
           className="form-control"
           rows={2}
-          placeholder={isDisabled ? "Respuesta gestionada por MercadoLibre" : "Escribir un mensaje…"}
+          placeholder={placeholder}
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={handleKeyDown}
-          disabled={isDisabled || sending}
+          disabled={sending}
           style={{ resize: "none" }}
           aria-label="Escribir mensaje"
         />
@@ -81,7 +80,7 @@ export default function MessageInput({ chatId: _chatId, sourceType, onSend }: Pr
           type="button"
           className="btn btn-primary d-flex align-items-center justify-content-center flex-shrink-0 px-3"
           onClick={() => void handleSend()}
-          disabled={isDisabled || sending || !text.trim()}
+          disabled={sending || !text.trim()}
           style={{ minWidth: 48, height: 48 }}
           aria-label="Enviar"
         >

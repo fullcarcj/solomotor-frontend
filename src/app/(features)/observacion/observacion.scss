@@ -1,0 +1,463 @@
+// Dashboard de observación 48h · SCSS copia exacta del HTML
+// solomotorx-v3-automatizado.html / dashboard-observacion-48h (2).html.
+// TEMPORAL · se descarta al construir módulo unificado.
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;0,800;1,400&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+// ── Paleta (copiada tal cual del HTML :root) ────────────────────
+.obs-page {
+  --bg:       #0e0f0c;
+  --panel:    #151611;
+  --panel-2:  #1c1e18;
+  --ink:      #efeadb;
+  --ink-dim:  #a8a89a;
+  --ink-mute: #6e6f64;
+  --line:     #2a2c24;
+  --accent:   #d4ff3a;
+  --accent-2: #ff6a3d;
+  --ok:       #7fd67f;
+  --warn:     #ffb84d;
+  --bad:      #ff5c5c;
+  --bot:      #b98cff;
+  --human:    #6ab6ff;
+
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(1200px 600px at 10% -10%, rgba(212, 255, 58, 0.04), transparent 60%),
+    radial-gradient(900px 500px at 110% 10%, rgba(255, 106, 61, 0.03), transparent 60%);
+  min-height: 100vh;
+  padding: 24px;
+  color: var(--ink);
+  font-family: 'Inter Tight', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+
+  * { box-sizing: border-box; }
+  .mono  { font-family: 'JetBrains Mono', monospace; }
+  .serif { font-family: 'Fraunces', serif; }
+}
+
+// ── Container ───────────────────────────────────────────────────
+.obs-container {
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+// ── Header ──────────────────────────────────────────────────────
+.obs-header {
+  max-width: 1600px;
+  margin: 0 auto 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 32px;
+  flex-wrap: wrap;
+
+  .obs-title {
+    h1 {
+      font-family: 'Fraunces', serif;
+      font-weight: 800;
+      font-size: 32px;
+      margin: 0;
+      letter-spacing: -0.02em;
+
+      em {
+        font-style: italic;
+        color: var(--accent);
+        font-weight: 400;
+      }
+    }
+
+    .obs-sub {
+      color: var(--ink-dim);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+  }
+
+  .obs-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+}
+
+// ── Status bar ──────────────────────────────────────────────────
+.obs-status-bar {
+  max-width: 1600px;
+  margin: 0 auto 24px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--ink-mute);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ok);
+    box-shadow: 0 0 8px var(--ok);
+  }
+  .obs-timer {
+    margin-left: auto;
+    color: var(--ink-mute);
+  }
+
+  &.error .dot   { background: var(--bad); box-shadow: 0 0 8px var(--bad); }
+  &.loading .dot {
+    background: var(--warn);
+    box-shadow: 0 0 8px var(--warn);
+    animation: obs-pulse 1s infinite;
+  }
+}
+
+@keyframes obs-pulse {
+  50% { opacity: 0.5; }
+}
+
+// ── Sección genérica ────────────────────────────────────────────
+.obs-section {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+
+  h2 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin: 0 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+
+    .tag {
+      font-size: 9px;
+      color: var(--ink-dim);
+      font-weight: 400;
+      letter-spacing: 0.1em;
+    }
+  }
+}
+
+// ── KPIs ────────────────────────────────────────────────────────
+.obs-kpis-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+
+  @media (max-width: 900px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.obs-kpi {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px;
+
+  .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+  }
+
+  .value {
+    font-family: 'Fraunces', serif;
+    font-size: 36px;
+    font-weight: 800;
+    margin: 8px 0 4px;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+
+  .sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-mute);
+    letter-spacing: 0.05em;
+  }
+
+  &.bot   .value { color: var(--bot); }
+  &.human .value { color: var(--human); }
+  &.warn  .value { color: var(--accent-2); }
+  &.ok    .value { color: var(--ok); }
+}
+
+// ── Ratio conversation_id ───────────────────────────────────────
+.obs-ratio-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.obs-ratio-card {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px;
+
+  .obs-ratio-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-bottom: 8px;
+  }
+
+  .big {
+    font-family: 'Fraunces', serif;
+    font-size: 48px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+
+  .pct-bar {
+    height: 8px;
+    background: var(--panel);
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 12px 0 8px;
+
+    .fill {
+      height: 100%;
+      background: var(--accent);
+      transition: width 0.5s ease;
+    }
+  }
+
+  .legend {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-dim);
+    display: flex;
+    justify-content: space-between;
+  }
+}
+
+// ── Actividad del bot ───────────────────────────────────────────
+.obs-bot-activity {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+
+  .obs-col-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-mute);
+    margin-bottom: 12px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+}
+
+.obs-bot-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+
+  li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+
+    &:last-child { border-bottom: none; }
+  }
+
+  .action-type {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink);
+  }
+
+  .count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  .count-small {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent-2);
+  }
+
+  .bot-mode {
+    border-top: 1px solid var(--line);
+    margin-top: 4px;
+    padding-top: 12px;
+
+    .count {
+      font-size: 10px;
+    }
+
+    &.gate .count { color: var(--warn); }
+    &.auto .count { color: var(--ok); }
+  }
+}
+
+// ── Tabla de chats ──────────────────────────────────────────────
+.obs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+
+  th {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    font-weight: 600;
+  }
+
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    font-size: 12px;
+
+    &.mono {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+    }
+    &.stage { color: var(--ink-dim); }
+    &.updated { color: var(--ink-mute); font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+    &.order-yes { color: var(--ok); font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+    &.order-no  { color: var(--ink-mute); font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+  }
+
+  tbody tr:hover { background: var(--panel-2); }
+}
+
+.obs-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 600;
+
+  &.ok   { background: rgba(127, 214, 127, 0.15); color: var(--ok); }
+  &.null { background: rgba(110, 111, 100, 0.2);  color: var(--ink-mute); }
+  &.ch1  { background: rgba(110, 111, 100, 0.2);  color: var(--ink-dim); }
+  &.ch2  { background: rgba(106, 182, 255, 0.15); color: var(--human); }
+  &.ch3  { background: rgba(255, 241, 89, 0.15);  color: #fff159; }
+  &.ch4  { background: rgba(106, 182, 255, 0.15); color: var(--human); }
+  &.ch5  { background: rgba(255, 106, 61, 0.15);  color: var(--accent-2); }
+}
+
+// ── SQL helper ──────────────────────────────────────────────────
+.obs-sql {
+  background: #0a0b08;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px;
+  margin-top: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--ink-dim);
+  white-space: pre-wrap;
+  position: relative;
+
+  &::before {
+    content: "SQL · correr en DBeaver";
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    font-size: 8px;
+    color: var(--ink-mute);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .kw  { color: var(--accent); }
+  .str { color: var(--ok); }
+}
+
+.obs-note {
+  font-size: 11px;
+  color: var(--ink-mute);
+  font-style: italic;
+  padding: 8px 0;
+  line-height: 1.5;
+
+  code {
+    background: var(--panel-2);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+  }
+
+  strong {
+    color: var(--ink);
+    font-style: normal;
+  }
+}
+
+.obs-empty {
+  text-align: center;
+  padding: 32px;
+  color: var(--ink-mute);
+  font-style: italic;
+  font-size: 13px;
+}
+
+.obs-error-cell {
+  color: var(--bad);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+// ── Footer ──────────────────────────────────────────────────────
+.obs-footer {
+  text-align: center;
+  padding: 20px;
+  color: var(--ink-mute);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}

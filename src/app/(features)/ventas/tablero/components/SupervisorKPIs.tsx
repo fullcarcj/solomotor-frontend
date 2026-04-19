@@ -10,7 +10,7 @@ interface Props {
 export function SupervisorKPIs({ kpis }: Props) {
   return (
     <div className="supervisor-kpis">
-      <div className="kpi kpi-auto">
+      <div className="kpi kpi--bot">
         <div className="kpi-label">
           <span className="dot dot-bot" />
           BOT resolvió
@@ -21,7 +21,7 @@ export function SupervisorKPIs({ kpis }: Props) {
         </div>
       </div>
 
-      <div className="kpi kpi-wait">
+      <div className="kpi kpi--human">
         <div className="kpi-label">
           <span className="dot dot-human" />
           Esperando comprador
@@ -34,7 +34,7 @@ export function SupervisorKPIs({ kpis }: Props) {
         </div>
       </div>
 
-      <div className="kpi kpi-exc">
+      <div className="kpi kpi--warn">
         <div className="kpi-label">
           <span className="dot dot-warn" />
           Excepciones
@@ -43,7 +43,7 @@ export function SupervisorKPIs({ kpis }: Props) {
         <div className="kpi-sub">Requieren tu atención</div>
       </div>
 
-      <div className="kpi kpi-ok">
+      <div className="kpi kpi--ok">
         <div className="kpi-label">
           <span className="dot dot-ok" />
           Cerradas hoy

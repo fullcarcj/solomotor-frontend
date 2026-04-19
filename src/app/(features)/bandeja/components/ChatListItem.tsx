@@ -1,6 +1,31 @@
 "use client";
 import Link from "next/link";
-import type { InboxChat } from "@/types/inbox";
+import { Tag } from "antd";
+import type { InboxChat, ChatStage } from "@/types/inbox";
+import { CHAT_STAGE_LABELS } from "@/types/inbox";
+
+const STAGE_COLORS: Record<ChatStage, string> = {
+  contact:   'default',
+  ml_answer: 'cyan',
+  quote:     'blue',
+  approved:  'geekblue',
+  order:     'purple',
+  payment:   'orange',
+  dispatch:  'gold',
+  closed:    'green',
+};
+
+function ChatStagePill({ stage }: { stage?: ChatStage }) {
+  if (!stage) return null;
+  return (
+    <Tag
+      color={STAGE_COLORS[stage]}
+      style={{ fontSize: '0.6rem', padding: '0 5px', lineHeight: '16px', marginLeft: 0 }}
+    >
+      {CHAT_STAGE_LABELS[stage]}
+    </Tag>
+  );
+}
 
 const AVATAR_COLORS: Record<string, string> = {
   wa_inbound:  "#1877F2",
@@ -88,6 +113,7 @@ export default function ChatListItem({ chat, active }: Props) {
             {chat.order !== null && (
               <span className="wa-source-pill wa-source-pill--emph">Con orden</span>
             )}
+            <ChatStagePill stage={chat.chat_stage} />
           </div>
         </div>
       </div>
