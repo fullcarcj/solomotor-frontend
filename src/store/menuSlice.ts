@@ -45,6 +45,76 @@ const initialState: MenuState = {
   canal: null,
 };
 
+/**
+ * Patch temporal · inyecta items que el backend todavía no expone vía /api/menu.
+ * Cada item usa dedupe por path: si el backend ya lo incluye, no se duplica.
+ *
+ * TODO · eliminar cuando backend incluya estas rutas en la tabla de menú:
+ *   - /ventas/tablero  → sección Ventas
+ *   - /workspace       → sección Bandeja
+ *   - /ventas/tablero  → sección Bandeja (acceso cruzado)
+ */
+function augmentMenuWithSupervisor(menu: MenuSection[] | null): MenuSection[] | null {
+  if (!Array.isArray(menu) || menu.length === 0) return menu;
+
+  // ── Items a inyectar en "Ventas" ─────────────────────────────
+  const tableroLeaf: MenuItemLeaf = {
+    id: "ventas_tablero",
+    label: "Tablero",
+    path: "/ventas/tablero",
+    minRole: "vendedor",
+    pendingMigration: false,
+    future: false,
+  };
+
+  // ── Items a inyectar en "Bandeja" ────────────────────────────
+  const workspaceLeaf: MenuItemLeaf = {
+    id: "bandeja_workspace",
+    label: "Workspace",
+    path: "/workspace",
+    minRole: "vendedor",
+    pendingMigration: false,
+    future: false,
+  };
+
+  const tableroInBandejaLeaf: MenuItemLeaf = {
+    id: "bandeja_tablero",
+    label: "Tablero",
+    path: "/ventas/tablero",
+    minRole: "vendedor",
+    pendingMigration: false,
+    future: false,
+  };
+
+  const isVentasSection = (s: MenuSection): boolean => {
+    const key = (s.moduleKey ?? "").toLowerCase();
+    if (key === "ventas" || key === "sales") return true;
+    const label = (s.label ?? "").toLowerCase();
+    const group = (s.group ?? "").toLowerCase();
+    return group.includes("ventas") || label === "ventas";
+  };
+
+  const isBandejaSection = (s: MenuSection): boolean => {
+    const key = (s.moduleKey ?? "").toLowerCase();
+    if (key === "bandeja" || key === "inbox") return true;
+    const label = (s.label ?? "").toLowerCase();
+    const group = (s.group ?? "").toLowerCase();
+    return label === "bandeja" || label === "inbox" || group.includes("bandeja");
+  };
+
+  const inject = (section: MenuSection, leaves: MenuItemLeaf[]): MenuSection => {
+    const toAdd = leaves.filter(l => !section.items.some(it => it.path === l.path));
+    if (toAdd.length === 0) return section;
+    return { ...section, items: [...section.items, ...toAdd] };
+  };
+
+  return menu.map((section) => {
+    if (isVentasSection(section))  return inject(section, [tableroLeaf]);
+    if (isBandejaSection(section)) return inject(section, [workspaceLeaf, tableroInBandejaLeaf]);
+    return section;
+  });
+}
+
 export const fetchMenu = createAsyncThunk(
   "menu/fetch",
   async (_, { getState, rejectWithValue }) => {
@@ -64,10 +134,14 @@ export const fetchMenu = createAsyncThunk(
       }
       const body = (await res.json()) as MenuApiResponse | MenuSection[];
       if (Array.isArray(body)) {
-        return { menu: body, role: null as string | null, canal: null as string | null };
+        return {
+          menu: augmentMenuWithSupervisor(body),
+          role: null as string | null,
+          canal: null as string | null,
+        };
       }
       return {
-        menu: body.menu ?? null,
+        menu: augmentMenuWithSupervisor(body.menu ?? null),
         role: body.role ?? null,
         canal: body.canal ?? null,
       };

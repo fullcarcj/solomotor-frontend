@@ -343,6 +343,10 @@ export const all_routes = {
   ventasHistorial:          "/ventas/historial",
   /** Tablero Kanban del ciclo de venta — esqueleto en Sprint 1.5 FE, implementación en Sprint 3 */
   ventasTablero:            "/ventas/tablero",
+  /** Dashboard de observación 48h (post-fix conversation_id) · temporal · no operativo */
+  observacion:              "/observacion",
+  /** Módulo Unificado de Ventas (mockup Fase A · Fase B cablea hooks reales) */
+  workspace:                "/workspace",
   /** POS mostrador — POST /api/pos/sales */
   ventasNueva:              "/ventas/nueva",
   posCashRegister:          "/pos/cash-register",

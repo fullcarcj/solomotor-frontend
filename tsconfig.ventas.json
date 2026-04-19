@@ -15,9 +15,14 @@
     "src/app/(features)/ventas/**/*.tsx",
     "src/app/(features)/bandeja/**/*.ts",
     "src/app/(features)/bandeja/**/*.tsx",
+    "src/app/(features)/observacion/**/*.ts",
+    "src/app/(features)/observacion/**/*.tsx",
+    "src/app/(features)/workspace/**/*.ts",
+    "src/app/(features)/workspace/**/*.tsx",
     "src/app/api/ventas/**/*.ts",
     "src/app/api/bandeja/**/*.ts",
     "src/app/api/inbox/**/*.ts",
+    "src/app/api/ai-responder/**/*.ts",
     "src/types/inbox.ts",
     "src/types/supervisor.ts",
     "src/types/sales.ts",
@@ -28,7 +33,8 @@
     "src/hooks/useSales.ts",
     "src/hooks/useSupervisorKPIs.ts",
     "src/hooks/useSupervisorWaiting.ts",
-    "src/hooks/useSupervisorExceptions.ts"
+    "src/hooks/useSupervisorExceptions.ts",
+    "src/hooks/useAiResponderStats.ts"
   ],
   "exclude": ["node_modules", ".next", "dist"]
 }
