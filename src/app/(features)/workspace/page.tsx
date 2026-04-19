@@ -57,6 +57,9 @@ export default function WorkspacePage() {
   const [selectedChatId, setSelectedChatId] = useState<string | number | null>(null);
   const [searchDraft, setSearchDraft] = useState('');
   const [composerDraft, setComposerDraft] = useState('');
+  // Mobile: 3er nivel de navegación (ficha full-screen). Desktop la ignora.
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  useEffect(() => { setDetailsOpen(false); }, [selectedChatId]);
   const attachInputRef = useRef<HTMLInputElement>(null);
 
   const {
@@ -78,16 +81,37 @@ export default function WorkspacePage() {
     [chatList, selectedChatId]
   );
 
+  // Detecta mobile para no auto-seleccionar el primer chat (rompería la
+  // navegación master-detail: al volver a la lista el efecto reseleccionaba).
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 768px)');
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
   useEffect(() => {
     if (chatList.length === 0) {
       setSelectedChatId(null);
       return;
     }
-    const stillThere = selectedChatId != null && chatList.some(c => String(c.id) === String(selectedChatId));
-    if (selectedChatId == null || !stillThere) {
+    const stillThere =
+      selectedChatId != null && chatList.some(c => String(c.id) === String(selectedChatId));
+    if (stillThere) return;
+
+    if (isMobile) {
+      // En mobile respetamos null (muestra lista). Solo limpiamos si el chat
+      // seleccionado desapareció de la bandeja.
+      if (selectedChatId != null) setSelectedChatId(null);
+    } else if (selectedChatId == null) {
+      setSelectedChatId(chatList[0]!.id);
+    } else {
       setSelectedChatId(chatList[0]!.id);
     }
-  }, [chatList, selectedChatId]);
+  }, [chatList, selectedChatId, isMobile]);
 
   const customerId = selected?.customer_id ?? null;
   const { customer, recentOrders, loadingCustomer, loadingOrders } = useChatContext(customerId);
@@ -204,7 +228,16 @@ export default function WorkspacePage() {
   return (
     <div className="page-wrapper">
       <div className="content p-0">
-        <main className="ws-root" data-view={selectedChatId != null ? 'chat' : 'list'}>
+        <main
+          className="ws-root"
+          data-view={
+            selectedChatId == null
+              ? 'list'
+              : detailsOpen
+                ? 'details'
+                : 'chat'
+          }
+        >
           <div className="webapp">
             <div className="webapp-chrome">
               <span className="dot-btn r" />
@@ -360,6 +393,15 @@ export default function WorkspacePage() {
                       </h3>
                       <div className="sub">{headerSub}</div>
                     </div>
+                    <button
+                      type="button"
+                      className="icon-btn convo-info"
+                      title="Ver ficha del cliente"
+                      aria-label="Ver ficha del cliente"
+                      onClick={() => setDetailsOpen(true)}
+                    >
+                      ⓘ
+                    </button>
                     <div className="icon-btn" title="Llamar">📞</div>
                     <div className="icon-btn" title="Traspasar">↔</div>
                     <div className="icon-btn" title="Más">⋯</div>
@@ -454,6 +496,17 @@ export default function WorkspacePage() {
                 </section>
 
                 <aside className="ficha">
+                  <div className="ficha-mobile-header">
+                    <button
+                      type="button"
+                      className="ficha-back"
+                      aria-label="Volver al chat"
+                      onClick={() => setDetailsOpen(false)}
+                    >
+                      ←
+                    </button>
+                    <h3>Ficha del cliente</h3>
+                  </div>
                   <div className="ficha-section">
                     <h4>Cliente <span className="more">VER FICHA →</span></h4>
                     <div className="cliente">

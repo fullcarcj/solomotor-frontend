@@ -377,6 +377,15 @@ body.workspace-page {
       &:hover { border-color: var(--accent); color: var(--accent); }
     }
 
+    .convo-info {
+      display: none;           // visible solo en mobile (media query más abajo)
+      background: var(--panel-2); border: 1px solid var(--line);
+      color: var(--ink-dim);
+      font-size: 16px; cursor: pointer;
+
+      &:hover { color: var(--accent); border-color: var(--accent); }
+    }
+
     .who { flex: 1; min-width: 0; }
     h3 {
       margin: 0; font-size: 14px; font-weight: 700;
@@ -645,6 +654,29 @@ body.workspace-page {
     overflow-y: auto;
     scrollbar-gutter: stable;
     display: flex; flex-direction: column;
+  }
+  .ficha-mobile-header {
+    display: none;             // visible solo en mobile (media query)
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    align-items: center; gap: 10px;
+    background: var(--panel);
+    position: sticky; top: 0; z-index: 3;
+
+    h3 {
+      margin: 0; font-size: 14px; font-weight: 700;
+      color: var(--ink); letter-spacing: 0.02em;
+    }
+    .ficha-back {
+      width: 34px; height: 34px; flex-shrink: 0;
+      border-radius: 50%;
+      background: var(--panel-2); border: 1px solid var(--line);
+      color: var(--ink); font-size: 20px; line-height: 1;
+      cursor: pointer; padding: 0;
+      display: grid; place-items: center;
+
+      &:hover { border-color: var(--accent); color: var(--accent); }
+    }
   }
   .ficha-section {
     padding: 16px 18px; border-bottom: 1px solid var(--line);
@@ -991,30 +1023,41 @@ body.workspace-page {
 }
 
 // --- Mobile master-detail: una sola panel visible a la vez ---
+// Niveles: list → chat → details (ficha full-screen).
 @media (max-width: 768px) {
   .ws-root .webapp-chrome { display: none; } // url bar ocupa espacio valioso
-
-  // webapp ocupa todo el alto disponible
   .ws-root .webapp { height: 100%; }
 
-  // una sola columna/fila
   .ws-root .webapp-body {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
   }
 
+  // Por defecto la ficha está oculta; la muestra el estado 'details'.
   .ws-root .webapp-body .ficha { display: none; }
 
-  // Modo lista: solo inbox
-  .ws-root[data-view='list'] .webapp-body .convo { display: none; }
+  // --- data-view='list' · solo inbox ---
+  .ws-root[data-view='list'] .webapp-body .convo,
+  .ws-root[data-view='list'] .webapp-body .ficha { display: none; }
 
-  // Modo chat: solo convo
-  .ws-root[data-view='chat'] .webapp-body .inbox { display: none; }
+  // --- data-view='chat' · solo convo ---
+  .ws-root[data-view='chat'] .webapp-body .inbox,
+  .ws-root[data-view='chat'] .webapp-body .ficha { display: none; }
 
-  // botón volver visible solo en mobile
-  .ws-root .convo-header .convo-back { display: grid; }
+  // --- data-view='details' · solo ficha full-screen ---
+  .ws-root[data-view='details'] .webapp-body .inbox,
+  .ws-root[data-view='details'] .webapp-body .convo { display: none; }
+  .ws-root[data-view='details'] .webapp-body .ficha {
+    display: flex;
+    border-left: 0;
+  }
 
-  // modales/racks de demo: abajo, sin llamar la atención
+  // botones mobile de navegación
+  .ws-root .convo-header .convo-back,
+  .ws-root .convo-header .convo-info { display: grid; }
+  .ws-root .ficha-mobile-header { display: flex; }
+
+  // modales/racks de demo: ocultos en mobile para no distraer
   .ws-root .modals-rack { display: none; }
 }
 
