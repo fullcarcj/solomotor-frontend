@@ -71,21 +71,23 @@ export default function WorkspacePage() {
     nextCursor,
   } = useInbox({ limit: 100 });
 
+  const chatList = Array.isArray(chats) ? chats : [];
+
   const selected = useMemo(
-    () => chats.find(c => String(c.id) === String(selectedChatId)) ?? null,
-    [chats, selectedChatId]
+    () => chatList.find(c => String(c.id) === String(selectedChatId)) ?? null,
+    [chatList, selectedChatId]
   );
 
   useEffect(() => {
-    if (chats.length === 0) {
+    if (chatList.length === 0) {
       setSelectedChatId(null);
       return;
     }
-    const stillThere = selectedChatId != null && chats.some(c => String(c.id) === String(selectedChatId));
+    const stillThere = selectedChatId != null && chatList.some(c => String(c.id) === String(selectedChatId));
     if (selectedChatId == null || !stillThere) {
-      setSelectedChatId(chats[0]!.id);
+      setSelectedChatId(chatList[0]!.id);
     }
-  }, [chats, selectedChatId]);
+  }, [chatList, selectedChatId]);
 
   const customerId = selected?.customer_id ?? null;
   const { customer, recentOrders, loadingCustomer, loadingOrders } = useChatContext(customerId);
@@ -100,7 +102,7 @@ export default function WorkspacePage() {
   /** Cronológico: antiguos arriba, recientes abajo (alineado con bandeja / API). */
   const messagesChronological = useMemo(
     () =>
-      [...messages].sort(
+      [...(Array.isArray(messages) ? messages : [])].sort(
         (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       ),
     [messages]
@@ -162,7 +164,7 @@ export default function WorkspacePage() {
   }, [selectedChatId]);
 
   const stage = selected?.chat_stage as ChatStage | undefined;
-  const miniPm = useMemo(() => miniPipelineFromStage(stage), [stage]);
+  const miniPm = useMemo(() => miniPipelineFromStage(stage) ?? [], [stage]);
 
   const headerSub = useMemo(() => {
     if (!selected) return 'Seleccioná una conversación';
@@ -182,7 +184,9 @@ export default function WorkspacePage() {
   const displayName = selected?.customer_name ?? selected?.phone ?? '—';
   const headerInitials = selected ? initials(selected.customer_name, selected.phone) : '—';
   const ch = selected ? sourceToChannel(selected.source_type) : { channel: 'wa' as const, letter: 'W' };
-  const avatarClass = selected ? pickAvatarClass(chats.findIndex(c => String(c.id) === String(selected.id))) : 'blue';
+  const avatarClass = selected
+    ? pickAvatarClass(chatList.findIndex(c => String(c.id) === String(selected.id)))
+    : 'blue';
 
   const latestOrder = recentOrders[0];
   const orderLine =
@@ -254,16 +258,16 @@ export default function WorkspacePage() {
                   </label>
 
                   <div className="conv-list">
-                    {loading && chats.length === 0 && (
+                    {loading && chatList.length === 0 && (
                       <div className="conv-preview" style={{ padding: 18 }}>Cargando conversaciones…</div>
                     )}
                     {error && (
                       <div className="conv-preview" style={{ padding: 18, color: 'var(--bad)' }}>{error}</div>
                     )}
-                    {!loading && !error && chats.length === 0 && (
+                    {!loading && !error && chatList.length === 0 && (
                       <div className="conv-preview" style={{ padding: 18 }}>No hay chats con este filtro.</div>
                     )}
-                    {chats.map((c, idx) => {
+                    {chatList.map((c, idx) => {
                       const active = String(c.id) === String(selectedChatId);
                       const ini = initials(c.customer_name, c.phone);
                       const { channel, letter } = sourceToChannel(c.source_type);
@@ -326,7 +330,7 @@ export default function WorkspacePage() {
                   )}
                   {total > 0 && (
                     <div className="conv-preview" style={{ padding: '8px 18px', fontSize: 10, opacity: 0.7 }}>
-                      {total} en bandeja · mostrando hasta {chats.length}
+                      {total} en bandeja · mostrando hasta {chatList.length}
                     </div>
                   )}
                 </section>
@@ -481,7 +485,9 @@ export default function WorkspacePage() {
                     <h4>Estado <span className="more">HISTORIAL →</span></h4>
                     <div className="estado-card">
                       <span className="tipo">
-                        {stage ? CHAT_STAGE_LABELS[stage].toUpperCase() : 'SIN ETAPA'}
+                        {stage && CHAT_STAGE_LABELS[stage]
+                          ? CHAT_STAGE_LABELS[stage].toUpperCase()
+                          : 'SIN ETAPA'}
                       </span>
                       <div className="num mono">{orderLine}</div>
                       <div className="monto">

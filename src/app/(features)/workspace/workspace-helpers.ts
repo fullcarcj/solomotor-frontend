@@ -7,14 +7,15 @@ export function pickAvatarClass(index: number): (typeof AVATAR_CLASS)[number] {
   return AVATAR_CLASS[index % AVATAR_CLASS.length]!;
 }
 
-export function initials(name: string | null, phone: string): string {
+export function initials(name: string | null | undefined, phone: string | null | undefined): string {
+  const ph = phone ?? '';
   if (name && name.trim()) {
     const parts = name.trim().split(/\s+/);
     const a = parts[0]?.[0] ?? '';
     const b = parts[1]?.[0] ?? '';
-    return (a + b).toUpperCase() || phone.slice(-2).toUpperCase();
+    return (a + b).toUpperCase() || ph.slice(-2).toUpperCase();
   }
-  return phone.replace(/\D/g, '').slice(-2) || '??';
+  return ph.replace(/\D/g, '').slice(-2) || '??';
 }
 
 export function fmtShortTime(iso: string | null): string {
@@ -32,8 +33,8 @@ export function fmtShortTime(iso: string | null): string {
 }
 
 /** Badge canal mockup (.ch-wa / .ch-ml / …) + letra */
-export function sourceToChannel(source: string): { channel: 'wa' | 'ml' | 'eco' | 'fv'; letter: string } {
-  const s = source.toLowerCase();
+export function sourceToChannel(source: string | null | undefined): { channel: 'wa' | 'ml' | 'eco' | 'fv'; letter: string } {
+  const s = (source ?? '').toLowerCase();
   if (s.includes('wa')) return { channel: 'wa', letter: 'W' };
   if (s.includes('ml')) return { channel: 'ml', letter: 'M' };
   if (s.includes('eco') || s.includes('shop') || s.includes('web')) return { channel: 'eco', letter: 'E' };
@@ -68,18 +69,26 @@ export interface MiniPm {
   status: 'done' | 'current' | 'pending';
 }
 
+function labelForStage(st: ChatStage): string {
+  const raw = CHAT_STAGE_LABELS[st];
+  return (raw ?? String(st)).toUpperCase();
+}
+
 /** Mini pipeline alineado a BE-1.9 (8 etapas). */
 export function miniPipelineFromStage(stage: ChatStage | undefined): MiniPm[] {
+  const order = Array.isArray(CHAT_STAGE_ORDER) ? CHAT_STAGE_ORDER : [];
+  if (order.length === 0) return [];
+
   if (stage === 'closed') {
-    return CHAT_STAGE_ORDER.map((st, i) => ({
-      label: `${String(i + 1).padStart(2, '0')} · ${CHAT_STAGE_LABELS[st].toUpperCase()}`,
+    return order.map((st, i) => ({
+      label: `${String(i + 1).padStart(2, '0')} · ${labelForStage(st)}`,
       status: 'done' as const,
     }));
   }
-  const idx = stage ? CHAT_STAGE_ORDER.indexOf(stage) : -1;
+  const idx = stage ? order.indexOf(stage) : -1;
   const current = idx >= 0 ? idx : 0;
-  return CHAT_STAGE_ORDER.map((st, i) => ({
-    label: `${String(i + 1).padStart(2, '0')} · ${CHAT_STAGE_LABELS[st].toUpperCase()}`,
+  return order.map((st, i) => ({
+    label: `${String(i + 1).padStart(2, '0')} · ${labelForStage(st)}`,
     status: i < current ? 'done' : i === current ? 'current' : 'pending',
   }));
 }
