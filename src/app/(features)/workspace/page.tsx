@@ -204,7 +204,7 @@ export default function WorkspacePage() {
   return (
     <div className="page-wrapper">
       <div className="content p-0">
-        <main className="ws-root">
+        <main className="ws-root" data-view={selectedChatId != null ? 'chat' : 'list'}>
           <div className="webapp">
             <div className="webapp-chrome">
               <span className="dot-btn r" />
@@ -337,6 +337,14 @@ export default function WorkspacePage() {
 
                 <section className="convo">
                   <div className="convo-header">
+                    <button
+                      type="button"
+                      className="convo-back"
+                      aria-label="Volver a la lista"
+                      onClick={() => setSelectedChatId(null)}
+                    >
+                      ←
+                    </button>
                     <div className={`avatar ${avatarClass}`}>
                       {headerInitials}
                       <span className={`ch-badge ch-${ch.channel}`}>{ch.letter}</span>
