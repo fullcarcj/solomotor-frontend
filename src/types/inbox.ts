@@ -1,3 +1,12 @@
+/**
+ * Reexport de etapas de chat: definición canónica en `src/constants/chatStage.ts`
+ * para que el bundler no trate los valores como tipos erasables.
+ */
+import type { ChatStage } from '@/constants/chatStage';
+
+export type { ChatStage } from '@/constants/chatStage';
+export { CHAT_STAGE_LABELS, CHAT_STAGE_ORDER } from '@/constants/chatStage';
+
 export interface InboxOrder {
   id:               number;
   payment_status:   string;
@@ -14,10 +23,14 @@ export interface InboxChat {
   last_message_at:   string | null;
   unread_count:      number | string;
   ml_order_id:       string | null;
+  /** FK opcional a pregunta ML (crm_chats.ml_question_id) */
+  ml_question_id?:   string | number | null;
   assigned_to:       number | null;
   customer_name:     string | null;
   customer_id:       number | string | null;
   order:             InboxOrder | null;
+  /** Etapa del pipeline del chat. Calculado por backend (BE-1.9). */
+  chat_stage?:       ChatStage;
 }
 
 export interface InboxCounts {

@@ -1,5 +1,5 @@
-import type { ChatStage } from '@/types/inbox';
-import { CHAT_STAGE_LABELS, CHAT_STAGE_ORDER } from '@/types/inbox';
+import type { ChatStage } from '@/constants/chatStage';
+import { CHAT_STAGE_LABELS, CHAT_STAGE_ORDER } from '@/constants/chatStage';
 
 const AVATAR_CLASS = ['blue', 'orange', 'violet', 'green'] as const;
 

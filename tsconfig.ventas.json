@@ -23,6 +23,7 @@
     "src/app/api/bandeja/**/*.ts",
     "src/app/api/inbox/**/*.ts",
     "src/app/api/ai-responder/**/*.ts",
+    "src/constants/chatStage.ts",
     "src/types/inbox.ts",
     "src/types/supervisor.ts",
     "src/types/sales.ts",

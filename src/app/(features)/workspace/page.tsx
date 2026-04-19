@@ -21,8 +21,8 @@ import {
 import { useInbox } from '@/hooks/useInbox';
 import { useChatMessages } from '@/hooks/useChatMessages';
 import { useChatContext } from '@/hooks/useChatContext';
-import type { ChatStage } from '@/types/inbox';
-import { CHAT_STAGE_LABELS } from '@/types/inbox';
+import type { ChatStage } from '@/constants/chatStage';
+import { CHAT_STAGE_LABELS } from '@/constants/chatStage';
 import MessageBubble from '@/app/(features)/bandeja/components/MessageBubble';
 
 import {
