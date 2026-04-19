@@ -11,16 +11,22 @@ import BootstrapJs from "../components/bootstrap-js/bootstrapjs";
 import { Providers } from "@/components/Providers";
 
 export const metadata = {
-  title: "Dreams POS - Inventory Management & Admin Dashboard Template",
-  description:
-    "Dreams POS is a powerful Bootstrap-based Inventory Management Admin Template designed for businesses, offering seamless invoicing, project tracking, and estimates.",
-  keywords:
-    "inventory management, admin dashboard, bootstrap template, invoicing, estimates, business management, responsive admin, POS system",
-  author: "Dreams Technologies",
+  title: "Solomotorx · Ventas",
+  description: "Gestión de ventas, bandeja omnicanal y tablero de supervisión",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Solomotorx",
+  },
   icons: {
     icon: "favicon.png",
-    shortcut: "favicon.png", // Add shortcut icon for better support
-    apple: "favicon.png", // Optional: for Apple devices (place in `public/`)
+    shortcut: "favicon.png",
+    apple: "favicon.png",
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+    "theme-color": "#0e0f0c",
   },
 };
 
