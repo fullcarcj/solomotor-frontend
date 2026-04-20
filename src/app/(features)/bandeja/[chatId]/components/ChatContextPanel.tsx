@@ -250,6 +250,14 @@ function MlOrderSection({ chatId }: { chatId: string }) {
                     {it.product.category}
                   </span>
                 )}
+                <Link
+                  href={`/inventario/productos?search=${encodeURIComponent(it.product.sku)}`}
+                  target="_blank"
+                  className="mu-ficha-link"
+                  style={{ marginLeft: "auto", fontSize: 9 }}
+                >
+                  VER INVENTARIO →
+                </Link>
               </div>
             )}
 
@@ -738,24 +746,10 @@ export default function ChatContextPanel({
         <MlQuestionContextSection chatId={chatId} chat={chat} />
       )}
 
-      {/* Orden ML con ítems, producto y ubicación WMS */}
+      {/* Orden ML con ítems, producto y ubicación WMS — para todos los chats ml_message
+          (el backend extrae el order_id del campo phone si ml_order_id es null) */}
       {chat?.source_type === "ml_message" && (
-        chat?.ml_order_id != null
-          ? <MlOrderSection chatId={chatId} />
-          : (
-            <div className="mu-ficha-section">
-              <h4 className="mu-ficha-title">Orden ML</h4>
-              <p style={{ fontSize: 11, color: "var(--mu-ink-mute)", margin: 0, display: "flex", gap: 6, alignItems: "center" }}>
-                <i className="ti ti-link-off" style={{ fontSize: 12 }} />
-                Sin orden vinculada a este chat.
-              </p>
-              {process.env.NODE_ENV === "development" && (
-                <pre style={{ fontSize: 8, color: "var(--mu-ink-mute)", marginTop: 4 }}>
-                  {`ml_order_id: ${JSON.stringify(chat?.ml_order_id)}\nsource: ${chat?.source_type}`}
-                </pre>
-              )}
-            </div>
-          )
+        <MlOrderSection chatId={chatId} />
       )}
 
       {/* ── Sección: Cliente ─────────────────────────── */}
