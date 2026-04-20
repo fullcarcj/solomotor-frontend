@@ -35,12 +35,22 @@ function parseRow(raw: unknown): AiResponderLogRow | null {
   if (!Number.isFinite(id)) return null;
   const action = String(r.action_taken ?? '');
   const provider = String(r.provider_used ?? 'system');
+  const crmMid = r.crm_message_id ?? r.message_id;
+  const messageId =
+    crmMid != null && crmMid !== ''
+      ? Number(crmMid)
+      : null;
+  const inputText =
+    typeof r.input_text === 'string' && r.input_text.trim() !== ''
+      ? r.input_text
+      : null;
   return {
     id,
-    message_id:    r.message_id   != null ? Number(r.message_id)   : null,
+    message_id:    messageId != null && Number.isFinite(messageId) ? messageId : null,
     customer_id:   r.customer_id  != null ? Number(r.customer_id)  : null,
     action_taken:  (VALID_ACTIONS.has(action)   ? action   : 'sent')   as AiResponderLogAction,
     provider_used: (VALID_PROVIDERS.has(provider) ? provider : 'system') as AiResponderLogProvider,
+    input_text:    inputText,
     reasoning:     typeof r.reasoning === 'string' ? r.reasoning : null,
     created_at:    typeof r.created_at === 'string' ? r.created_at : new Date().toISOString(),
   };

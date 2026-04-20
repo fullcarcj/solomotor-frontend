@@ -12,6 +12,8 @@ interface Props {
   activeChatId?: string | number;
   initialSrc?:   string;
   initialFilter?: string;
+  /** En panel triaje (/bandeja): oculta el header “Spacework” para alinear con bandeja general. */
+  variant?: "default" | "embedded";
 }
 
 function SkeletonItem() {
@@ -27,7 +29,12 @@ function SkeletonItem() {
   );
 }
 
-export default function ChatList({ activeChatId, initialSrc = "", initialFilter = "" }: Props) {
+export default function ChatList({
+  activeChatId,
+  initialSrc = "",
+  initialFilter = "",
+  variant = "default",
+}: Props) {
   const { chats, nextCursor, total, loading, loadingMore, error, filters, setFilters, loadMore } = useInbox(
     initialSrc || initialFilter ? { src: initialSrc, filter: initialFilter } : undefined
   );
@@ -36,27 +43,60 @@ export default function ChatList({ activeChatId, initialSrc = "", initialFilter 
 
   const pendingCount = stats?.total_pending_count ?? 0;
 
+  const embedded = variant === "embedded";
+
   return (
-    <div className="d-flex flex-column h-100 min-h-0">
-      <div className="bandeja-wa-top-header">
-        <div className="bandeja-wa-avatar-sm" aria-hidden>SM</div>
-        <div className="flex-grow-1 min-w-0">
-          <h2 className="bandeja-wa-title">Spacework</h2>
-          {total > 0 && (
-            <span className="bandeja-wa-header-meta d-block">{total} conversaciones</span>
-          )}
+    <div
+      className={`d-flex flex-column h-100 min-h-0${embedded ? " chat-list--embedded" : ""}`}
+    >
+      {!embedded && (
+        <div className="bandeja-wa-top-header">
+          <div className="bandeja-wa-avatar-sm" aria-hidden>SM</div>
+          <div className="flex-grow-1 min-w-0">
+            <h2 className="bandeja-wa-title">Spacework</h2>
+            {total > 0 && (
+              <span className="bandeja-wa-header-meta d-block">{total} conversaciones</span>
+            )}
+          </div>
+          <AiReviewBadge count={pendingCount} onClick={() => setDrawerOpen(true)} />
+          <button type="button" className="btn btn-link p-0 border-0" style={{ color: "var(--wa-icon)" }} aria-label="Menú" tabIndex={-1}>
+            <i className="ti ti-dots-vertical fs-5" />
+          </button>
         </div>
-        <AiReviewBadge count={pendingCount} onClick={() => setDrawerOpen(true)} />
-        <button type="button" className="btn btn-link p-0 border-0" style={{ color: "var(--wa-icon)" }} aria-label="Menú" tabIndex={-1}>
-          <i className="ti ti-dots-vertical fs-5" />
-        </button>
-      </div>
+      )}
+
+      {embedded && (
+        <div className="bd-compact-header">
+          {/* Búsqueda */}
+          <div className="bd-compact-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" className="bd-compact-search-icon">
+              <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
+            </svg>
+            <input
+              type="search"
+              className="bd-compact-search-input"
+              placeholder="Buscar cliente, orden, SKU…"
+              value={filters.search ?? ""}
+              onChange={e => setFilters({ search: e.target.value })}
+              aria-label="Buscar conversación"
+            />
+            {total > 0 && (
+              <span className="bd-compact-count" title={`${total} conversaciones`}>
+                {total > 999 ? `${Math.floor(total / 1000)}k` : total}
+              </span>
+            )}
+          </div>
+          {/* Badge bot IA */}
+          <AiReviewBadge count={pendingCount} onClick={() => setDrawerOpen(true)} />
+        </div>
+      )}
 
       <AiReviewDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
 
       <InboxCountBadges activeFilter={filters.filter} onFilter={(f) => setFilters({ filter: f })} />
 
-      <ChatFilters filters={filters} onChange={setFilters} />
+      {/* En modo embedded la búsqueda ya está en bd-compact-header; solo mostrar si no es embedded */}
+      {!embedded && <ChatFilters filters={filters} onChange={setFilters} />}
 
       <div className="bandeja-chat-list-scroll bandeja-chat-list">
         {error && (

@@ -70,7 +70,6 @@ export default function Sidebar() {
         onMouseLeave={expandMenu}
         onMouseOver={expandMenuOpen}
       >
-        <>
           {/* Logo */}
           <div className="sidebar-logo">
             <Link href={route.newdashboard} className="logo logo-normal">
@@ -91,42 +90,6 @@ export default function Sidebar() {
             </Link>
           </div>
           {/* /Logo */}
-          <div className="modern-profile p-3 pb-0">
-            <div className="text-center rounded bg-light p-3 mb-4 border">
-              <div className="avatar avatar-lg online mb-3">
-                <img
-                  src="assets/img/customer/customer15.jpg"
-                  alt="Img"
-                  className="img-fluid rounded-circle"
-                />
-              </div>
-              <h6 className="fs-14 fw-bold mb-1">Adrian Herman</h6>
-              <p className="fs-12 mb-0">System Admin</p>
-            </div>
-            <div className="sidebar-nav mb-3">
-              <ul
-                className="nav nav-tabs nav-tabs-solid nav-tabs-rounded nav-justified bg-transparent"
-                role="tablist"
-              >
-                <li className="nav-item">
-                  <Link className="nav-link active border-0" href="#">
-                    Menu
-                  </Link>
-                </li>
-                <li className="nav-item">
-                  <Link className="nav-link border-0" href={route.chat}>
-                    Chats
-                  </Link>
-                </li>
-                <li className="nav-item">
-                  <Link className="nav-link border-0" href={route.email}>
-                    Inbox
-                  </Link>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </>
         <PerfectScrollbar>
           <div className="sidebar-inner slimscroll">
             <div id="sidebar-menu" className="sidebar-menu">

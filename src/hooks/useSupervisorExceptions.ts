@@ -7,6 +7,9 @@ import type {
 } from '@/types/supervisor';
 
 const POLL_INTERVAL_MS = 30_000;
+
+// TODO Sprint 3: reemplazar polling por evento SSE cuando backend emita
+// exception_created / exception_resolved (ver ADR-009 deuda técnica D7).
 const VALID_KINDS: readonly ExceptionKind[] = [
   'payment_no_match',
   'stock_zero_no_supplier',
@@ -116,12 +119,21 @@ export function useSupervisorExceptions(): Result {
   useEffect(() => {
     cancelledRef.current = false;
     void fetchExceptions();
+
+    // Polling 30s · pausado cuando la pestaña está en segundo plano
     const iv = setInterval(() => {
-      void fetchExceptions();
+      if (document.visibilityState !== 'hidden') void fetchExceptions();
     }, POLL_INTERVAL_MS);
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void fetchExceptions();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
     return () => {
       cancelledRef.current = true;
       clearInterval(iv);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [fetchExceptions]);
 

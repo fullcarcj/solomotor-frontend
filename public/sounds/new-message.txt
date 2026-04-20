@@ -1,0 +1,2 @@
+Colocá aquí el archivo new-message.mp3 (sonido corto de notificación).
+El código lo carga desde /sounds/new-message.mp3

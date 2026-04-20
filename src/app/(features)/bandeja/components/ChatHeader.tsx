@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { InboxChat } from "@/types/inbox";
 import ChannelBadge from "./ChannelBadge";
 import { CHAT_STAGE_LABELS } from "@/types/inbox";
+import SlaCountdown from "@/components/bandeja/SlaCountdown";
 
 function initials(name: string | null, phone: string): string {
   if (name) { const p = name.trim().split(" "); return (p[0][0] + (p[1]?.[0] ?? "")).toUpperCase(); }
@@ -17,9 +18,25 @@ interface Props {
   onEditCustomer?: () => void;
   /** Callback para abrir el lightbox con lastImageUrl. */
   onViewPhoto?: () => void;
+  /** SLA activo (ISO); prioridad sobre `chat.sla_deadline_at` si viene del slice. */
+  slaDeadline?: string | null;
+  /** Mostrar acción liberar (PENDING propio). */
+  showRelease?: boolean;
+  onRelease?: () => void;
+  /** Evita doble envío mientras la solicitud está en curso. */
+  releasePending?: boolean;
 }
 
-export default function ChatHeader({ chat, lastImageUrl, onEditCustomer, onViewPhoto }: Props) {
+export default function ChatHeader({
+  chat,
+  lastImageUrl,
+  onEditCustomer,
+  onViewPhoto,
+  slaDeadline,
+  showRelease,
+  onRelease,
+  releasePending,
+}: Props) {
   const displayName = chat.customer_name ?? chat.phone;
   const ini = initials(chat.customer_name, chat.phone);
   const hasPhone = Boolean(chat.phone);
@@ -49,8 +66,9 @@ export default function ChatHeader({ chat, lastImageUrl, onEditCustomer, onViewP
 
       {/* Nombre + metadatos */}
       <div className="flex-grow-1 min-w-0">
-        <div className="mu-convo-name text-truncate d-flex align-items-center gap-2">
+        <div className="mu-convo-name text-truncate d-flex align-items-center gap-2 flex-wrap">
           {displayName}
+          <SlaCountdown deadline={slaDeadline ?? chat.sla_deadline_at ?? null} />
           {chat.chat_stage && (
             <span className="mu-stage-inline">{CHAT_STAGE_LABELS[chat.chat_stage]}</span>
           )}
@@ -123,6 +141,24 @@ export default function ChatHeader({ chat, lastImageUrl, onEditCustomer, onViewP
         >
           <i className="ti ti-edit" />
         </button>
+
+        {showRelease && onRelease ? (
+          <button
+            type="button"
+            className="btn btn-sm"
+            style={{
+              borderColor: "var(--mu-line)",
+              color: "var(--mu-ink-dim)",
+              fontSize: "0.75rem",
+            }}
+            title="Liberar conversación"
+            aria-busy={releasePending ? true : undefined}
+            disabled={releasePending}
+            onClick={onRelease}
+          >
+            {releasePending ? "Liberando…" : "Liberar conversación"}
+          </button>
+        ) : null}
 
         {/* ti-search eliminado (B.5) */}
 

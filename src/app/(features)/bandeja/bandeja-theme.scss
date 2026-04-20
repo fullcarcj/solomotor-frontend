@@ -34,6 +34,10 @@
   --mu-ok:        #7fd67f;
   --mu-warn:      #ffb84d;
   --mu-bad:       #ff5c5c;
+  --danger-bg:    rgba(255, 92, 92, 0.18);
+  --danger-fg:    #ff5c5c;
+  --warning-bg:   rgba(255, 184, 77, 0.2);
+  --warning-fg:   #ffb84d;
 
   /* Canales (ADR-007) */
   --mu-ch-wa:     #25d366;
@@ -91,7 +95,8 @@
    PANEL IZQUIERDO (lista — root /bandeja)
    ══════════════════════════════════════════════════════════════ */
 .bandeja-panel-left {
-  width: 380px;
+  /* Default +20% respecto a 380px para mejor lectura de la lista */
+  width: 456px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -100,11 +105,36 @@
   overflow: hidden;
   min-height: 0;
 
+  > .bd-triaje {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+  }
+
   .bandeja-chat-list-scroll {
     flex: 1;
     overflow-y: auto;
     min-height: 0;
     scroll-behavior: smooth;
+  }
+}
+
+/* El mismo scroll container dentro de bandeja-detail-list (vista /bandeja/[chatId]) */
+.bandeja-shell--detail {
+  .bandeja-detail-list {
+    .bandeja-chat-list-scroll {
+      flex: 1;
+      overflow-y: auto;
+      min-height: 0;
+      scroll-behavior: smooth;
+    }
+
+    /* Asegura que ChatList (d-flex flex-column h-100) quede acotado */
+    .chat-list--embedded {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
   }
 }
 
@@ -145,7 +175,8 @@
 
     @media (min-width: 768px) { display: flex; }
 
-    > .d-flex.flex-column {
+    > .d-flex.flex-column,
+    > .bd-triaje {
       flex: 1;
       min-height: 0;
       width: 100%;
@@ -242,16 +273,22 @@
 
   &::-webkit-scrollbar { height: 3px; }
 
-  .btn {
+  .btn.bandeja-inbox-tab {
     border: 1px solid transparent;
     background: transparent;
     color: var(--mu-ink-mute);
     font-size: 0.7rem;
     font-family: "JetBrains Mono", monospace;
-    padding: 5px 9px;
-    border-radius: 6px;
+    padding: 6px 6px;
+    min-width: 2.5rem;
+    border-radius: 8px;
     white-space: nowrap;
-    letter-spacing: 0.05em;
+    flex-shrink: 0;
+
+    .ti {
+      font-size: 1.05rem;
+      line-height: 1;
+    }
 
     &:hover { background: var(--mu-panel-2); color: var(--mu-ink-dim); }
 
@@ -262,14 +299,19 @@
       border-color: var(--mu-accent);
     }
 
-    .badge {
+    .bandeja-inbox-tab__n {
+      min-width: 1.1rem;
+      padding: 0 4px;
+      font-size: 0.6rem;
+      font-weight: 800;
+      line-height: 1.2;
       background: var(--mu-panel-2) !important;
       color: var(--mu-ink-mute) !important;
       font-family: "JetBrains Mono", monospace;
     }
 
-    &.active .badge {
-      background: rgba(0,0,0,0.25) !important;
+    &.active .bandeja-inbox-tab__n {
+      background: rgba(0, 0, 0, 0.22) !important;
       color: #0a0b08 !important;
     }
   }
@@ -1285,4 +1327,42 @@
 /* ChatList scroll */
 .bandeja-chat-list {
   &::-webkit-scrollbar { width: 5px; }
+}
+
+/* Realtime · omnicanal (SSE) */
+.bandeja-shell .mu-conv.mu-conv--urgent {
+  background: var(--danger-bg) !important;
+  border-left: 4px solid var(--danger-fg);
+  animation: pulse-urgent 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes pulse-urgent {
+  from { opacity: 1; }
+  to { opacity: 0.7; }
+}
+
+.bandeja-shell .viewing-chip {
+  background: var(--warning-bg);
+  color: var(--warning-fg);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bandeja-shell .sla-countdown {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--mu-ink-dim);
+  flex-shrink: 0;
+}
+.bandeja-shell .sla-countdown--warn {
+  color: var(--mu-warn);
+}
+.bandeja-shell .sla-countdown--danger {
+  color: var(--mu-bad);
+  animation: pulse-urgent 0.8s ease-in-out infinite alternate;
 }

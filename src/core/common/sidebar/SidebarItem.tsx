@@ -10,23 +10,24 @@ interface Props {
 
 export default function SidebarItem({ item, pathname }: Props) {
   const disabled = item.pendingMigration || item.future;
-  const active = !disabled && item.path && pathname === item.path;
-  const disabledClass = disabled
-    ? item.future
-      ? "sidebar-item--future"
-      : "sidebar-item--pending"
-    : "";
+  const active = !disabled && !!item.path && pathname === item.path;
 
   if (disabled) {
+    const cls = item.future ? "sidebar-leaf sidebar-leaf--future" : "sidebar-leaf sidebar-leaf--pending";
     return (
-      <span className={disabledClass} title="Disponible próximamente">
+      <span className={cls} title="Disponible próximamente">
+        <span className="sidebar-leaf__dot" />
         {item.label}
       </span>
     );
   }
 
   return (
-    <Link href={item.path || "#"} className={active ? "active" : ""}>
+    <Link
+      href={item.path || "#"}
+      className={`sidebar-leaf${active ? " active" : ""}`}
+    >
+      <span className="sidebar-leaf__dot" />
       {item.label}
     </Link>
   );

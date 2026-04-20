@@ -1,36 +1,170 @@
 "use client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useCallback } from "react";
 import type { InboxChat, ChatStage } from "@/types/inbox";
-import { CHAT_STAGE_LABELS } from "@/types/inbox";
-import ChannelBadge from "./ChannelBadge";
+import ExceptionBadge from "@/components/bandeja/ExceptionBadge";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  bumpInboxRefetch,
+  clearAutoReleased,
+  clearMyPending,
+  clearUrgent,
+  markAutoReleased,
+  setMyPending,
+} from "@/store/realtimeSlice";
 
-/* ── Stage tag compacto ──────────────────────────────────────── */
+// ─── Origin helpers ────────────────────────────────────────────────────────────
 
-const STAGE_STYLE: Record<ChatStage, { bg: string; color: string }> = {
-  contact:   { bg: "#2a2c24",             color: "#a8a89a" },
-  ml_answer: { bg: "#3a3218",             color: "#fff159" },
-  quote:     { bg: "#3a3218",             color: "#fff159" },
-  approved:  { bg: "#1a3a2e",             color: "#7fd67f" },
-  order:     { bg: "#2a1f3a",             color: "#b98cff" },
-  payment:   { bg: "#2a1f3a",             color: "#b98cff" },
-  dispatch:  { bg: "#1a2a3a",             color: "#6ab6ff" },
-  closed:    { bg: "#2a2c24",             color: "#6e6f64" },
+function originClass(sourceType: string): string {
+  const s = sourceType.toLowerCase();
+  if (s.includes("social_media") || s.includes("wa") || s.includes("whatsapp"))
+    return "origin-wa";
+  if (s.includes("mercadolibre") || s.includes("ml_") || s.startsWith("ml"))
+    return "origin-ml";
+  if (s.includes("ecommerce") || s.includes("ecom") || s.includes("shopify"))
+    return "origin-ecom";
+  if (s.includes("fuerza") || s.includes("field") || s.includes("sales_force"))
+    return "origin-fuerza";
+  if (s.includes("mostrador") || s.includes("pos"))
+    return "origin-mostrador";
+  return "origin-wa";
+}
+
+// ─── Channel icon (inline SVG like the mockup) ─────────────────────────────────
+
+const SVG_WA = (
+  <svg viewBox="0 0 24 24">
+    <rect width="24" height="24" rx="5" fill="#25D366" />
+    <path d="M17 13.5c-.2-.1-1.3-.6-1.5-.7-.2-.1-.3-.1-.5.1s-.5.7-.7.8c-.1.2-.2.2-.5.1s-1-.4-1.9-1.1c-.7-.6-1.1-1.3-1.3-1.6s0-.3.1-.4c.1-.1.2-.2.3-.4l.2-.3c0-.1 0-.2 0-.4s-.5-1.2-.7-1.6-.4-.4-.5-.4h-.4c-.2 0-.4.1-.6.3s-.8.8-.8 1.9.8 2.2.9 2.3c.1.2 1.6 2.4 3.8 3.4.5.2.9.4 1.3.5.5.2 1 .1 1.4.1.4-.1 1.3-.5 1.5-1.1.2-.5.2-1 .1-1.1s-.2-.1-.4-.2z" fill="#fff" />
+  </svg>
+);
+
+const SVG_ML_MSG = (
+  <svg viewBox="0 0 24 24">
+    <rect width="24" height="24" rx="5" fill="#FFE600" />
+    <path d="M6 9c0-1.1.9-2 2-2h8c1.1 0 2 .9 2 2v4c0 1.1-.9 2-2 2h-5l-3 2.5V15H8c-1.1 0-2-.9-2-2V9z" fill="#2D3277" />
+  </svg>
+);
+
+const SVG_ML_PREG = (
+  <svg viewBox="0 0 24 24">
+    <rect width="24" height="24" rx="5" fill="#FFE600" />
+    <text x="12" y="17.5" textAnchor="middle" fontFamily="Inter,sans-serif" fontSize="15" fontWeight="800" fill="#2D3277">?</text>
+  </svg>
+);
+
+const SVG_ECOM = (
+  <svg viewBox="0 0 24 24">
+    <rect width="24" height="24" rx="5" fill="#FF6B35" />
+    <path d="M6 8h1.5l1.5 7h7l1.5-5H9" stroke="#fff" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    <circle cx="10" cy="17.5" r="1" fill="#fff" />
+    <circle cx="15" cy="17.5" r="1" fill="#fff" />
+  </svg>
+);
+
+const SVG_MOSTRADOR = (
+  <svg viewBox="0 0 24 24">
+    <rect width="24" height="24" rx="5" fill="#3b82f6" />
+    <path d="M4 10h16M4 10v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M4 10l2-5a2 2 0 0 1 2-1h8a2 2 0 0 1 2 1l2 5" stroke="#fff" strokeWidth="1.5" fill="none" strokeLinejoin="round" />
+  </svg>
+);
+
+const SVG_FUERZA = (
+  <svg viewBox="0 0 24 24">
+    <rect width="24" height="24" rx="5" fill="#FF6B35" />
+    <path d="M12 5v14M5 12h14" stroke="#fff" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+  </svg>
+);
+
+function ChannelOriginIcon({ sourceType, mlQuestionId }: { sourceType: string; mlQuestionId?: string | number | null }) {
+  const s = sourceType.toLowerCase();
+  if (s.includes("social_media") || s.includes("wa") || s.includes("whatsapp"))
+    return <span className="origen" aria-hidden="true">{SVG_WA}</span>;
+  // Pregunta ML: tanto source_type = ml_question como ml_message si tiene ml_question_id
+  if (s.includes("ml_preg") || s.includes("question") || (s.startsWith("ml") && mlQuestionId != null))
+    return <span className="origen" aria-hidden="true">{SVG_ML_PREG}</span>;
+  if (s.includes("mercadolibre") || s.includes("ml_") || s.startsWith("ml"))
+    return <span className="origen" aria-hidden="true">{SVG_ML_MSG}</span>;
+  if (s.includes("ecommerce") || s.includes("ecom") || s.includes("shopify"))
+    return <span className="origen" aria-hidden="true">{SVG_ECOM}</span>;
+  if (s.includes("fuerza") || s.includes("field") || s.includes("sales_force"))
+    return <span className="origen" aria-hidden="true">{SVG_FUERZA}</span>;
+  return <span className="origen" aria-hidden="true">{SVG_MOSTRADOR}</span>;
+}
+
+// ─── Stage chip ─────────────────────────────────────────────────────────────────
+
+interface StageInfo { num: string; label: string; cls: string; }
+
+const STAGE_MAP: Record<ChatStage, StageInfo> = {
+  contact:   { num: "01", label: "Contacto",  cls: "st-01" },
+  quote:     { num: "02", label: "Cotizar",   cls: "st-02" },
+  approved:  { num: "03", label: "Aprobada",  cls: "st-03" },
+  order:     { num: "04", label: "Orden",     cls: "st-04" },
+  payment:   { num: "05", label: "Pago",      cls: "st-05" },
+  dispatch:  { num: "06", label: "Despacho",  cls: "st-06" },
+  closed:    { num: "07", label: "Cerrada",   cls: "st-07" },
+  ml_answer: { num: "ML", label: "Resp. ML",  cls: "st-respml" },
 };
 
-function StageTag({ stage }: { stage: ChatStage }) {
-  const s = STAGE_STYLE[stage];
+function StageChip({ stage }: { stage: ChatStage }) {
+  const info = STAGE_MAP[stage] ?? { num: "?", label: stage, cls: "st-07" };
   return (
-    <span
-      className="mu-conv-tag"
-      style={{ background: s.bg, color: s.color }}
-      title={CHAT_STAGE_LABELS[stage]}
-    >
-      {CHAT_STAGE_LABELS[stage]}
+    <span className={`bd-status ${info.cls}`}>
+      <span className="num">{info.num}</span>
+      {info.label}
     </span>
   );
 }
 
-/* ── Utilidades ──────────────────────────────────────────────── */
+// ─── Elapsed / SLA ──────────────────────────────────────────────────────────────
+
+function elapsedBucket(
+  lastAt: string | null,
+  slaDeadline: string | null,
+  stage: ChatStage | undefined
+): "hot" | "warn" | "cold" | "ok" {
+  if (stage === "closed") return "ok";
+  if (slaDeadline) {
+    const ms = new Date(slaDeadline).getTime() - Date.now();
+    if (ms < 0) return "hot";
+    if (ms < 3 * 3_600_000) return "warn";
+    return "cold";
+  }
+  if (!lastAt) return "cold";
+  const hours = (Date.now() - new Date(lastAt).getTime()) / 3_600_000;
+  if (hours > 48) return "hot";
+  if (hours > 12) return "warn";
+  return "cold";
+}
+
+function fmtElapsed(lastAt: string | null): string {
+  if (!lastAt) return "—";
+  const ms = Date.now() - new Date(lastAt).getTime();
+  if (ms < 0) return "—";
+  const days = ms / 86_400_000;
+  const hours = ms / 3_600_000;
+  const mins = ms / 60_000;
+  if (days >= 1) return `${Math.floor(days)}d`;
+  if (hours >= 1) return `${Math.floor(hours)}h`;
+  return `${Math.floor(mins)}m`;
+}
+
+function slaClass(
+  isUrgent: boolean,
+  slaDeadline: string | null
+): "sla-hot" | "sla-warn" | "" {
+  if (isUrgent) return "sla-hot";
+  if (slaDeadline) {
+    const ms = new Date(slaDeadline).getTime() - Date.now();
+    if (ms < 0) return "sla-hot";
+    if (ms < 3 * 3_600_000) return "sla-warn";
+  }
+  return "";
+}
+
+// ─── Time format ────────────────────────────────────────────────────────────────
 
 function fmtTime(iso: string | null): string {
   if (!iso) return "";
@@ -45,12 +179,42 @@ function fmtTime(iso: string | null): string {
 }
 
 function initials(name: string | null, phone: string): string {
-  if (name) {
+  if (name?.trim()) {
     const parts = name.trim().split(" ");
     return (parts[0][0] + (parts[1]?.[0] ?? "")).toUpperCase();
   }
-  return phone.slice(-2);
+  return phone.slice(-2).toUpperCase();
 }
+
+// ─── Avatar color palette ────────────────────────────────────────────────────────
+
+const AV_PALETTE = [
+  { bg: "#1e5a3a", color: "#86efac" },
+  { bg: "#1e4a7a", color: "#93c5fd" },
+  { bg: "#7a3a1e", color: "#fdba74" },
+  { bg: "#7a1e1e", color: "#fca5a5" },
+  { bg: "#5a2e7a", color: "#c4b5fd" },
+  { bg: "#2d5a5a", color: "#67e8f9" },
+  { bg: "#5a4a1e", color: "#fde047" },
+];
+
+function avColor(key: string) {
+  let h = 0;
+  for (let i = 0; i < key.length; i++)
+    h = ((h * 31 + key.charCodeAt(i)) >>> 0) % AV_PALETTE.length;
+  return AV_PALETTE[h];
+}
+
+// ─── Clock SVG ──────────────────────────────────────────────────────────────────
+
+const ClockSvg = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
+  </svg>
+);
+
+// ─── Component ──────────────────────────────────────────────────────────────────
 
 interface Props {
   chat:    InboxChat;
@@ -58,57 +222,187 @@ interface Props {
 }
 
 export default function ChatListItem({ chat, active }: Props) {
-  const unread = Number(chat.unread_count);
+  const router   = useRouter();
+  const dispatch = useAppDispatch();
+  const myUserId            = useAppSelector((s) => s.auth.userId);
+  const presence            = useAppSelector((s) => s.realtime.presenceByChat[String(chat.id)]);
+  const urgentRedux         = useAppSelector((s) => s.realtime.urgentChats[String(chat.id)]);
+  const myPendingChatId     = useAppSelector((s) => s.realtime.myPendingChatId);
+  const myPendingHasResponded = useAppSelector((s) => s.realtime.myPendingHasResponded);
+  const isAutoReleased      = useAppSelector((s) =>
+    s.realtime.autoReleasedChatIds.includes(String(chat.id))
+  );
+
+  const isUrgent = Boolean(urgentRedux || chat.is_urgent);
+  const unread   = Number(chat.unread_count);
+
   const displayName = chat.customer_name ?? chat.phone;
   const preview = chat.last_message_text
     ? chat.last_message_text.slice(0, 60) + (chat.last_message_text.length > 60 ? "…" : "")
     : "Sin mensajes";
+
   const ini = initials(chat.customer_name, chat.phone);
+  const av  = avColor(chat.customer_name ?? chat.phone);
+
+  const href = `/bandeja/${String(chat.id)}`;
+
+  const origCls  = originClass(chat.source_type);
+  const slaCls   = slaClass(isUrgent, chat.sla_deadline_at ?? null);
+  const bucket   = elapsedBucket(chat.last_message_at, chat.sla_deadline_at ?? null, chat.chat_stage);
+  const elapsed  = fmtElapsed(chat.last_message_at);
+  const showViewingChip = presence && myUserId != null && presence.userId !== myUserId;
+
+  const navigateAfterRules = useCallback(async () => {
+    const id = String(chat.id);
+    const st = chat.status;
+    const assigned = chat.assigned_to;
+
+    const needTake = st === "UNASSIGNED" || st === "RE_OPENED";
+    if (needTake) {
+      // Si hay un chat pendiente diferente al destino, liberarlo automáticamente
+      // antes de intentar tomar el nuevo — sin mostrar modal al agente.
+      if (myPendingChatId && myPendingChatId !== id) {
+        const prevId = myPendingChatId;
+        const prevHasResponded = myPendingHasResponded;
+        try {
+          const rel = await fetch(`/api/bandeja/${encodeURIComponent(prevId)}/release`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+          });
+          if (rel.ok) {
+            dispatch(clearMyPending());
+            dispatch(bumpInboxRefetch());
+            // Agente cambió de chat sin responder → alerta silenciosa de supervisión
+            if (!prevHasResponded) {
+              dispatch(markAutoReleased(prevId));
+              // TODO deuda técnica: emitir alerta cross-sesión al supervisor cuando
+              // exista un endpoint backend para notificaciones de abandono de chat.
+            }
+          }
+        } catch {
+          // Error de red al liberar — continuar igualmente con el take
+        }
+      }
+
+      const res = await fetch(`/api/bandeja/${encodeURIComponent(id)}/take`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+      // 409 residual (raro tras auto-release): continuar silenciosamente, sin modal
+      if (!res.ok) return;
+      dispatch(setMyPending(id));
+      // Si el chat destino estaba marcado como auto-released, limpiarlo
+      dispatch(clearAutoReleased(id));
+      router.push(href);
+      return;
+    }
+    if (st === "PENDING_RESPONSE" && assigned != null && myUserId != null && assigned !== myUserId) {
+      router.push(href);
+      return;
+    }
+    router.push(href);
+  }, [
+    chat.assigned_to, chat.id, chat.status, dispatch, href,
+    myPendingChatId, myPendingHasResponded, myUserId, router,
+  ]);
+
+  const onNavigate = useCallback(
+    async (e: React.MouseEvent<HTMLAnchorElement>) => {
+      if (e.defaultPrevented) return;
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      dispatch(clearUrgent(String(chat.id)));
+      await navigateAfterRules();
+    },
+    [chat.id, dispatch, navigateAfterRules]
+  );
 
   return (
-    <Link
-      href={`/bandeja/${String(chat.id)}`}
-      className="mu-conv-link text-decoration-none d-block"
-    >
-      <div className={`mu-conv${active ? " mu-conv--active" : ""}`}>
-
-        {/* Avatar + ch-badge */}
-        <div className="mu-conv-avatar" style={{ position: "relative" }}>
-          <div className="mu-avatar">{ini}</div>
-          <ChannelBadge
-            channelId={chat.channel_id}
-            sourceType={chat.source_type}
-            overlay
-          />
-        </div>
-
-        {/* Meta */}
-        <div className="mu-conv-meta">
-          <div className="mu-conv-top">
-            <span className={`mu-conv-name${unread > 0 ? " mu-conv-name--bold" : ""}`}>
-              {displayName}
-            </span>
+    <>
+      <Link
+        href={href}
+        prefetch={false}
+        className="text-decoration-none d-block"
+        onClick={onNavigate}
+        aria-label={`Conversación con ${displayName}`}
+      >
+        <div
+          className={[
+            "bd-inbox-row",
+            origCls,
+            slaCls,
+            active ? "bd-inbox-row--active" : "",
+          ].filter(Boolean).join(" ")}
+        >
+          {/* Avatar */}
+          <div
+            className="bd-avatar"
+            style={{ background: av.bg, color: av.color }}
+            aria-hidden="true"
+          >
+            {ini}
           </div>
-          <div className="mu-conv-preview">{preview}</div>
-          <div className="mu-conv-tags">
-            {chat.chat_stage && <StageTag stage={chat.chat_stage} />}
-            {chat.order !== null && (
-              <span className="mu-conv-tag" style={{ background: "#1a3a2e", color: "#7fd67f" }}>
-                Orden #{chat.order.id}
-              </span>
-            )}
-          </div>
-        </div>
 
-        {/* Derecha: hora + badge no leídos */}
-        <div className="mu-conv-right">
-          <span className="mu-conv-time">{fmtTime(chat.last_message_at)}</span>
-          {unread > 0 && (
-            <span className="mu-unread-badge">{unread}</span>
+          {/* Cuerpo */}
+          <div className="bd-row-body">
+            <div className="bd-row-top">
+              <div className="bd-row-name">{displayName}</div>
+              <div className="bd-row-time">{fmtTime(chat.last_message_at)}</div>
+            </div>
+
+            <div className="bd-row-msg">{preview}</div>
+
+            <div className="bd-row-tags">
+              <ChannelOriginIcon sourceType={chat.source_type} mlQuestionId={chat.ml_question_id} />
+
+              {chat.chat_stage !== "closed" && elapsed !== "—" && (
+                <span className={`bd-elapsed ${bucket}`}>
+                  {ClockSvg}
+                  {elapsed}
+                </span>
+              )}
+
+              {chat.chat_stage && <StageChip stage={chat.chat_stage} />}
+
+              {/* Bloque 2 — excepción activa */}
+              {(chat.has_active_exception ?? false) && (
+                <ExceptionBadge
+                  code={chat.top_exception_code ?? "MANUAL_REVIEW_REQUESTED"}
+                  reason={chat.top_exception_reason ?? "Excepción activa"}
+                  compact
+                />
+              )}
+
+              {showViewingChip && (
+                <span
+                  className="bd-viewing-chip"
+                  title={`${presence.userName} está viendo este chat`}
+                >
+                  Viendo: {presence.userName}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Badge no leídos — servidor o fuga local */}
+          {(unread > 0 || isAutoReleased) && (
+            <div
+              className="bd-unread-count"
+              aria-label={
+                isAutoReleased && unread === 0
+                  ? "Sin respuesta — requiere atención"
+                  : `${unread} mensajes sin leer`
+              }
+              style={isAutoReleased && unread === 0 ? { background: "#f97316" } : undefined}
+              title={isAutoReleased ? "Chat abandonado sin respuesta" : undefined}
+            >
+              {unread > 0 ? (unread > 99 ? "99+" : unread) : "!"}
+            </div>
           )}
         </div>
-
-      </div>
-    </Link>
+      </Link>
+    </>
   );
 }

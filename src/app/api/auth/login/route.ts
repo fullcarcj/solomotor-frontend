@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { formatUpstreamFetchError } from "@/lib/bffUpstreamError";
 
 export const runtime = "nodejs";
 
@@ -17,6 +18,7 @@ function backendBase(): string {
 
 export async function POST(req: NextRequest) {
   const base = backendBase();
+  const target = `${base}/api/auth/login`;
   let body: unknown = {};
   try {
     body = await req.json();
@@ -26,15 +28,16 @@ export async function POST(req: NextRequest) {
 
   let up: Response;
   try {
-    up = await fetch(`${base}/api/auth/login`, {
+    up = await fetch(target, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(body),
       cache: "no-store",
+      signal: AbortSignal.timeout(12_000),
     });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, message: String(e) },
+      { ok: false, ...formatUpstreamFetchError(e, target) },
       { status: 502 }
     );
   }

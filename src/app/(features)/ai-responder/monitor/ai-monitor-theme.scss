@@ -43,7 +43,8 @@
   /* ── Layout base ─────────────────────────────────────────── */
   background: var(--bg);
   color: var(--text);
-  min-height: 100vh;
+  /* Dentro de .page-wrapper el header fijo ya deja padding-top; no usar 100vh pleno. */
+  min-height: calc(100vh - 74px);
   display: flex;
   flex-direction: column;
   font-family: 'Inter', system-ui, sans-serif;

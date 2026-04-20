@@ -9,6 +9,9 @@ export interface AuthState {
   token: string | null;
   role: string | null;
   canal: string | null;
+  /** Identificador de usuario (GET /api/auth/me → user.id o id). */
+  userId: number | null;
+  userName: string | null;
   /** true mientras se intenta restaurar sesión con GET /api/auth/me */
   restoring: boolean;
 }
@@ -17,6 +20,8 @@ const initialState: AuthState = {
   token: null,
   role: null,
   canal: null,
+  userId: null,
+  userName: null,
   restoring: false,
 };
 
@@ -30,14 +35,30 @@ export const restoreSession = createAsyncThunk(
       });
       if (!res.ok) return rejectWithValue("no_session");
       const data = (await res.json()) as {
-        user?: { role?: string | null; canal?: string | null };
+        user?: {
+          id?: number | string | null;
+          name?: string | null;
+          role?: string | null;
+          canal?: string | null;
+        };
+        id?: number | string | null;
+        name?: string | null;
         role?: string | null;
         canal?: string | null;
       };
+      const rawId = data.user?.id ?? data.id;
+      const userId =
+        rawId === null || rawId === undefined
+          ? null
+          : typeof rawId === "number"
+            ? rawId
+            : Number(rawId);
       return {
         token: "cookie" as const,
         role: data.user?.role ?? data.role ?? null,
         canal: data.user?.canal ?? data.canal ?? null,
+        userId: Number.isFinite(userId) ? userId : null,
+        userName: data.user?.name ?? data.name ?? null,
       };
     } catch {
       return rejectWithValue("network_error");
@@ -51,11 +72,19 @@ const authSlice = createSlice({
   reducers: {
     setCredentials(
       state,
-      action: PayloadAction<{ token: string | null; role?: string | null; canal?: string | null }>
+      action: PayloadAction<{
+        token: string | null;
+        role?: string | null;
+        canal?: string | null;
+        userId?: number | null;
+        userName?: string | null;
+      }>
     ) {
       state.token = action.payload.token;
       if (action.payload.role !== undefined) state.role = action.payload.role;
       if (action.payload.canal !== undefined) state.canal = action.payload.canal;
+      if (action.payload.userId !== undefined) state.userId = action.payload.userId;
+      if (action.payload.userName !== undefined) state.userName = action.payload.userName;
     },
     clearCredentials() {
       return { ...initialState };
@@ -70,12 +99,16 @@ const authSlice = createSlice({
         state.token = action.payload.token;
         state.role = action.payload.role;
         state.canal = action.payload.canal;
+        state.userId = action.payload.userId;
+        state.userName = action.payload.userName;
         state.restoring = false;
       })
       .addCase(restoreSession.rejected, (state) => {
         state.token = null;
         state.role = null;
         state.canal = null;
+        state.userId = null;
+        state.userName = null;
         state.restoring = false;
       });
   },

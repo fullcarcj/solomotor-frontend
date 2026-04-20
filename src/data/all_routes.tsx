@@ -415,6 +415,12 @@ export const all_routes = {
   logisticaDespachos:       "/logistica/despachos",
   logisticaHistorial:       "/logistica/historial",
 
+  // ── Supervisor — Bloque 2 ────────────────────────────────────
+  /** Cola de revisión de acciones del bot (BotActionsReviewQueue) */
+  supervisorBotActions:     "/supervisor/bot-actions",
+  /** Panel de excepciones abiertas para el supervisor */
+  supervisorExceptions:     "/supervisor/exceptions",
+
   // ── CRM / Clientes ───────────────────────────────────────────────────────
   /** Directorio unificado de clientes */
   clientesDirectorio:       "/clientes/directorio",

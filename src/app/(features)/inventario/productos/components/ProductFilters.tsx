@@ -7,10 +7,12 @@ export default function ProductFilters({
   filters,
   onChange,
   products,
+  total,
 }: {
   filters: PF;
   onChange: (next: PF) => void;
   products: Product[];
+  total?: number;
 }) {
   const categories = useMemo(() => {
     const s = new Set<string>();
@@ -30,120 +32,101 @@ export default function ProductFilters({
     return [...s].sort((a, b) => a.localeCompare(b, "es"));
   }, [products]);
 
-  const limit = filters.limit ?? 50;
+  const hasFilters =
+    !!filters.search || !!filters.category || !!filters.brand || !!filters.alert;
 
-  const clear = () => {
-    onChange({
-      limit,
-      offset: 0,
-      search: undefined,
-      category: undefined,
-      brand: undefined,
-      alert: undefined,
-    });
-  };
+  const clear = () =>
+    onChange({ limit: filters.limit, offset: 0 });
+
+  const set = (patch: Partial<PF>) =>
+    onChange({ ...filters, ...patch, offset: 0 });
 
   return (
-    <div className="card mb-4">
-      <div className="card-body py-3">
-        <div className="row g-2 align-items-end flex-wrap">
-          <div className="col-12 col-lg-4">
-            <label className="form-label small text-muted mb-1">
-              Buscar por SKU o nombre
-            </label>
-            <div className="input-group input-group-sm">
-              <span className="input-group-text" aria-hidden>
-                🔍
-              </span>
-              <input
-                type="search"
-                className="form-control"
-                placeholder="SKU o nombre…"
-                value={filters.search ?? ""}
-                onChange={(e) =>
-                  onChange({
-                    ...filters,
-                    search: e.target.value || undefined,
-                    offset: 0,
-                  })
-                }
-                autoComplete="off"
-              />
-            </div>
-          </div>
-          <div className="col-12 col-md-6 col-lg-2">
-            <label className="form-label small text-muted mb-1">Categoría</label>
-            <select
-              className="form-select form-select-sm"
-              value={filters.category ?? ""}
-              onChange={(e) =>
-                onChange({
-                  ...filters,
-                  category: e.target.value || undefined,
-                  offset: 0,
-                })
-              }
-            >
-              <option value="">Todas</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-              </option>
-              ))}
-            </select>
-          </div>
-          <div className="col-12 col-md-6 col-lg-2">
-            <label className="form-label small text-muted mb-1">Marca</label>
-            <select
-              className="form-select form-select-sm"
-              value={filters.brand ?? ""}
-              onChange={(e) =>
-                onChange({
-                  ...filters,
-                  brand: e.target.value || undefined,
-                  offset: 0,
-                })
-              }
-            >
-              <option value="">Todas</option>
-              {brands.map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="col-12 col-md-6 col-lg-2">
-            <div className="form-check mt-3 mt-lg-4">
-              <input
-                id="inv-alert-only"
-                type="checkbox"
-                className="form-check-input"
-                checked={filters.alert === true}
-                onChange={(e) =>
-                  onChange({
-                    ...filters,
-                    alert: e.target.checked ? true : undefined,
-                    offset: 0,
-                  })
-                }
-              />
-              <label className="form-check-label small" htmlFor="inv-alert-only">
-                ⚠ Solo alertas
-              </label>
-            </div>
-          </div>
-          <div className="col-12 col-lg-2 text-lg-end">
-            <button
-              type="button"
-              className="btn btn-outline-secondary btn-sm"
-              onClick={clear}
-            >
-              Limpiar filtros
-            </button>
-          </div>
-        </div>
+    <div className="pinv-filters">
+      {/* Search */}
+      <div className="pinv-filters__search">
+        <i className="ti ti-search pinv-filters__search-icon" />
+        <input
+          type="search"
+          className="pinv-filters__search-input"
+          placeholder="Buscar SKU o nombre…"
+          value={filters.search ?? ""}
+          onChange={(e) => set({ search: e.target.value || undefined })}
+          autoComplete="off"
+        />
+        {filters.search && (
+          <button
+            type="button"
+            className="pinv-filters__search-clear"
+            onClick={() => set({ search: undefined })}
+            aria-label="Limpiar búsqueda"
+          >
+            <i className="ti ti-x" />
+          </button>
+        )}
       </div>
+
+      <div className="pinv-filters__sep" />
+
+      {/* Category pills */}
+      <div className="pinv-filters__pills">
+        <button
+          type="button"
+          className={`pinv-pill ${!filters.category ? "pinv-pill--active" : ""}`}
+          onClick={() => set({ category: undefined })}
+        >
+          Todas las categorías
+          {total != null && !filters.category && (
+            <span className="pinv-pill__cnt">{total}</span>
+          )}
+        </button>
+        {categories.map((c) => (
+          <button
+            key={c}
+            type="button"
+            className={`pinv-pill ${filters.category === c ? "pinv-pill--active" : ""}`}
+            onClick={() => set({ category: filters.category === c ? undefined : c })}
+          >
+            {c}
+          </button>
+        ))}
+      </div>
+
+      <div className="pinv-filters__sep" />
+
+      {/* Brand select */}
+      <select
+        className="pinv-filters__select"
+        value={filters.brand ?? ""}
+        onChange={(e) => set({ brand: e.target.value || undefined })}
+      >
+        <option value="">Todas las marcas</option>
+        {brands.map((b) => (
+          <option key={b} value={b}>{b}</option>
+        ))}
+      </select>
+
+      {/* Alert toggle */}
+      <button
+        type="button"
+        className={`pinv-pill pinv-pill--alert ${filters.alert ? "pinv-pill--active" : ""}`}
+        onClick={() => set({ alert: filters.alert ? undefined : true })}
+      >
+        <i className="ti ti-alert-triangle" />
+        Alertas
+      </button>
+
+      {/* Clear */}
+      {hasFilters && (
+        <button
+          type="button"
+          className="pinv-pill pinv-pill--clear"
+          onClick={clear}
+        >
+          <i className="ti ti-x" />
+          Limpiar
+        </button>
+      )}
     </div>
   );
 }

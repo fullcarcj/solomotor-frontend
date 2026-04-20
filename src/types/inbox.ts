@@ -14,6 +14,8 @@ export interface InboxOrder {
   channel_id:       number;
 }
 
+export type ChatStatus = 'UNASSIGNED' | 'PENDING_RESPONSE' | 'ATTENDED' | 'RE_OPENED';
+
 export interface InboxChat {
   id:                number | string;
   phone:             string;
@@ -37,6 +39,20 @@ export interface InboxChat {
    * que GET /api/inbox lo devuelve en la raíz.
    */
   channel_id?:       number | null;
+  /** Estado omnicanal (webhook-receiver). Opcional para compatibilidad con mocks. */
+  status?:           ChatStatus;
+  sla_deadline_at?:  string | null;
+  last_outbound_at?: string | null;
+  /** UI-only: presencia derivada de SSE (no viene del listado inicial). */
+  viewing_user_name?: string | null;
+  /** UI-only: urgencia derivada de SSE o enriquecimiento local. */
+  is_urgent?:        boolean;
+  /** Bloque 2 BE — GET /api/inbox extendido. Defensivo: puede no venir en legacy. */
+  has_active_exception?:  boolean;
+  top_exception_reason?:  string | null;
+  top_exception_code?:    string | null;
+  /** Derivado de status en UI — bot activo cuando status es UNASSIGNED. */
+  handoff_active?:        boolean;
 }
 
 export interface InboxCounts {

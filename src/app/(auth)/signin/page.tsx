@@ -44,7 +44,27 @@ export default function Login() {
       }
 
       if (!res.ok) {
-        const d = data as { message?: string; error?: string };
+        const d = data as {
+          message?: string;
+          error?: string;
+          detail?: string;
+          code?: string;
+          hint?: string;
+          upstream?: string;
+        };
+        if (res.status === 502) {
+          const parts = [
+            d.hint,
+            d.detail && `${d.code ? `[${d.code}] ` : ""}${d.detail}`,
+            d.upstream && `→ ${d.upstream}`,
+          ].filter(Boolean);
+          setError(
+            parts.length > 0
+              ? parts.join(" · ")
+              : d.message ?? "No se pudo contactar al servidor de autenticación."
+          );
+          return;
+        }
         setError(
           d.message ??
             (typeof d.error === "string" ? d.error : null) ??

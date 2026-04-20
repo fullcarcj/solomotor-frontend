@@ -10,7 +10,7 @@ interface Props {
 const BADGES = [
   { key: "",                label: "Todos",        icon: "ti-messages" },
   { key: "unread",          label: "Sin leer",     icon: "ti-bell" },
-  { key: "payment_pending", label: "Pago pend.",   icon: "ti-clock-hour-3" },
+  { key: "payment_pending", label: "Pago pendiente", icon: "ti-clock-hour-3" },
   { key: "quote",           label: "Cotizar",      icon: "ti-file-invoice" },
   { key: "dispatch",        label: "Despachar",    icon: "ti-truck" },
 ] as const;
@@ -51,21 +51,23 @@ export default function InboxCountBadges({ activeFilter, onFilter }: Props) {
       {BADGES.map(b => {
         const count = getCount(b.key);
         const isActive = activeFilter === b.key;
+        const ariaLabel =
+          count !== null ? `${b.label}, ${count}` : b.label;
         return (
           <button
             key={b.key}
             type="button"
             role="tab"
             aria-selected={isActive}
-            className={`btn btn-sm d-flex align-items-center gap-1 ${isActive ? "active" : ""}`}
-            style={{ fontSize: "0.75rem" }}
+            title={b.label}
+            aria-label={ariaLabel}
+            className={`btn btn-sm bandeja-inbox-tab d-flex align-items-center justify-content-center gap-1 ${isActive ? "active" : ""}`}
             onClick={() => onFilter(b.key)}
           >
-            <i className={`ti ${b.icon}`} />
-            {b.label}
+            <i className={`ti ${b.icon}`} aria-hidden />
             {count !== null && (
-              <span className="badge rounded-pill ms-1">
-                {count}
+              <span className="badge rounded-pill bandeja-inbox-tab__n">
+                {count > 999 ? "999+" : count}
               </span>
             )}
           </button>

@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { formatUpstreamFetchError } from "@/lib/bffUpstreamError";
 
 export const runtime = "nodejs";
 
@@ -17,21 +18,23 @@ function backendBase(): string {
 
 export async function POST(req: NextRequest) {
   const base = backendBase();
+  const target = `${base}/api/auth/logout`;
   const cookieHeader = req.headers.get("cookie") ?? "";
 
   let up: Response;
   try {
-    up = await fetch(`${base}/api/auth/logout`, {
+    up = await fetch(target, {
       method: "POST",
       headers: {
         ...(cookieHeader ? { Cookie: cookieHeader } : {}),
         Accept: "application/json",
       },
       cache: "no-store",
+      signal: AbortSignal.timeout(8_000),
     });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, message: String(e) },
+      { ok: false, ...formatUpstreamFetchError(e, target) },
       { status: 502 }
     );
   }

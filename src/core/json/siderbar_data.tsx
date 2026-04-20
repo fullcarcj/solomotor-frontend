@@ -144,6 +144,39 @@ export const SidebarData = [
     ],
   },
 
+  // ── SUPERVISOR (Bloque 2 · NEW) ──────────────────────────────────────────
+  {
+    label: "Supervisión",
+    submenuOpen: false,
+    showSubRoute: false,
+    submenuHdr: "Supervisión",
+    submenuItems: [
+      {
+        label: "Supervisión",
+        link: "#",
+        icon: "shield-check",
+        submenu: true,
+        showSubRoute: false,
+        submenuItems: [
+          {
+            label: "Cola de revisión bot",
+            link: route.supervisorBotActions,
+            icon: "robot",
+            showSubRoute: false,
+            submenu: false,
+          },
+          {
+            label: "Excepciones",
+            link: route.supervisorExceptions,
+            icon: "alert-triangle",
+            showSubRoute: false,
+            submenu: false,
+          },
+        ],
+      },
+    ],
+  },
+
   {
     label: "Ventas",
     submenuOpen: false,

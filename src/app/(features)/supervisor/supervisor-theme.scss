@@ -1,0 +1,446 @@
+/* =================================================================
+   Supervisor & Bot-Actions — Bloque 2 Frontend · Fase 1
+   Tokens heredados del contexto dark del POS.
+================================================================= */
+
+/* ── Tokens locales ────────────────────────────────────────────── */
+:root {
+  --sv-bg:         #0d1117;
+  --sv-panel:      #161b22;
+  --sv-panel-2:    #1c2333;
+  --sv-border:     rgba(255,255,255,0.08);
+  --sv-text-hi:    #e2e8f0;
+  --sv-text-lo:    #9aa4b8;
+  --sv-text-mute:  #5e6a82;
+  --sv-accent:     #3b82f6;
+  --sv-ok:         #22c55e;
+  --sv-warn:       #f59e0b;
+  --sv-err:        #ef4444;
+}
+
+/* ================================================================
+   Handoff Badge (src/components/bandeja/HandoffBadge)
+================================================================= */
+.hb-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+
+  &--gray   { background: rgba(90,98,118,.18);  border: 1px solid rgba(90,98,118,.4);  color: #9aa4b8; }
+  &--blue   { background: rgba(59,130,246,.18); border: 1px solid rgba(59,130,246,.4); color: #60a5fa; }
+  &--green  { background: rgba(34,197,94,.18);  border: 1px solid rgba(34,197,94,.4);  color: #4ade80; }
+  &--orange { background: rgba(249,115,22,.18); border: 1px solid rgba(249,115,22,.4); color: #fb923c; }
+  &--purple { background: rgba(139,92,246,.18); border: 1px solid rgba(139,92,246,.4); color: #a78bfa; }
+}
+
+/* ================================================================
+   Exception Badge (src/components/bandeja/ExceptionBadge)
+================================================================= */
+.exc-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: default;
+
+  &--compact {
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .exc-badge-code { font-weight: 600; white-space: nowrap; }
+  .exc-badge-reason { opacity: 0.7; font-size: 10.5px; }
+}
+
+/* ================================================================
+   Exceptions Panel (src/components/bandeja/ExceptionsPanel)
+================================================================= */
+.exc-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+
+  &--empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+    color: var(--sv-text-mute);
+    font-size: 12px;
+  }
+
+  .exc-panel-skel {
+    height: 48px;
+    border-radius: 8px;
+    background: var(--sv-panel-2);
+    margin-bottom: 6px;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  .ant-list-item.exc-panel-row {
+    cursor: pointer;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--sv-border) !important;
+    transition: background 0.15s;
+
+    &:hover { background: var(--sv-panel-2); }
+  }
+
+  .exc-panel-row-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .exc-panel-code {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .exc-panel-chat {
+    font-family: monospace;
+    font-size: 11px;
+    color: var(--sv-text-lo);
+  }
+
+  .exc-panel-time {
+    font-size: 10px;
+    color: var(--sv-text-mute);
+    margin-left: auto;
+  }
+
+  .exc-resolve-btn {
+    background: rgba(34,197,94,.15);
+    border: 1px solid rgba(34,197,94,.3);
+    color: #4ade80;
+    border-radius: 5px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+
+    &:hover { background: rgba(34,197,94,.25); }
+  }
+}
+
+/* ================================================================
+   Bot Actions Timeline (src/components/bandeja/BotActionsTimeline)
+================================================================= */
+.bat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--sv-border);
+  margin-bottom: 12px;
+
+  .bat-header-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--sv-text-hi);
+  }
+}
+
+.bat-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--sv-panel-2);
+  border: 1px solid var(--sv-border);
+  color: var(--sv-text-lo);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: color .15s, background .15s;
+
+  &:hover {
+    background: rgba(59,130,246,.1);
+    color: #60a5fa;
+    border-color: rgba(59,130,246,.3);
+  }
+}
+
+.bat-item {
+  background: var(--sv-panel-2);
+  border: 1px solid var(--sv-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+
+  &--wrong {
+    background: rgba(239,68,68,.06);
+    border-color: rgba(239,68,68,.25);
+  }
+
+  .bat-item-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+
+  .bat-item-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--sv-text-hi);
+  }
+
+  .bat-item-time {
+    font-size: 10px;
+    color: var(--sv-text-mute);
+    font-family: monospace;
+  }
+
+  .bat-item-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--sv-text-lo);
+    margin-bottom: 8px;
+  }
+
+  .bat-item-review {
+    border-radius: 5px;
+    padding: 5px 9px;
+    font-size: 11px;
+    font-weight: 500;
+
+    &--ok  { background: rgba(34,197,94,.1);   color: #4ade80;  border: 1px solid rgba(34,197,94,.25); }
+    &--err { background: rgba(239,68,68,.1);   color: #f87171;  border: 1px solid rgba(239,68,68,.25); }
+  }
+
+  .bat-item-notes {
+    margin: 6px 0 0;
+    font-size: 10.5px;
+    color: var(--sv-text-lo);
+    font-style: italic;
+  }
+
+  .bat-item-pending {
+    padding: 6px 0 2px;
+  }
+
+  .bat-item-pending-label {
+    font-size: 10.5px;
+    color: var(--sv-text-mute);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+}
+
+.bat-mini-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 5px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+
+  &--ok {
+    background: rgba(34,197,94,.12);
+    border: 1px solid rgba(34,197,94,.3);
+    color: #4ade80;
+    &:hover { background: rgba(34,197,94,.22); }
+  }
+
+  &--err {
+    background: rgba(239,68,68,.12);
+    border: 1px solid rgba(239,68,68,.3);
+    color: #f87171;
+    &:hover { background: rgba(239,68,68,.22); }
+  }
+}
+
+.bat-review-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--sv-panel-2);
+  border: 1px solid var(--sv-border);
+  color: var(--sv-text-lo);
+  transition: all .15s;
+
+  &--active-ok {
+    background: rgba(34,197,94,.15);
+    border-color: rgba(34,197,94,.4);
+    color: #4ade80;
+  }
+
+  &--active-err {
+    background: rgba(239,68,68,.15);
+    border-color: rgba(239,68,68,.4);
+    color: #f87171;
+  }
+
+  &:hover:not(.bat-review-btn--active-ok):not(.bat-review-btn--active-err) {
+    background: var(--sv-panel);
+    border-color: rgba(255,255,255,.15);
+    color: var(--sv-text-hi);
+  }
+}
+
+/* ================================================================
+   Supervisor Queue (BotActionsReviewQueue / SupervisorExceptionsPanel)
+================================================================= */
+.sup-queue {
+  padding: 20px 24px;
+  min-height: calc(100vh - 65px);
+  background: var(--sv-bg);
+}
+
+.sup-queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--sv-border);
+}
+
+.sup-queue-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--sv-text-hi);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sup-queue-new-tag {
+  background: rgba(59,130,246,.25);
+  border: 1px solid rgba(59,130,246,.5);
+  color: #60a5fa;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sup-filters {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.sup-review-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(59,130,246,.15);
+  border: 1px solid rgba(59,130,246,.3);
+  color: #60a5fa;
+  border-radius: 5px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s;
+
+  &:hover { background: rgba(59,130,246,.25); }
+
+  &--secondary {
+    background: rgba(90,98,118,.1);
+    border-color: rgba(90,98,118,.25);
+    color: var(--sv-text-mute);
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+}
+
+/* ================================================================
+   Inline NEW tag genérico para destacar features nuevas en vistas
+================================================================= */
+.feature-new-tag {
+  display: inline-block;
+  background: rgba(59,130,246,.2);
+  border: 1px solid rgba(59,130,246,.45);
+  color: #60a5fa;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+
+/* ================================================================
+   Sección BotActions + Excepciones en ChatContextPanel
+================================================================= */
+.mu-ficha-tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--sv-border);
+  margin: 0 -1px 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar { display: none; }
+}
+
+.mu-ficha-tab {
+  padding: 8px 14px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--sv-text-mute);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color .15s;
+
+  &--active {
+    color: var(--sv-accent);
+    border-bottom-color: var(--sv-accent);
+    font-weight: 600;
+  }
+
+  &:hover:not(.mu-ficha-tab--active) {
+    color: var(--sv-text-hi);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}

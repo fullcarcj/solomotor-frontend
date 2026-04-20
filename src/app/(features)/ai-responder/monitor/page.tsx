@@ -1,11 +1,27 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, type ReactNode } from 'react';
 import { useAiResponderStats } from '@/hooks/useAiResponderStats';
 import { useAiResponderLog }   from '@/hooks/useAiResponderLog';
 import type { AiResponderStats }  from '@/types/ai-responder';
 import type { AiResponderLogAction, AiResponderLogProvider } from '@/types/ai-responder';
 import './ai-monitor-theme.scss';
+
+/** Mismo patrón que /ventas/tablero y /bandeja: el tema aplica margin-left al .page-wrapper. */
+function FeatureLayout({ children }: { children: ReactNode }) {
+  return (
+    <div className="page-wrapper">
+      <div className="content p-0">{children}</div>
+    </div>
+  );
+}
+
+/** Parte el título del hero en before · <em> · after (una sola ocurrencia de `em`). */
+function splitHeroEmphasis(title: string, em: string): { before: string; after: string } {
+  const i = title.indexOf(em);
+  if (i < 0) return { before: title, after: '' };
+  return { before: title.slice(0, i), after: title.slice(i + em.length) };
+}
 
 // ── Tipos de salud ────────────────────────────────────────────────────────
 
@@ -297,6 +313,7 @@ export default function AiResponderMonitorPage() {
   // ── Render: loading inicial ──────────────────────────────────────────
   if (isLoading) {
     return (
+      <FeatureLayout>
       <div className="ai-monitor">
         <div className="am-topbar">
           <div className="am-topbar-left">
@@ -314,12 +331,14 @@ export default function AiResponderMonitorPage() {
         <SkeletonKpi />
         <SkeletonLog />
       </div>
+      </FeatureLayout>
     );
   }
 
   // ── Render: error de red ─────────────────────────────────────────────
   if (isNetError && !stats) {
     return (
+      <FeatureLayout>
       <div className="ai-monitor">
         <div className="am-topbar">
           <div className="am-topbar-left">
@@ -336,6 +355,7 @@ export default function AiResponderMonitorPage() {
           </button>
         </div>
       </div>
+      </FeatureLayout>
     );
   }
 
@@ -356,8 +376,11 @@ export default function AiResponderMonitorPage() {
   const errorsValue  = todayErrors;
   const errorsColor  = errorsValue > 0 ? '#fca5a5' : '#86efac';
 
+  const heroParts = splitHeroEmphasis(hcfg.title, hcfg.em);
+
   // ── Render: página completa ──────────────────────────────────────────
   return (
+    <FeatureLayout>
     <div className="ai-monitor">
 
       {/* Auth error banner (no bloquea la página) */}
@@ -407,9 +430,9 @@ export default function AiResponderMonitorPage() {
               '--_em-gradient': `linear-gradient(135deg, ${hcfg.gradient[0]}, ${hcfg.gradient[1]})`,
             } as React.CSSProperties}
           >
-            {hcfg.title.replace(hcfg.em, '')}
+            {heroParts.before}
             <em>{hcfg.em}</em>
-            {hcfg.title.endsWith(hcfg.em) ? '' : hcfg.title.slice(hcfg.title.lastIndexOf(hcfg.em) + hcfg.em.length)}
+            {heroParts.after}
           </h1>
           <p className="am-hero-sub">
             Último ciclo: <code>{lastCycleText}</code>
@@ -548,6 +571,7 @@ export default function AiResponderMonitorPage() {
                     <th>Acción</th>
                     <th>Proveedor</th>
                     <th>Msg ID</th>
+                    <th>Mensaje entrante</th>
                     <th>Reasoning</th>
                   </tr>
                 </thead>
@@ -555,7 +579,7 @@ export default function AiResponderMonitorPage() {
                   {filteredLog.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={6}
                         style={{
                           textAlign: 'center',
                           padding: '28px',
@@ -590,6 +614,17 @@ export default function AiResponderMonitorPage() {
                           )}
                         </td>
                         <td
+                          className="log-inbound-cell"
+                          data-label="Entrante"
+                          title={row.input_text ?? ''}
+                        >
+                          <span className="log-inbound-text">
+                            {row.input_text ?? (
+                              <span style={{ opacity: .4 }}>—</span>
+                            )}
+                          </span>
+                        </td>
+                        <td
                           className="reasoning-cell"
                           data-label="Reasoning"
                           title={row.reasoning ?? ''}
@@ -608,5 +643,6 @@ export default function AiResponderMonitorPage() {
         )}
       </div>
     </div>
+    </FeatureLayout>
   );
 }

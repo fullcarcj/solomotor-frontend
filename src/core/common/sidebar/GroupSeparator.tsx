@@ -4,14 +4,13 @@ interface Props {
   label: string;
 }
 
-/** Separador entre grupos del menú dinámico (solo lectura). */
+/** Separador entre grupos del menú dinámico. */
 export default function GroupSeparator({ label }: Props) {
   return (
-    <li
-      className="list-unstyled border-0 bg-transparent py-0"
-      style={{ listStyle: "none" }}
-    >
-      <span className="sidebar-group-sep">{label}</span>
+    <li className="sidebar-group-item">
+      <span className="sidebar-group-sep">
+        <span className="sidebar-group-sep__text">{label}</span>
+      </span>
     </li>
   );
 }

@@ -11,30 +11,31 @@ interface Props {
 }
 
 export default function SidebarSection({ section, pathname }: Props) {
-  const [open, setOpen] = useState(false);
+  const hasActiveChild = section.items.some((item) => item.path && pathname === item.path);
+  const [open, setOpen] = useState(hasActiveChild);
   const icon = section.icon?.trim() || "layout-grid";
   const pending = section.moduleStatus === "pending";
 
   return (
-    <li className="submenu">
+    <li className="submenu sidebar-section">
       <Link
         href="#"
         onClick={(e) => {
           e.preventDefault();
           setOpen((o) => !o);
         }}
-        className={open ? "subdrop" : ""}
+        className={`sidebar-section__toggle ${open ? "subdrop" : ""}`}
       >
-        <i className={`ti ti-${icon} me-2`} />
-        <span className="custom-active-span">{section.label}</span>
+        <span className={`sidebar-section__icon ${open || hasActiveChild ? "sidebar-section__icon--active" : ""}`}>
+          <i className={`ti ti-${icon}`} />
+        </span>
+        <span className="sidebar-section__label">{section.label}</span>
         {pending && (
-          <span className="badge bg-secondary ms-1" style={{ fontSize: 9 }}>
-            Próximamente
-          </span>
+          <span className="badge bg-secondary sidebar-section__badge">Próximamente</span>
         )}
-        <span className="menu-arrow" />
+        <i className={`ti ti-chevron-right sidebar-section__arrow ${open ? "sidebar-section__arrow--open" : ""}`} />
       </Link>
-      <ul style={{ display: open ? "block" : "none" }}>
+      <ul style={{ display: open ? "block" : "none" }} className="sidebar-section__items">
         {section.items.map((item) => (
           <li key={item.id}>
             <SidebarItem item={item} pathname={pathname} />

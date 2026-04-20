@@ -50,23 +50,12 @@ const initialState: MenuState = {
  * Cada item usa dedupe por path: si el backend ya lo incluye, no se duplica.
  *
  * TODO · eliminar cuando backend incluya estas rutas en la tabla de menú:
- *   - /ventas/tablero          → sección Ventas
  *   - /workspace               → sección Bandeja
  *   - /ventas/tablero          → sección Bandeja (acceso cruzado)
  *   - /ai-responder/monitor    → sección AI Responder
  */
 function augmentMenuWithSupervisor(menu: MenuSection[] | null): MenuSection[] | null {
   if (!Array.isArray(menu) || menu.length === 0) return menu;
-
-  // ── Items a inyectar en "Ventas" ─────────────────────────────
-  const tableroLeaf: MenuItemLeaf = {
-    id: "ventas_tablero",
-    label: "Tablero",
-    path: "/ventas/tablero",
-    minRole: "vendedor",
-    pendingMigration: false,
-    future: false,
-  };
 
   // ── Items a inyectar en "Bandeja" ────────────────────────────
   const workspaceLeaf: MenuItemLeaf = {
@@ -107,14 +96,6 @@ function augmentMenuWithSupervisor(menu: MenuSection[] | null): MenuSection[] | 
     ],
   };
 
-  const isVentasSection = (s: MenuSection): boolean => {
-    const key = (s.moduleKey ?? "").toLowerCase();
-    if (key === "ventas" || key === "sales") return true;
-    const label = (s.label ?? "").toLowerCase();
-    const group = (s.group ?? "").toLowerCase();
-    return group.includes("ventas") || label === "ventas";
-  };
-
   const isBandejaSection = (s: MenuSection): boolean => {
     const key = (s.moduleKey ?? "").toLowerCase();
     if (key === "bandeja" || key === "inbox") return true;
@@ -135,12 +116,84 @@ function augmentMenuWithSupervisor(menu: MenuSection[] | null): MenuSection[] | 
   );
 
   const patched = menu.map((section) => {
-    if (isVentasSection(section))  return inject(section, [tableroLeaf]);
     if (isBandejaSection(section)) return inject(section, [workspaceLeaf, tableroInBandejaLeaf]);
     return section;
   });
 
   return alreadyHasAiSection ? patched : [...patched, aiMonitorSection];
+}
+
+/**
+ * Parche de presentación · renombres y ocultamientos acordados en FE (Apr 2026).
+ * Opera sobre rutas y etiquetas del backend; no requiere cambios en BD.
+ *
+ * TODO · eliminar cada entrada cuando el backend refleje el cambio correspondiente.
+ */
+function applyFrontendPatches(menu: MenuSection[] | null): MenuSection[] | null {
+  if (!Array.isArray(menu) || menu.length === 0) return menu;
+
+  // Paths de items a eliminar del menú
+  const REMOVE_PATHS = new Set([
+    "/channels-monitor",  // Monitor de Canales — ruta 404
+    "/dashboard",         // Panel Global — duplicado de inicio (erpDashboard)
+    "/ventas/tablero",    // Tablero — ocultar de sección Ventas
+  ]);
+
+  // Etiquetas a eliminar (fallback si el path difiere entre entornos)
+  const REMOVE_LABELS = new Set([
+    "Panel Global",
+    "Monitor de Canales",
+    "Tablero",
+  ]);
+
+  // Renombres por path (prioridad sobre etiqueta)
+  const RENAME_BY_PATH: Record<string, string> = {
+    "/ventas/nueva":   "Crear venta",
+    "/ventas/pedidos": "Bandeja de órdenes",
+  };
+
+  // Renombres por etiqueta (fallback)
+  const RENAME_BY_LABEL: Record<string, string> = {
+    "Nueva venta (POS)": "Crear venta",
+    "Todos los pedidos": "Bandeja de órdenes",
+    "Pedidos y Ventas":  "Bandeja de órdenes",
+  };
+
+  // Secciones a renombrar por etiqueta actual
+  const RENAME_SECTION: Record<string, string> = {
+    "Ventas Omnicanal": "Ventas",
+  };
+
+  return menu.map((section) => {
+    const newSectionLabel = RENAME_SECTION[section.label] ?? section.label;
+
+    const newItems = section.items
+      .filter((item) => {
+        if (REMOVE_PATHS.has(item.path)) return false;
+        // Solo aplica REMOVE_LABELS dentro de secciones no-Bandeja para evitar
+        // ocultar un "Tablero" legítimo en bandeja si coincide por nombre
+        const isBandeja = ["bandeja", "inbox"].includes((section.moduleKey ?? "").toLowerCase());
+        if (!isBandeja && REMOVE_LABELS.has(item.label)) return false;
+        return true;
+      })
+      .map((item) => {
+        const renamedLabel =
+          RENAME_BY_PATH[item.path] ??
+          RENAME_BY_LABEL[item.label] ??
+          item.label;
+        return renamedLabel !== item.label ? { ...item, label: renamedLabel } : item;
+      });
+
+    if (
+      newSectionLabel === section.label &&
+      newItems.length === section.items.length &&
+      newItems.every((item, i) => item === section.items[i])
+    ) {
+      return section;
+    }
+
+    return { ...section, label: newSectionLabel, items: newItems };
+  });
 }
 
 export const fetchMenu = createAsyncThunk(
@@ -161,15 +214,17 @@ export const fetchMenu = createAsyncThunk(
         return rejectWithValue(`HTTP ${res.status}`);
       }
       const body = (await res.json()) as MenuApiResponse | MenuSection[];
+      const patch = (m: MenuSection[] | null) =>
+        applyFrontendPatches(augmentMenuWithSupervisor(m));
       if (Array.isArray(body)) {
         return {
-          menu: augmentMenuWithSupervisor(body),
+          menu: patch(body),
           role: null as string | null,
           canal: null as string | null,
         };
       }
       return {
-        menu: augmentMenuWithSupervisor(body.menu ?? null),
+        menu: patch(body.menu ?? null),
         role: body.role ?? null,
         canal: body.canal ?? null,
       };

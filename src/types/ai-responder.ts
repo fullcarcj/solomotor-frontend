@@ -108,10 +108,13 @@ export type AiResponderLogProvider = 'groq' | 'human' | 'system';
 
 export interface AiResponderLogRow {
   id:            number;
+  /** ID del mensaje CRM (inbound) asociado al evento; backend envía `crm_message_id`. */
   message_id:    number | null;
   customer_id:   number | null;
   action_taken:  AiResponderLogAction;
   provider_used: AiResponderLogProvider;
+  /** Texto entrante del cliente que disparó la respuesta (columna `input_text` en BD). */
+  input_text:    string | null;
   reasoning:     string | null;
   created_at:    string;
 }
