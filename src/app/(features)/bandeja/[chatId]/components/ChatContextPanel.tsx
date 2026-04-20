@@ -2,11 +2,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { InboxChat } from "@/types/inbox";
+import { CHAT_STAGE_LABELS, CHAT_STAGE_ORDER } from "@/types/inbox";
 import type { CustomerDetail } from "@/types/customers";
 import type { Sale } from "@/types/sales";
 import SaleStatusBadge from "@/app/(features)/ventas/pedidos/components/SaleStatusBadge";
 import { IdentifyCustomerSection } from "@/app/(features)/bandeja/components/IdentifyCustomerSection";
-import { ChatStageSection } from "@/app/(features)/bandeja/components/ChatStageSection";
 
 type ActionType = "quote" | "pay" | "pos" | "dispatch" | null;
 
@@ -23,21 +23,42 @@ interface Props {
   onCustomerLinked?: () => void;
 }
 
-function initials(name: string | null): string {
+/* ── Utilidades ──────────────────────────────────────────────── */
+
+function initials(name: string | null | undefined): string {
   if (!name) return "?";
   return name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? "").join("");
 }
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
-  try { return new Date(iso).toLocaleDateString("es-VE", { day: "2-digit", month: "short", year: "numeric" }); }
-  catch { return iso; }
+  try {
+    return new Date(iso).toLocaleDateString("es-VE", { day: "2-digit", month: "short", year: "numeric" });
+  } catch { return iso; }
 }
 
-function fmtUSD(v: number | string): string {
+function fmtUSD(v: number | string | null | undefined): string {
+  if (v == null) return "—";
   const n = Number(v);
   return Number.isFinite(n) ? `$${n.toFixed(2)}` : "—";
 }
+
+/* ── Skeleton ──────────────────────────────────────────────────*/
+function Skeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {Array.from({ length: rows }).map((_, i) => (
+        <div
+          key={i}
+          className="mu-skeleton"
+          style={{ height: 12, width: i % 2 === 0 ? "100%" : "70%", borderRadius: 4 }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ── Sección ML question (solo para source_type = ml_question) ── */
 
 function mlQuestionRoot(json: Record<string, unknown>): Record<string, unknown> {
   const d = json.data;
@@ -45,7 +66,6 @@ function mlQuestionRoot(json: Record<string, unknown>): Record<string, unknown> 
   return json;
 }
 
-/** URL pública VE; si hay permalink del backend, usarlo. */
 function mlVeItemUrl(itemIdRaw: string | null | undefined, permalink: string | null | undefined): string | null {
   if (permalink && permalink.startsWith("http")) return permalink;
   if (!itemIdRaw) return null;
@@ -61,146 +81,159 @@ function itemIdFromRow(r: Record<string, unknown>): string | null {
   return String(v);
 }
 
-function MlQuestionContextSection({
-  chatId,
-  chat,
-}: {
-  chatId: string;
-  chat: InboxChat | null;
-}) {
+function MlQuestionContextSection({ chatId, chat }: { chatId: string; chat: InboxChat | null }) {
   const [loadingQ, setLoadingQ] = useState(true);
-  const [qError, setQError] = useState<string | null>(null);
-  const [qRow, setQRow] = useState<Record<string, unknown> | null>(null);
+  const [qError, setQError]     = useState<string | null>(null);
+  const [qRow, setQRow]         = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setLoadingQ(true);
-    setQError(null);
+    setLoadingQ(true); setQError(null);
     void (async () => {
       try {
         const res = await fetch(`/api/inbox/${encodeURIComponent(chatId)}/ml-question`, {
-          credentials: "include",
-          cache: "no-store",
+          credentials: "include", cache: "no-store",
         });
         const j = (await res.json().catch(() => ({}))) as Record<string, unknown>;
         if (cancelled) return;
-        if (!res.ok || res.status === 404) {
-          setQError("No se pudo cargar el detalle de la pregunta");
-          setQRow(null);
-          return;
-        }
+        if (!res.ok || res.status === 404) { setQError("No se pudo cargar la pregunta"); setQRow(null); return; }
         setQRow(mlQuestionRoot(j));
       } catch {
-        if (!cancelled) setQError("No se pudo cargar el detalle de la pregunta");
+        if (!cancelled) setQError("No se pudo cargar la pregunta");
       } finally {
         if (!cancelled) setLoadingQ(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [chatId]);
 
-  const questionText =
-    qRow && typeof qRow.question_text === "string"
-      ? qRow.question_text
-      : qRow && typeof qRow.text === "string"
-        ? qRow.text
-        : null;
-  const buyer =
-    qRow && typeof qRow.buyer_nickname === "string"
-      ? qRow.buyer_nickname
-      : qRow && typeof qRow.buyer === "string"
-        ? qRow.buyer
-        : null;
-
-  const itemId = useMemo(() => (qRow ? itemIdFromRow(qRow) : null), [qRow]);
-  const permalink =
-    qRow && typeof qRow.permalink === "string" && qRow.permalink.startsWith("http")
-      ? qRow.permalink
-      : null;
-  const mlUrl = useMemo(() => mlVeItemUrl(itemId, permalink), [itemId, permalink]);
-
-  const mlQid = chat?.ml_question_id;
+  const questionText = qRow && (typeof qRow.question_text === "string" ? qRow.question_text : typeof qRow.text === "string" ? qRow.text : null);
+  const buyer        = qRow && (typeof qRow.buyer_nickname === "string" ? qRow.buyer_nickname : typeof qRow.buyer === "string" ? qRow.buyer : null);
+  const itemId       = useMemo(() => (qRow ? itemIdFromRow(qRow) : null), [qRow]);
+  const permalink    = qRow && typeof qRow.permalink === "string" && qRow.permalink.startsWith("http") ? qRow.permalink : null;
+  const mlUrl        = useMemo(() => mlVeItemUrl(itemId, permalink), [itemId, permalink]);
+  const mlQid        = chat?.ml_question_id;
 
   return (
-    <div className="p-3 border-bottom bg-white">
-      <div
-        className="small fw-semibold text-muted text-uppercase mb-2"
-        style={{ letterSpacing: ".05em", fontSize: "0.7rem" }}
-      >
-        Pregunta ML
-      </div>
-      {mlQid != null && mlQid !== "" && (
-        <div className="text-muted small mb-2 font-monospace">ml_question_id: {String(mlQid)}</div>
-      )}
-      {loadingQ ? (
-        <div className="placeholder-glow">
-          <div className="placeholder col-12 rounded mb-2" style={{ height: 48 }} />
+    <div className="mu-ficha-section">
+      <h4 className="mu-ficha-title">Pregunta ML</h4>
+      {mlQid != null && (
+        <div style={{ fontSize: 9, color: "var(--mu-ink-mute)", fontFamily: "monospace", marginBottom: 6 }}>
+          ml_question_id: {String(mlQid)}
         </div>
-      ) : qError ? (
-        <p className="text-danger small mb-0">{qError}</p>
+      )}
+      {loadingQ ? <Skeleton rows={2} /> : qError ? (
+        <p style={{ color: "var(--mu-bad)", fontSize: 11, margin: 0 }}>{qError}</p>
       ) : (
         <>
-          <div className="small fw-semibold mb-1">Pregunta</div>
-          {questionText ? (
-            <blockquote className="small mb-3 ps-2 border-start border-3 border-warning text-body-secondary">
+          {questionText && (
+            <blockquote style={{
+              fontSize: 12, margin: "0 0 8px", padding: "8px 10px",
+              borderLeft: "3px solid var(--mu-accent)", background: "var(--mu-panel-2)",
+              borderRadius: "0 6px 6px 0", color: "var(--mu-ink-dim)", lineHeight: 1.5,
+            }}>
               {questionText}
             </blockquote>
-          ) : (
-            <p className="text-muted small">—</p>
           )}
-
-          <div className="small fw-semibold mb-1">Ítem preguntado</div>
-          <p className="small font-monospace mb-2">{itemId ?? "—"}</p>
-
-          {buyer && (
-            <div className="small text-muted mb-2">
-              <span className="fw-semibold text-body-secondary">Comprador: </span>
-              {buyer}
-            </div>
-          )}
-
-          {mlUrl ? (
-            <a
-              href={mlUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-sm btn-outline-primary w-100"
-            >
-              Ver en ML
+          {buyer && <div style={{ fontSize: 10, color: "var(--mu-ink-mute)", marginBottom: 4 }}>Comprador: {buyer}</div>}
+          {itemId && <div style={{ fontSize: 10, fontFamily: "monospace", color: "var(--mu-ink-mute)", marginBottom: 6 }}>{itemId}</div>}
+          {mlUrl && (
+            <a href={mlUrl} target="_blank" rel="noopener noreferrer"
+               style={{ fontSize: 10, color: "var(--mu-accent)", textDecoration: "underline" }}>
+              Ver en MercadoLibre →
             </a>
-          ) : null}
+          )}
         </>
       )}
     </div>
   );
 }
 
-const ACTIONS: { key: ActionType; label: string; icon: string; color: string }[] = [
-  { key: "quote",    label: "+ Cotizar",    icon: "ti-file-invoice",  color: "outline-primary" },
-  { key: "pay",      label: "$ Cobrar",     icon: "ti-cash",          color: "outline-success" },
-  { key: "pos",      label: "POS rápido",   icon: "ti-shopping-cart", color: "outline-warning" },
-  { key: "dispatch", label: "→ Despachar",  icon: "ti-truck",         color: "outline-secondary" },
-];
+/* ── Pipeline stage en ficha ─────────────────────────────────── */
+function FichaStageSection({ chat }: { chat: InboxChat | null }) {
+  if (!chat?.chat_stage) return null;
+  const currentIdx = CHAT_STAGE_ORDER.indexOf(chat.chat_stage);
 
-/* ─── Skeleton ─── */
-function CustomerSkeleton() {
   return (
-    <div className="placeholder-glow">
-      <div className="d-flex align-items-center gap-2 mb-3">
-        <div className="rounded-circle placeholder bg-secondary" style={{ width: 44, height: 44 }} />
-        <div className="flex-grow-1">
-          <div className="placeholder col-7 rounded mb-1" style={{ height: 14 }} />
-          <div className="placeholder col-5 rounded" style={{ height: 12 }} />
-        </div>
+    <div className="mu-ficha-section">
+      <h4 className="mu-ficha-title">Etapa del pipeline</h4>
+      <div className="chat-stage-pipeline">
+        {CHAT_STAGE_ORDER.map((stage, idx) => {
+          const isPast    = idx < currentIdx;
+          const isCurrent = idx === currentIdx;
+          return (
+            <div key={stage} className={`chat-stage-step${isPast ? " past" : isCurrent ? " current" : ""}`}>
+              <div className="chat-stage-dot" />
+              <div className="chat-stage-label">{CHAT_STAGE_LABELS[stage]}</div>
+            </div>
+          );
+        })}
       </div>
-      <div className="placeholder col-12 rounded mb-2" style={{ height: 12 }} />
-      <div className="placeholder col-8 rounded" style={{ height: 12 }} />
     </div>
   );
 }
 
+/* ── Orden vinculada (CONDICIONAL — Decisión 6 Sprint 6A) ──────
+   Regla: si chat.order !== null → mostrar. Si null → NO renderizar.
+   NO se muestra placeholder "sin orden". */
+function FichaOrdenSection({ chat }: { chat: InboxChat }) {
+  if (!chat.order) return null;
+
+  const o = chat.order;
+  const statusLabel = o.payment_status ?? "—";
+  const fulfillLabel = o.fulfillment_type ?? "—";
+
+  return (
+    <div className="mu-ficha-section">
+      <h4 className="mu-ficha-title">
+        Estado
+        <Link href="/ventas/pedidos" className="mu-ficha-link">HISTORIAL →</Link>
+      </h4>
+      <div className="mu-estado-card">
+        <div className="mu-estado-tipo">
+          ORDEN · #{o.id}
+        </div>
+        <div className="mu-estado-num">
+          Pago: {statusLabel} · Entrega: {fulfillLabel}
+        </div>
+        <div style={{ fontSize: 10, color: "var(--mu-ink-mute)", fontFamily: "monospace", marginTop: 4 }}>
+          CH-{o.channel_id}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Acciones (placeholder visual, funcionalidad en Sprint 6B) ─ */
+const ACTIONS: { key: ActionType; label: string; icon: string }[] = [
+  { key: "quote",    label: "Cotizar",    icon: "ti-file-invoice" },
+  { key: "pay",      label: "Cobrar",     icon: "ti-cash" },
+  { key: "pos",      label: "POS",        icon: "ti-shopping-cart" },
+  { key: "dispatch", label: "Despachar",  icon: "ti-truck" },
+];
+
+function FichaAccionesSection({ activeAction, onSetAction }: { activeAction: ActionType; onSetAction: (a: ActionType) => void }) {
+  return (
+    <div className="mu-ficha-section">
+      <h4 className="mu-ficha-title">Acciones</h4>
+      <div className="mu-ficha-actions">
+        {ACTIONS.map(a => (
+          <button
+            key={a.key}
+            type="button"
+            className={`mu-ficha-action-btn${activeAction === a.key ? " mu-ficha-action-btn--primary" : ""}`}
+            onClick={() => onSetAction(activeAction === a.key ? null : a.key)}
+          >
+            <i className={`ti ${a.icon}`} style={{ fontSize: "0.9rem" }} />
+            {a.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── Componente principal ─────────────────────────────────────── */
 export default function ChatContextPanel({
   chatId, chat, customerId, customer, recentOrders,
   loadingCustomer, loadingOrders, activeAction, onSetAction,
@@ -209,152 +242,156 @@ export default function ChatContextPanel({
   const hasCustomer = customerId !== null && customerId !== undefined;
 
   return (
-    <div className="d-flex flex-column h-100 overflow-y-auto" style={{ background: "var(--bs-light)" }}>
+    <div className="mu-ficha">
 
+      {/* ML question solo si aplica */}
       {chat?.source_type === "ml_question" && (
         <MlQuestionContextSection chatId={chatId} chat={chat} />
       )}
 
-      {/* ── Sección 1: Ficha cliente ─────────────────────────── */}
-      <div className="p-3 border-bottom bg-white">
-        <div className="small fw-semibold text-muted text-uppercase mb-2" style={{ letterSpacing: ".05em", fontSize: "0.7rem" }}>
+      {/* ── Sección: Cliente ─────────────────────────── */}
+      <div className="mu-ficha-section">
+        <h4 className="mu-ficha-title">
           Cliente
-        </div>
+          {hasCustomer && customerId && (
+            <Link href={`/clientes/historial?id=${customerId}`} className="mu-ficha-link">
+              VER FICHA →
+            </Link>
+          )}
+        </h4>
+
         {!hasCustomer ? (
-          <div className="py-1">
-            <div className="d-flex align-items-center gap-1 mb-2">
-              <i className="ti ti-user-question text-muted" />
-              <span className="text-muted small">Cliente no identificado</span>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, color: "var(--mu-ink-mute)", fontSize: 12 }}>
+              <i className="ti ti-user-question" />
+              <span>Cliente no identificado</span>
             </div>
-            <IdentifyCustomerSection
-              chatId={chatId}
-              onLinked={onCustomerLinked ?? (() => {})}
-            />
+            <IdentifyCustomerSection chatId={chatId} onLinked={onCustomerLinked ?? (() => {})} />
           </div>
         ) : loadingCustomer ? (
-          <CustomerSkeleton />
+          <Skeleton rows={3} />
         ) : customer ? (
           <>
-            <div className="d-flex align-items-center gap-2 mb-2">
-              <div className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
-                   style={{ width: 44, height: 44, fontSize: "0.85rem" }}>
+            <div className="mu-ficha-cliente">
+              <div className="mu-avatar" style={{ width: 44, height: 44, fontSize: 14, flexShrink: 0 }}>
                 {initials(customer.full_name ?? chat?.customer_name)}
               </div>
-              <div className="min-w-0">
-                <div className="fw-semibold small text-truncate">{customer.full_name ?? chat?.customer_name}</div>
-                <div className="text-muted" style={{ fontSize: "0.75rem" }}>{customer.phone ?? chat?.phone}</div>
+              <div>
+                <div className="mu-ficha-cliente-name">
+                  {customer.full_name ?? chat?.customer_name ?? "—"}
+                </div>
+                {customer.client_segment && (
+                  <div className="mu-ficha-cliente-id">{customer.client_segment}</div>
+                )}
               </div>
             </div>
-            {customer.first_order_date && (
-              <div className="text-muted small mb-2">
-                <i className="ti ti-calendar me-1" />Cliente desde: {fmtDate(customer.first_order_date)}
+
+            <dl className="mu-kv">
+              <dt>Teléfono</dt>
+              <dd>{customer.phone ?? chat?.phone ?? "—"}</dd>
+
+              {customer.city && (
+                <>
+                  <dt>Zona</dt>
+                  <dd>{customer.city}</dd>
+                </>
+              )}
+
+              {customer.first_order_date && (
+                <>
+                  <dt>Cliente desde</dt>
+                  <dd>{fmtDate(customer.first_order_date)}</dd>
+                </>
+              )}
+            </dl>
+
+            {/* Stats compactos */}
+            <div className="mu-ficha-stats" style={{ marginTop: 10 }}>
+              <div className="mu-stat-box">
+                <div className="mu-stat-value">{customer.total_orders}</div>
+                <div className="mu-stat-label">Órdenes</div>
               </div>
-            )}
-            <div className="row g-2 mb-2">
-              <div className="col-6">
-                <div className="border rounded text-center py-2 bg-light">
-                  <div className="fw-bold">{customer.total_orders}</div>
-                  <div className="text-muted" style={{ fontSize: "0.7rem" }}>Órdenes</div>
-                </div>
-              </div>
-              <div className="col-6">
-                <div className="border rounded text-center py-2 bg-light">
-                  <div className="fw-bold small">{fmtUSD(customer.total_spent_usd)}</div>
-                  <div className="text-muted" style={{ fontSize: "0.7rem" }}>Total gastado</div>
-                </div>
+              <div className="mu-stat-box">
+                <div className="mu-stat-value" style={{ fontSize: 16 }}>{fmtUSD(customer.total_spent_usd)}</div>
+                <div className="mu-stat-label">Total gastado</div>
               </div>
             </div>
-            <Link
-              href={`/clientes/historial?id=${customerId}`}
-              className="btn btn-sm btn-outline-primary w-100"
-            >
-              Ver historial completo →
-            </Link>
           </>
         ) : (
-          <div className="text-muted small text-center py-2">Sin datos del cliente</div>
+          <p style={{ color: "var(--mu-ink-mute)", fontSize: 11, margin: 0 }}>Sin datos del cliente</p>
         )}
       </div>
 
-      {/* ── Sección 1b: Pipeline de etapas ─────────────────── */}
-      <ChatStageSection currentStage={chat?.chat_stage} />
+      {/* ── Sección: Orden vinculada (CONDICIONAL) ─── */}
+      {chat && <FichaOrdenSection chat={chat} />}
 
-      {/* ── Sección 2: Acciones ─────────────────────────────── */}
-      <div className="p-3 border-bottom bg-white mt-2">
-        <div className="small fw-semibold text-muted text-uppercase mb-2" style={{ letterSpacing: ".05em", fontSize: "0.7rem" }}>
-          Acciones
-        </div>
-        <div className="row g-2">
-          {ACTIONS.map(a => (
-            <div key={a.key} className="col-6">
-              <button
-                className={`btn btn-sm w-100 d-flex align-items-center justify-content-center gap-1 ${
-                  activeAction === a.key ? a.color.replace("outline-", "") + " text-white" : `btn-${a.color}`
-                }`}
-                onClick={() => onSetAction(activeAction === a.key ? null : a.key)}
-              >
-                <i className={`ti ${a.icon}`} style={{ fontSize: "0.85rem" }} />
-                <span style={{ fontSize: "0.78rem" }}>{a.label}</span>
-              </button>
+      {/* ── Sección: Etapa pipeline ──────────────────── */}
+      <FichaStageSection chat={chat} />
+
+      {/* ── Sección: Acciones ────────────────────────── */}
+      <FichaAccionesSection activeAction={activeAction} onSetAction={onSetAction} />
+
+      {/* ── Sección: Órdenes recientes ───────────────── */}
+      {hasCustomer && (
+        <div className="mu-ficha-section">
+          <h4 className="mu-ficha-title">Órdenes recientes</h4>
+          {loadingOrders ? (
+            <Skeleton rows={3} />
+          ) : recentOrders.length === 0 ? (
+            <p style={{ color: "var(--mu-ink-mute)", fontSize: 11, margin: 0 }}>Sin órdenes activas</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {recentOrders.map(o => (
+                <Link
+                  key={String(o.id)}
+                  href="/ventas/pedidos"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    background: "var(--mu-panel)",
+                    border: "1px solid var(--mu-line)",
+                    textDecoration: "none",
+                    fontSize: 11,
+                    color: "inherit",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontFamily: "monospace", color: "var(--mu-ink)", fontSize: 11 }}>
+                      #{o.id}
+                    </div>
+                    <div style={{ color: "var(--mu-ink-mute)", fontSize: 9, marginTop: 2 }}>
+                      {fmtDate(o.created_at)}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontWeight: 700, color: "var(--mu-ink)" }}>{fmtUSD(o.total_usd)}</div>
+                    <SaleStatusBadge status={o.status} />
+                  </div>
+                </Link>
+              ))}
             </div>
-          ))}
+          )}
         </div>
-      </div>
+      )}
 
-      {/* ── Sección 3: Órdenes recientes ────────────────────── */}
-      <div className="p-3 border-bottom bg-white mt-2">
-        <div className="small fw-semibold text-muted text-uppercase mb-2" style={{ letterSpacing: ".05em", fontSize: "0.7rem" }}>
-          Órdenes recientes
-        </div>
-        {!hasCustomer ? (
-          <p className="text-muted small mb-0">—</p>
-        ) : loadingOrders ? (
-          <div className="placeholder-glow">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="placeholder col-12 rounded mb-2" style={{ height: 36 }} />
-            ))}
-          </div>
-        ) : recentOrders.length === 0 ? (
-          <p className="text-muted small mb-0">Sin órdenes activas</p>
-        ) : (
-          <div className="d-flex flex-column gap-1">
-            {recentOrders.map(o => (
-              <Link
-                key={String(o.id)}
-                href="/ventas/pedidos"
-                className="d-flex align-items-center justify-content-between p-2 rounded border bg-light text-decoration-none"
-                style={{ fontSize: "0.78rem" }}
-              >
-                <div>
-                  <code className="text-body small">#{o.id}</code>
-                  <div className="text-muted" style={{ fontSize: "0.7rem" }}>{fmtDate(o.created_at)}</div>
-                </div>
-                <div className="text-end">
-                  <div className="fw-semibold">{fmtUSD(o.total_usd)}</div>
-                  <SaleStatusBadge status={o.status} />
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ── Sección 4: Vehículos ─────────────────────────────── */}
+      {/* ── Sección: Vehículos ───────────────────────── */}
       {customer && customer.vehicles && customer.vehicles.length > 0 && (
-        <div className="p-3 bg-white mt-2">
-          <div className="small fw-semibold text-muted text-uppercase mb-2" style={{ letterSpacing: ".05em", fontSize: "0.7rem" }}>
-            Vehículos registrados
-          </div>
-          <div className="d-flex flex-wrap gap-1">
+        <div className="mu-ficha-section">
+          <h4 className="mu-ficha-title">Vehículos registrados</h4>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {customer.vehicles.map(v => (
-              <span key={v.id} className="badge bg-light text-dark border" style={{ fontSize: "0.72rem", fontWeight: 500 }}>
-                <i className="ti ti-car me-1" />
+              <span key={v.id} className="mu-vehicle-tag">
+                <i className="ti ti-car" style={{ fontSize: 11 }} />
                 {v.label ?? `${v.brand_name} ${v.model_name} ${v.year_start ?? ""}`}
               </span>
             ))}
           </div>
         </div>
       )}
+
     </div>
   );
 }
