@@ -50,9 +50,10 @@ const initialState: MenuState = {
  * Cada item usa dedupe por path: si el backend ya lo incluye, no se duplica.
  *
  * TODO · eliminar cuando backend incluya estas rutas en la tabla de menú:
- *   - /ventas/tablero  → sección Ventas
- *   - /workspace       → sección Bandeja
- *   - /ventas/tablero  → sección Bandeja (acceso cruzado)
+ *   - /ventas/tablero          → sección Ventas
+ *   - /workspace               → sección Bandeja
+ *   - /ventas/tablero          → sección Bandeja (acceso cruzado)
+ *   - /ai-responder/monitor    → sección AI Responder
  */
 function augmentMenuWithSupervisor(menu: MenuSection[] | null): MenuSection[] | null {
   if (!Array.isArray(menu) || menu.length === 0) return menu;
@@ -86,6 +87,26 @@ function augmentMenuWithSupervisor(menu: MenuSection[] | null): MenuSection[] | 
     future: false,
   };
 
+  // ── Sección sintética "AI Responder" con Monitor bot ─────────
+  const aiMonitorSection: MenuSection = {
+    id:           "ai-responder",
+    label:        "AI Responder",
+    icon:         "activity",
+    group:        "ai-responder",
+    moduleKey:    "ai-responder",
+    moduleStatus: "active",
+    items: [
+      {
+        id:               "ai_responder_monitor",
+        label:            "Monitor bot",
+        path:             "/ai-responder/monitor",
+        minRole:          "admin",
+        pendingMigration: false,
+        future:           false,
+      },
+    ],
+  };
+
   const isVentasSection = (s: MenuSection): boolean => {
     const key = (s.moduleKey ?? "").toLowerCase();
     if (key === "ventas" || key === "sales") return true;
@@ -108,11 +129,18 @@ function augmentMenuWithSupervisor(menu: MenuSection[] | null): MenuSection[] | 
     return { ...section, items: [...section.items, ...toAdd] };
   };
 
-  return menu.map((section) => {
+  // Dedupe: no agregar la sección AI Responder si el backend ya la devuelve
+  const alreadyHasAiSection = menu.some(
+    s => (s.moduleKey ?? "").toLowerCase() === "ai-responder"
+  );
+
+  const patched = menu.map((section) => {
     if (isVentasSection(section))  return inject(section, [tableroLeaf]);
     if (isBandejaSection(section)) return inject(section, [workspaceLeaf, tableroInBandejaLeaf]);
     return section;
   });
+
+  return alreadyHasAiSection ? patched : [...patched, aiMonitorSection];
 }
 
 export const fetchMenu = createAsyncThunk(

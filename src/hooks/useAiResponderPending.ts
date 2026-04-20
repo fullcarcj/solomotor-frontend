@@ -1,51 +1,31 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type {
+  AiPendingMessage,
+  AiPendingMessageContent,
+} from '@/types/ai-responder';
+
+export type { AiPendingMessage, AiPendingMessageContent };
 
 const POLL_INTERVAL_MS = 30_000;
 
-export interface AiPendingMessageContent {
-  text: string | null;
-  caption: string | null;
-  mediaUrl: string | null;
-  mimeType: string | null;
-  duration?: number;
-  thumbnailUrl?: string | null;
-}
-
-export interface AiPendingMessage {
-  id: string;
-  chat_id: string;
-  customer_id: string | null;
-  ai_reply_status: 'needs_human_review';
-  ai_reply_text: string | null;
-  ai_reasoning: string | null;
-  content: AiPendingMessageContent;
-  created_at: string;
-  chat_phone: string | null;
-  source_type: string | null;
-  channel_id: number | null;
-  customer_full_name: string | null;
-  customer_segment: string | null;
-  message_text_preview: string | null;
-}
-
 interface Result {
-  rows: AiPendingMessage[];
-  total: number;
+  rows:    AiPendingMessage[];
+  total:   number;
   loading: boolean;
-  error: string | null;
+  error:   string | null;
   refetch: () => Promise<void>;
 }
 
 function parseContent(raw: unknown): AiPendingMessageContent {
   const c = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   return {
-    text: (c.text ?? null) as string | null,
-    caption: (c.caption ?? null) as string | null,
-    mediaUrl: (c.mediaUrl ?? c.media_url ?? null) as string | null,
-    mimeType: (c.mimeType ?? c.mime_type ?? null) as string | null,
-    duration: typeof c.duration === 'number' ? c.duration : undefined,
+    text:         (c.text ?? null) as string | null,
+    caption:      (c.caption ?? null) as string | null,
+    mediaUrl:     (c.mediaUrl ?? c.media_url ?? null) as string | null,
+    mimeType:     (c.mimeType ?? c.mime_type ?? null) as string | null,
+    duration:     typeof c.duration === 'number' ? c.duration : undefined,
     thumbnailUrl: (c.thumbnailUrl ?? c.thumbnail_url ?? null) as string | null,
   };
 }
@@ -57,18 +37,18 @@ function parseRow(raw: unknown): AiPendingMessage | null {
   if (!id) return null;
   return {
     id,
-    chat_id: String(r.chat_id ?? ''),
-    customer_id: r.customer_id != null ? String(r.customer_id) : null,
-    ai_reply_status: 'needs_human_review',
-    ai_reply_text: (r.ai_reply_text ?? null) as string | null,
-    ai_reasoning: (r.ai_reasoning ?? null) as string | null,
-    content: parseContent(r.content),
-    created_at: String(r.created_at ?? new Date().toISOString()),
-    chat_phone: (r.chat_phone ?? null) as string | null,
-    source_type: (r.source_type ?? null) as string | null,
-    channel_id: r.channel_id != null ? Number(r.channel_id) : null,
-    customer_full_name: (r.customer_full_name ?? null) as string | null,
-    customer_segment: (r.customer_segment ?? null) as string | null,
+    chat_id:              String(r.chat_id ?? ''),
+    customer_id:          r.customer_id != null ? String(r.customer_id) : null,
+    ai_reply_status:      'needs_human_review',
+    ai_reply_text:        (r.ai_reply_text ?? null) as string | null,
+    ai_reasoning:         (r.ai_reasoning ?? null) as string | null,
+    content:              parseContent(r.content),
+    created_at:           String(r.created_at ?? new Date().toISOString()),
+    chat_phone:           (r.chat_phone ?? null) as string | null,
+    source_type:          (r.source_type ?? null) as string | null,
+    channel_id:           r.channel_id != null ? Number(r.channel_id) : null,
+    customer_full_name:   (r.customer_full_name ?? null) as string | null,
+    customer_segment:     (r.customer_segment ?? null) as string | null,
     message_text_preview: (r.message_text_preview ?? null) as string | null,
   };
 }
@@ -89,11 +69,11 @@ function parsePayload(raw: unknown): { rows: AiPendingMessage[]; total: number }
 }
 
 export function useAiResponderPending(): Result {
-  const [rows, setRows] = useState<AiPendingMessage[]>([]);
-  const [total, setTotal] = useState(0);
+  const [rows, setRows]       = useState<AiPendingMessage[]>([]);
+  const [total, setTotal]     = useState(0);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const cancelledRef = useRef(false);
+  const [error, setError]     = useState<string | null>(null);
+  const cancelledRef          = useRef(false);
 
   const fetchPending = useCallback(async () => {
     try {

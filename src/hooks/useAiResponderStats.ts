@@ -1,32 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { AiResponderStats, AiResponderLogEntry } from '@/types/ai-responder';
+
+export type { AiResponderStats, AiResponderLogEntry };
 
 const POLL_INTERVAL_MS = 30_000;
-
-export interface AiResponderLogEntry {
-  action_taken: string;
-  n: number;
-}
-
-export interface AiResponderStats {
-  today_log_by_action: AiResponderLogEntry[];
-  today_by_status: {
-    ai_replied: number;
-    needs_human_review: number;
-    skipped: number;
-    processing: number;
-    pending: number;
-  };
-  pending_count: number;
-  needs_review_count: number;
-  /** Total de mensajes en cola de revisión humana (todos los días). Badge del AiReviewDrawer. */
-  total_pending_count: number;
-  /** Total de mensajes archivados como legacy (para referencia). */
-  legacy_archived_count: number;
-  force_send: boolean;
-  human_review_gate: boolean;
-}
 
 interface Result {
   stats: AiResponderStats | null;
@@ -38,11 +17,11 @@ interface Result {
 function parseStatusCounts(raw: unknown): AiResponderStats['today_by_status'] {
   const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   return {
-    ai_replied: Number(o.ai_replied) || 0,
-    needs_human_review: Number(o.needs_human_review) || 0,
-    skipped: Number(o.skipped) || 0,
-    processing: Number(o.processing) || 0,
-    pending: Number(o.pending) || 0,
+    ai_replied:         Number(o.ai_replied)          || 0,
+    needs_human_review: Number(o.needs_human_review)  || 0,
+    skipped:            Number(o.skipped)              || 0,
+    processing:         Number(o.processing)           || 0,
+    pending:            Number(o.pending)              || 0,
   };
 }
 
@@ -68,15 +47,30 @@ function parseStatsPayload(raw: unknown): AiResponderStats | null {
   const o = raw as Record<string, unknown>;
   return {
     today_log_by_action: parseLogByAction(o.today_log_by_action),
-    today_by_status: parseStatusCounts(o.today_by_status),
-    pending_count: Number(o.pending_count) || 0,
-    needs_review_count: Number(o.needs_review_count) || 0,
-    // total_pending_count: alias de needs_review_count (cuenta global de revisión pendiente).
-    // Si el backend envía total_pending_count explícito, se usa ese; sino cae en needs_review_count.
-    total_pending_count: Number(o.total_pending_count ?? o.needs_review_count) || 0,
+    today_by_status:     parseStatusCounts(o.today_by_status),
+    pending_count:        Number(o.pending_count)       || 0,
+    needs_review_count:   Number(o.needs_review_count)  || 0,
+    total_pending_count:  Number(o.total_pending_count ?? o.needs_review_count) || 0,
     legacy_archived_count: Number(o.legacy_archived_count) || 0,
-    force_send: Boolean(o.force_send),
+    force_send:      Boolean(o.force_send),
     human_review_gate: Boolean(o.human_review_gate),
+    // TODO(backend): campos opcionales del shape nuevo
+    enabled:        o.enabled       !== undefined ? Boolean(o.enabled)       : undefined,
+    worker_running: o.worker_running !== undefined ? Boolean(o.worker_running) : undefined,
+    last_cycle_at:  typeof o.last_cycle_at === 'string' ? o.last_cycle_at : null,
+    today_messages: o.today_messages && typeof o.today_messages === 'object'
+      ? (() => {
+          const tm = o.today_messages as Record<string, unknown>;
+          return {
+            total:          Number(tm.total)          || 0,
+            needs_review:   Number(tm.needs_review)   || 0,
+            ai_replied:     Number(tm.ai_replied)     || 0,
+            human_replied:  Number(tm.human_replied)  || 0,
+            human_rejected: Number(tm.human_rejected) || 0,
+            errors:         Number(tm.errors)         || 0,
+          };
+        })()
+      : undefined,
   };
 }
 
