@@ -8,7 +8,10 @@
     "start": "next start",
     "start:static": "npx --yes serve@latest out",
     "lint": "next lint",
-    "tsc:ventas": "tsc -p tsconfig.ventas.json"
+    "tsc:ventas": "tsc -p tsconfig.ventas.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@ant-design/v5-patch-for-react-19": "^1.0.3",
@@ -72,6 +75,9 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.3",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/dragula": "^3.7.5",
     "@types/js-cookie": "^3.0.6",
     "@types/leaflet": "^1.9.21",
@@ -82,13 +88,17 @@
     "@types/react-dom": "^19.2.3",
     "@types/react-input-mask": "^3.0.6",
     "@types/react-slick": "^0.23.13",
+    "@vitejs/plugin-react": "^6.0.1",
+    "@vitest/coverage-v8": "^4.1.4",
     "css-loader": "^7.1.2",
     "eslint": "^9.39.1",
     "eslint-config-next": "^15.5.2",
+    "jsdom": "^29.0.2",
     "postcss": "^8.5.6",
     "postcss-loader": "^8.2.0",
     "resolve-url-loader": "^5.0.0",
     "sass": "^1.94.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.4"
   }
 }
