@@ -20,6 +20,10 @@ export interface AiResponderStats {
   };
   pending_count: number;
   needs_review_count: number;
+  /** Total de mensajes en cola de revisión humana (todos los días). Badge del AiReviewDrawer. */
+  total_pending_count: number;
+  /** Total de mensajes archivados como legacy (para referencia). */
+  legacy_archived_count: number;
   force_send: boolean;
   human_review_gate: boolean;
 }
@@ -67,6 +71,10 @@ function parseStatsPayload(raw: unknown): AiResponderStats | null {
     today_by_status: parseStatusCounts(o.today_by_status),
     pending_count: Number(o.pending_count) || 0,
     needs_review_count: Number(o.needs_review_count) || 0,
+    // total_pending_count: alias de needs_review_count (cuenta global de revisión pendiente).
+    // Si el backend envía total_pending_count explícito, se usa ese; sino cae en needs_review_count.
+    total_pending_count: Number(o.total_pending_count ?? o.needs_review_count) || 0,
+    legacy_archived_count: Number(o.legacy_archived_count) || 0,
     force_send: Boolean(o.force_send),
     human_review_gate: Boolean(o.human_review_gate),
   };

@@ -9,11 +9,20 @@ function initials(name: string | null, phone: string): string {
   return phone.slice(-2);
 }
 
-interface Props { chat: InboxChat; }
+interface Props {
+  chat: InboxChat;
+  /** URL de la última imagen inbound del chat (para VER FOTO). Null si no hay. */
+  lastImageUrl?: string | null;
+  /** Callback para abrir el modal de edición de cliente. */
+  onEditCustomer?: () => void;
+  /** Callback para abrir el lightbox con lastImageUrl. */
+  onViewPhoto?: () => void;
+}
 
-export default function ChatHeader({ chat }: Props) {
+export default function ChatHeader({ chat, lastImageUrl, onEditCustomer, onViewPhoto }: Props) {
   const displayName = chat.customer_name ?? chat.phone;
   const ini = initials(chat.customer_name, chat.phone);
+  const hasPhone = Boolean(chat.phone);
 
   return (
     <div className="mu-convo-header bandeja-chat-header-wa">
@@ -53,11 +62,78 @@ export default function ChatHeader({ chat }: Props) {
         </div>
       </div>
 
-      {/* Acciones del header (estáticas — 6B las activa) */}
-      <div className="mu-header-actions d-none d-sm-flex" aria-hidden>
-        <span className="mu-icon-btn ti ti-phone" title="Llamar (6B)" />
-        <span className="mu-icon-btn ti ti-search" title="Buscar" />
-        <span className="mu-icon-btn ti ti-dots-vertical" title="Más opciones" />
+      {/* Acciones del header */}
+      <div className="mu-header-actions d-none d-sm-flex align-items-center gap-1">
+        {/* B.2 · LLAMAR */}
+        {hasPhone ? (
+          <a
+            href={`tel:${chat.phone}`}
+            className="mu-icon-btn"
+            title="Llamar"
+            aria-label="Llamar"
+          >
+            <i className="ti ti-phone" />
+          </a>
+        ) : (
+          <button
+            type="button"
+            className="mu-icon-btn"
+            disabled
+            title="Sin teléfono registrado"
+            aria-label="Sin teléfono registrado"
+            style={{ opacity: 0.35, cursor: "not-allowed" }}
+          >
+            <i className="ti ti-phone" />
+          </button>
+        )}
+
+        {/* B.3 · VER FOTO */}
+        {lastImageUrl ? (
+          <button
+            type="button"
+            className="mu-icon-btn"
+            title="Ver última imagen"
+            aria-label="Ver última imagen"
+            onClick={onViewPhoto}
+          >
+            <i className="ti ti-photo" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="mu-icon-btn"
+            disabled
+            title="Sin imágenes en este chat"
+            aria-label="Sin imágenes en este chat"
+            style={{ opacity: 0.35, cursor: "not-allowed" }}
+          >
+            <i className="ti ti-photo" />
+          </button>
+        )}
+
+        {/* B.4 · EDITAR */}
+        <button
+          type="button"
+          className="mu-icon-btn"
+          title="Editar cliente"
+          aria-label="Editar cliente"
+          onClick={onEditCustomer}
+          disabled={!onEditCustomer}
+          style={!onEditCustomer ? { opacity: 0.35, cursor: "not-allowed" } : undefined}
+        >
+          <i className="ti ti-edit" />
+        </button>
+
+        {/* ti-search eliminado (B.5) */}
+
+        <button
+          type="button"
+          className="mu-icon-btn"
+          title="Más opciones"
+          aria-label="Más opciones"
+        >
+          <i className="ti ti-dots-vertical" />
+        </button>
       </div>
     </div>
   );

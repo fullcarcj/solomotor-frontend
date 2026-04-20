@@ -1,8 +1,12 @@
 "use client";
+import { useState } from "react";
 import { useInbox } from "@/hooks/useInbox";
+import { useAiResponderStats } from "@/hooks/useAiResponderStats";
 import InboxCountBadges from "./InboxCountBadges";
 import ChatFilters from "./ChatFilters";
 import ChatListItem from "./ChatListItem";
+import AiReviewBadge from "./AiReviewBadge";
+import AiReviewDrawer from "./AiReviewDrawer";
 
 interface Props {
   activeChatId?: string | number;
@@ -27,6 +31,10 @@ export default function ChatList({ activeChatId, initialSrc = "", initialFilter 
   const { chats, nextCursor, total, loading, loadingMore, error, filters, setFilters, loadMore } = useInbox(
     initialSrc || initialFilter ? { src: initialSrc, filter: initialFilter } : undefined
   );
+  const { stats } = useAiResponderStats();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const pendingCount = stats?.total_pending_count ?? 0;
 
   return (
     <div className="d-flex flex-column h-100 min-h-0">
@@ -38,10 +46,13 @@ export default function ChatList({ activeChatId, initialSrc = "", initialFilter 
             <span className="bandeja-wa-header-meta d-block">{total} conversaciones</span>
           )}
         </div>
+        <AiReviewBadge count={pendingCount} onClick={() => setDrawerOpen(true)} />
         <button type="button" className="btn btn-link p-0 border-0" style={{ color: "var(--wa-icon)" }} aria-label="Menú" tabIndex={-1}>
           <i className="ti ti-dots-vertical fs-5" />
         </button>
       </div>
+
+      <AiReviewDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
 
       <InboxCountBadges activeFilter={filters.filter} onFilter={(f) => setFilters({ filter: f })} />
 

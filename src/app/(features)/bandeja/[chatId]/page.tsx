@@ -11,8 +11,24 @@ import PipelineMini from "../components/PipelineMini";
 import MessageInput from "../components/MessageInput";
 import ChatContextPanel from "./components/ChatContextPanel";
 import ChatActionSlideOver from "./components/ChatActionSlideOver";
+import EditCustomerModal from "./components/EditCustomerModal";
 
 type ActionType = "quote" | "pay" | "pos" | "dispatch" | null;
+
+/** Último mediaUrl de imagen inbound del chat. */
+function getLastImageUrl(messages: import("@/types/inbox").ChatMessage[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (
+      m.direction === "inbound" &&
+      m.content.mediaUrl &&
+      (!m.content.mimeType || m.content.mimeType.startsWith("image/"))
+    ) {
+      return m.content.mediaUrl;
+    }
+  }
+  return null;
+}
 
 const ACTION_LABELS: Record<NonNullable<ActionType>, (name: string | null) => string> = {
   quote:    name => `+ Creando cotización${name ? ` para ${name}` : ""}`,
@@ -38,10 +54,12 @@ export default function ChatDetailPage() {
   const params = useParams();
   const chatId = params.chatId as string;
 
-  const [chat, setChat]                 = useState<InboxChat | null>(null);
-  const [chatLoading, setChatLoading]   = useState(true);
-  const [chatError, setChatError]       = useState<string | null>(null);
-  const [activeAction, setActiveAction] = useState<ActionType>(null);
+  const [chat, setChat]                     = useState<InboxChat | null>(null);
+  const [chatLoading, setChatLoading]       = useState(true);
+  const [chatError, setChatError]           = useState<string | null>(null);
+  const [activeAction, setActiveAction]     = useState<ActionType>(null);
+  const [editCustomerOpen, setEditCustomerOpen] = useState(false);
+  const [photoViewerUrl, setPhotoViewerUrl] = useState<string | null>(null);
 
   /* Ancho resizable de la columna INBOX */
   const [listWidth, setListWidth] = useState(360);
@@ -129,6 +147,8 @@ export default function ChatDetailPage() {
   const customerName  = chat?.customer_name ?? null;
   const { customer, recentOrders, loadingCustomer, loadingOrders } = useChatContext(customerId);
 
+  const lastImageUrl = getLastImageUrl(messages);
+
   /* Fetch del chat activo */
   const fetchChat = useCallback(() => {
     if (!chatId) return;
@@ -183,7 +203,12 @@ export default function ChatDetailPage() {
                 <span className="bandeja-wa-alert small">{chatError}</span>
               </div>
             ) : chat ? (
-              <ChatHeader chat={chat} />
+              <ChatHeader
+                chat={chat}
+                lastImageUrl={lastImageUrl}
+                onViewPhoto={lastImageUrl ? () => setPhotoViewerUrl(lastImageUrl) : undefined}
+                onEditCustomer={customerId != null ? () => setEditCustomerOpen(true) : undefined}
+              />
             ) : (
               <div className="bandeja-chat-header-wa">
                 <a href="/bandeja" className="btn btn-sm mu-icon-btn">
@@ -245,7 +270,7 @@ export default function ChatDetailPage() {
 
         </div>
 
-        {/* Slide-over de acción (datos de Sprint 6B lo activan) */}
+        {/* Slide-over de acción */}
         <ChatActionSlideOver
           action={activeAction}
           chatId={chatId}
@@ -255,6 +280,70 @@ export default function ChatDetailPage() {
           onClose={() => setActiveAction(null)}
           onSuccess={() => setActiveAction(null)}
         />
+
+        {/* B.4 · Modal de edición de cliente */}
+        {customerId != null && (
+          <EditCustomerModal
+            open={editCustomerOpen}
+            customerId={Number(customerId)}
+            currentName={chat?.customer_name ?? null}
+            currentPhone={chat?.phone ?? null}
+            onClose={() => setEditCustomerOpen(false)}
+            onSuccess={() => { setEditCustomerOpen(false); fetchChat(); }}
+          />
+        )}
+
+        {/* B.3 · Visor de foto (última imagen inbound) */}
+        {photoViewerUrl && (
+          <>
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.85)",
+                zIndex: 10000,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              onClick={() => setPhotoViewerUrl(null)}
+              role="dialog"
+              aria-modal
+              aria-label="Vista de imagen"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={photoViewerUrl}
+                alt="Imagen del chat"
+                style={{ maxWidth: "90vw", maxHeight: "90vh", borderRadius: 8, boxShadow: "0 4px 32px rgba(0,0,0,0.6)" }}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <button
+                type="button"
+                aria-label="Cerrar"
+                onClick={() => setPhotoViewerUrl(null)}
+                style={{
+                  position: "absolute",
+                  top: 16,
+                  right: 16,
+                  background: "rgba(255,255,255,0.1)",
+                  border: "none",
+                  borderRadius: "50%",
+                  width: 36,
+                  height: 36,
+                  color: "#fff",
+                  fontSize: "1.2rem",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <i className="ti ti-x" />
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

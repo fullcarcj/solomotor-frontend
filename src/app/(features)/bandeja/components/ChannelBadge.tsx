@@ -38,13 +38,23 @@ const CHANNEL_DEFS: Record<ChannelKey, ChannelDef> = {
 /**
  * Deriva el canal a partir del source_type (proxy mientras channel_id
  * no esté en la raíz del payload de inbox).
+ * - wa_ml_linked → "wa" visual (el título indica el origen compuesto)
+ * - null / "" → "direct" (fallback neutral)
  */
-export function sourceTypeToChannel(sourceType: string): ChannelKey {
-  if (sourceType === "wa_inbound") return "wa";
+export function sourceTypeToChannel(sourceType: string | null | undefined): ChannelKey {
+  if (!sourceType) return "direct";
+  if (sourceType === "wa_inbound" || sourceType === "wa_ml_linked") return "wa";
   if (sourceType === "ml_question" || sourceType === "ml_message") return "ml";
   if (sourceType.startsWith("eco")) return "eco";
   if (sourceType.startsWith("fv") || sourceType === "mostrador") return "fv";
   return "direct";
+}
+
+/** Etiqueta larga para title/aria del canal (incluye sufijo para wa_ml_linked). */
+function channelLabel(channelKey: ChannelKey, sourceType?: string | null): string {
+  const base = CHANNEL_DEFS[channelKey].label;
+  if (sourceType === "wa_ml_linked") return `${base} ↔ MercadoLibre`;
+  return base;
 }
 
 /**
@@ -66,7 +76,7 @@ interface Props {
   /** channel_id numérico (ADR-007) — preferido cuando esté disponible */
   channelId?: number | null;
   /** source_type string — fallback cuando no hay channel_id */
-  sourceType?: string;
+  sourceType?: string | null;
   /** Tamaño del badge (default: "sm") */
   size?: "sm" | "md";
   /** Si true, renderiza como badge superpuesto sobre avatar (position:absolute) */
@@ -97,6 +107,7 @@ export default function ChannelBadge({
       : sourceTypeToChannel(sourceType);
 
   const def = CHANNEL_DEFS[channelKey];
+  const label = channelLabel(channelKey, channelId == null ? sourceType : undefined);
 
   const dim = size === "sm" ? 16 : 20;
   const fontSize = size === "sm" ? 8 : 10;
@@ -125,8 +136,8 @@ export default function ChannelBadge({
     <span
       className="ch-badge"
       style={style}
-      title={def.label}
-      aria-label={`Canal: ${def.label}`}
+      title={label}
+      aria-label={`Canal: ${label}`}
     >
       {def.short}
     </span>

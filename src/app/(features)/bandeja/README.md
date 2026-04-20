@@ -130,17 +130,50 @@ Archivos de test:
 
 ---
 
-## Fuera de alcance — va en Sprint 6B
+## Sprint 6B — Capas funcionales (completado)
+
+### Bloque A · Drawer de revisión IA
 
 | Elemento | Estado |
 |---|---|
-| Drawer cola revisión IA (986 pendientes) | Sprint 6B |
-| Acción funcional CHAT (envío asistido IA) | Sprint 6B |
-| Acción funcional LLAMAR | Sprint 6B |
-| Acción funcional VER FOTO | Sprint 6B |
-| Botones de Cotizar/Cobrar/POS/Despachar activados | Sprint 6B |
-| Consumo de `POST /api/ai-responder/:id/reject` | Sprint 6B |
-| Consumo de `POST /api/ai-responder/:id/draft` | Sprint 6B |
+| `useAiResponderPending` hook (polling 30s, `GET /api/ai-responder/pending`) | DONE |
+| `AiReviewBadge` (botón flotante, oculto si count=0) | DONE |
+| `AiReviewDrawer` (panel fijo 480px, animación CSS, backdrop) | DONE |
+| `AiReviewItem` (4 acciones: aprobar, editar+enviar, borrador, rechazar) | DONE |
+| Manejo 409 `legacy_archived_blocked` → toast amigable + auto-remove | DONE |
+| `ChannelBadge` extendido: `wa_ml_linked` → "W" + título compuesto; `null` → "D" | DONE |
+| `useAiResponderStats` extendido: `total_pending_count`, `legacy_archived_count` | DONE |
+| BFF routes: `/api/ai-responder/pending`, `/[id]/approve|override|draft|reject` | DONE |
+
+### Bloque B · Acciones funcionales en ChatHeader
+
+| Elemento | Estado |
+|---|---|
+| LLAMAR: `<a href="tel:...">` o `<button disabled>` con tooltip | DONE |
+| VER FOTO: abre photo viewer (última imagen inbound) | DONE |
+| EDITAR: abre `EditCustomerModal` (PATCH `/api/clientes/:id`) | DONE |
+| `ti-search` eliminado del header (B.5) | DONE |
+| BFF proxy `PATCH /api/clientes/[id]` → backend `PATCH /api/crm/customers/:id` | DONE |
+
+### Tests Sprint 6B
+
+| Archivo | Tipo | Casos |
+|---|---|---|
+| `AiReviewBadge.test.tsx` | unit | 6 |
+| `AiReviewItem.test.tsx` | unit | 20 (incl. mapping 6 canales) |
+| `useAiResponderPending.test.ts` | unit | 6 |
+| `AiReviewDrawer.integration.test.tsx` | integration | 7 |
+
+**Total Sprint 6B: 39 tests · 39 pass · 0 fail**
+
+Documentación detallada del drawer: [`components/AiReviewDrawer/README.md`](./components/AiReviewDrawer/README.md)
+
+---
+
+## Items fuera de alcance (NO implementados)
+
+| Elemento | Estado |
+|---|---|
 | Tags de intención NLU (backend no soporta) | NO se implementa |
 | Resumen inteligente de consulta (NLU) | NO se implementa |
 | Sugerencia de producto del bot (NLU) | NO se implementa |
