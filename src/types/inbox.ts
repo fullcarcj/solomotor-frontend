@@ -31,6 +31,12 @@ export interface InboxChat {
   order:             InboxOrder | null;
   /** Etapa del pipeline del chat. Calculado por backend (BE-1.9). */
   chat_stage?:       ChatStage;
+  /**
+   * ADR-007: canal de origen del chat. El backend puede exponerlo en el root
+   * del objeto (canal directo) o via order.channel_id. Opcional hasta confirmar
+   * que GET /api/inbox lo devuelve en la raíz.
+   */
+  channel_id?:       number | null;
 }
 
 export interface InboxCounts {
