@@ -1,0 +1,11 @@
+feat(bandeja): ficha 360 con pregunta ML, orden ML, producto y WMS
+
+- Descarga automatica de publicacion ML si no esta en ml_listings
+- Busca pregunta en ml_questions_pending Y answered (UNION) para preguntas ya respondidas
+- Muestra seccion Orden ML para chats ml_message extrayendo order_id del campo phone (mlm:{uid}:{order_id}) cuando ml_order_id es null en crm_chats
+- Muestra items de la orden con thumbnail, cantidad, precio, SKU y enlace VER INVENTARIO
+- Ubicaciones WMS (bin_code x qty) para cada producto resuelto via ml_item_sku_map / sku_old
+- Icono de pregunta ML preservado tras responder (ml_message + ml_question_id)
+- fetchChat usa GET /api/crm/chats/:id/context (por ID directo) con order mapeado
+- answered_by acepta string (rol/username) ademas de numero
+- Nuevas BFF routes: /api/crm/chats/[chatId]/context y /api/inbox/[chatId]/ml-order
