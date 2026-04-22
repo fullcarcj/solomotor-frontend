@@ -11,29 +11,28 @@
  */
 
 import type { ChatStage } from "@/types/inbox";
-import { CHAT_STAGE_ORDER, CHAT_STAGE_LABELS } from "@/types/inbox";
+import { CHAT_STAGE_ORDER, CHAT_STAGE_LABELS, normalizeChatStage } from "@/types/inbox";
 
 interface Props {
-  stage?: ChatStage;
+  stage?: ChatStage | string;
 }
 
-/** Etiquetas ultra-cortas para la barra compacta */
+/** Etiquetas ultra-cortas para la barra compacta (6 pasos) */
 const SHORT_LABELS: Record<ChatStage, string> = {
-  contact:   "01 · CONTACTO",
-  ml_answer: "02 · ML",
-  quote:     "03 · COT.",
-  approved:  "04 · APROBADA",
-  order:     "05 · ORDEN",
-  payment:   "06 · PAGO",
-  dispatch:  "07 · DESPACHO",
-  closed:    "08 · CERRADA",
+  contact:   "CONTACTO",
+  quote:     "COT.",
+  order:     "ORDEN",
+  payment:   "PAGO",
+  dispatch:  "DESPACHO",
+  closed:    "CERRADA",
 };
 
 export default function PipelineMini({ stage }: Props) {
-  const currentIdx = stage ? CHAT_STAGE_ORDER.indexOf(stage) : -1;
+  const st = normalizeChatStage(stage == null ? undefined : String(stage));
+  const currentIdx = st ? CHAT_STAGE_ORDER.indexOf(st) : -1;
 
   return (
-    <div className="mu-pipeline-mini" aria-label={`Etapa: ${stage ? CHAT_STAGE_LABELS[stage] : "Sin etapa"}`}>
+    <div className="mu-pipeline-mini" aria-label={`Etapa: ${st ? CHAT_STAGE_LABELS[st] : "Sin etapa"}`}>
       {CHAT_STAGE_ORDER.map((s, idx) => {
         const isDone    = idx < currentIdx;
         const isCurrent = idx === currentIdx;

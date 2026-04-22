@@ -5,13 +5,16 @@
 import type { ChatStage } from '@/constants/chatStage';
 
 export type { ChatStage } from '@/constants/chatStage';
-export { CHAT_STAGE_LABELS, CHAT_STAGE_ORDER } from '@/constants/chatStage';
+export { CHAT_STAGE_LABELS, CHAT_STAGE_ORDER, normalizeChatStage } from '@/constants/chatStage';
 
 export interface InboxOrder {
   id:               number;
   payment_status:   string;
   fulfillment_type: string;
   channel_id:       number;
+  /** FK a customers (contexto ML / venta importada). */
+  customer_id?:     number | null;
+  status?:          string | null;
 }
 
 export type ChatStatus = 'UNASSIGNED' | 'PENDING_RESPONSE' | 'ATTENDED' | 'RE_OPENED';
@@ -53,6 +56,11 @@ export interface InboxChat {
   top_exception_code?:    string | null;
   /** Derivado de status en UI — bot activo cuando status es UNASSIGNED. */
   handoff_active?:        boolean;
+  /**
+   * TRUE cuando el número está en whitelist con mode='muted' (personal de empresa).
+   * Aparece en bandeja con badge "NO CLIENTE" y sin pipeline de ventas.
+   */
+  is_operational?:        boolean;
 }
 
 export interface InboxCounts {
@@ -95,4 +103,8 @@ export interface InboxFilters {
   src:    string;
   search: string;
   limit:  number;
+  /** Coma-separado: contact, quote, … (mismo vocabulario que el backend). */
+  stage:  string;
+  /** no_conversion | converted | in_progress */
+  result: string;
 }

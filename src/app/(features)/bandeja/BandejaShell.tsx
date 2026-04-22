@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useInboxRealtime } from "@/hooks/useInboxRealtime";
+import { BandejaInboxProvider } from "./BandejaInboxContext";
 import BandejaTriajeMock from "./components/BandejaTriajeMock";
 import ChatList from "./components/ChatList";
 
@@ -57,39 +58,41 @@ export default function BandejaShell({ children }: Props) {
   );
 
   return (
-    <div className="page-wrapper" style={{ overflow: "hidden" }}>
-      <div className="content p-0">
-        <div className={`bandeja-shell${isDetail ? " bandeja-shell--detail" : ""}`}>
+    <BandejaInboxProvider>
+      <div className="page-wrapper" style={{ overflow: "hidden" }}>
+        <div className="content p-0">
+          <div className={`bandeja-shell${isDetail ? " bandeja-shell--detail" : ""}`}>
 
-          {/* ── Columna izquierda (INBOX) — persiste en toda la navegación ── */}
-          <div
-            className={
-              isDetail
-                ? "bandeja-detail-list d-none d-md-flex"
-                : "bandeja-panel-left"
-            }
-            style={isDetail ? { width: listWidth } : undefined}
-          >
-            <BandejaTriajeMock>
-              <ChatList activeChatId={activeChatId} variant="embedded" />
-            </BandejaTriajeMock>
+            {/* ── Columna izquierda (INBOX) — persiste en toda la navegación ── */}
+            <div
+              className={
+                isDetail
+                  ? "bandeja-detail-list d-none d-md-flex"
+                  : "bandeja-panel-left"
+              }
+              style={isDetail ? { width: listWidth } : undefined}
+            >
+              <BandejaTriajeMock>
+                <ChatList activeChatId={activeChatId} variant="embedded" />
+              </BandejaTriajeMock>
 
-            {isDetail && (
-              <div
-                className="bandeja-resize-handle"
-                onMouseDown={startResize}
-                role="separator"
-                aria-orientation="vertical"
-                aria-label="Redimensionar panel lista"
-              />
-            )}
+              {isDetail && (
+                <div
+                  className="bandeja-resize-handle"
+                  onMouseDown={startResize}
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Redimensionar panel lista"
+                />
+              )}
+            </div>
+
+            {/* ── Contenido de la ruta actual (convo + ficha, o estado vacío) ── */}
+            {children}
+
           </div>
-
-          {/* ── Contenido de la ruta actual (convo + ficha, o estado vacío) ── */}
-          {children}
-
         </div>
       </div>
-    </div>
+    </BandejaInboxProvider>
   );
 }

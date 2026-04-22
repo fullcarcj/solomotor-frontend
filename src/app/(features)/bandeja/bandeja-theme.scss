@@ -193,12 +193,12 @@
     background-image: radial-gradient(circle at 50% 0%, rgba(212,255,58,.03), transparent 40%);
   }
 
-  /* Ficha 360° — columna derecha */
+  /* Ficha 360° — columna derecha (+25% respecto al original) */
   .bandeja-detail-context {
     display: none;
     box-sizing: border-box;
-    width: min(340px, 100%);
-    min-width: 280px;
+    width: min(425px, 100%);
+    min-width: 320px;
     flex-shrink: 0;
     flex-direction: column;
     align-items: stretch;
@@ -620,27 +620,58 @@
   min-width: max-content;
   padding: 5px 8px;
   border-radius: 4px;
-  background: var(--mu-panel-2);
-  color: var(--mu-ink-mute);
+  background: rgba(255,255,255,0.03);
+  color: #3e3f36;                /* pasos futuros: muy opacos, casi invisibles */
   text-align: center;
   font-size: 9px;
   font-family: "JetBrains Mono", monospace;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  border: 1px solid transparent;
+  border: 1px solid rgba(255,255,255,0.04);
   white-space: nowrap;
+  position: relative;
 
-  &--done {
-    background: #1a2e1f;
-    color: var(--mu-ok);
-    border-color: #2a4a30;
+  /* Conector → entre etapas */
+  &:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    right: -4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 1px;
+    background: rgba(255,255,255,0.08);
+    z-index: 1;
   }
 
+  /* Pasos completados: fondo verde sutil + texto verde brillante + check */
+  &--done {
+    background: rgba(127, 214, 127, 0.10);
+    color: var(--mu-ok);
+    border-color: rgba(127, 214, 127, 0.25);
+
+    &::before {
+      content: '✓ ';
+      font-size: 8px;
+      opacity: 0.85;
+    }
+
+    &::after {
+      background: rgba(127, 214, 127, 0.3); /* conector verde en pasos hechos */
+    }
+  }
+
+  /* Etapa actual: acento neon, negrita, borde luminoso */
   &--current {
     background: var(--mu-accent);
     color: #0a0b08;
     font-weight: 800;
     border-color: var(--mu-accent);
+    box-shadow: 0 0 8px rgba(212,255,58,0.35);
+
+    &::after {
+      background: rgba(212,255,58,0.4);
+    }
   }
 }
 

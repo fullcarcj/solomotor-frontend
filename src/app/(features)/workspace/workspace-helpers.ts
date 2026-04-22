@@ -1,5 +1,5 @@
 import type { ChatStage } from '@/constants/chatStage';
-import { CHAT_STAGE_LABELS, CHAT_STAGE_ORDER } from '@/constants/chatStage';
+import { CHAT_STAGE_LABELS, CHAT_STAGE_ORDER, normalizeChatStage } from '@/constants/chatStage';
 
 const AVATAR_CLASS = ['blue', 'orange', 'violet', 'green'] as const;
 
@@ -46,8 +46,6 @@ export function stageToTagClass(stage: ChatStage | undefined): string {
   switch (stage) {
     case 'contact':
       return 'tag-new';
-    case 'ml_answer':
-      return 'tag-des';
     case 'quote':
       return 'tag-cot';
     case 'approved':
@@ -74,21 +72,22 @@ function labelForStage(st: ChatStage): string {
   return (raw ?? String(st)).toUpperCase();
 }
 
-/** Mini pipeline alineado a BE-1.9 (8 etapas). */
+/** Mini pipeline alineado a BE-1.9 (7 etapas). */
 export function miniPipelineFromStage(stage: ChatStage | undefined): MiniPm[] {
   const order = Array.isArray(CHAT_STAGE_ORDER) ? CHAT_STAGE_ORDER : [];
   if (order.length === 0) return [];
 
-  if (stage === 'closed') {
-    return order.map((st, i) => ({
-      label: `${String(i + 1).padStart(2, '0')} · ${labelForStage(st)}`,
+  const st = stage == null ? undefined : normalizeChatStage(String(stage));
+  if (st === 'closed') {
+    return order.map((step, i) => ({
+      label: `${String(i + 1).padStart(2, '0')} · ${labelForStage(step)}`,
       status: 'done' as const,
     }));
   }
-  const idx = stage ? order.indexOf(stage) : -1;
+  const idx = st ? order.indexOf(st) : -1;
   const current = idx >= 0 ? idx : 0;
-  return order.map((st, i) => ({
-    label: `${String(i + 1).padStart(2, '0')} · ${labelForStage(st)}`,
+  return order.map((step, i) => ({
+    label: `${String(i + 1).padStart(2, '0')} · ${labelForStage(step)}`,
     status: i < current ? 'done' : i === current ? 'current' : 'pending',
   }));
 }

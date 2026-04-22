@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
 import type { InboxChat, ChatStage } from "@/types/inbox";
+import { normalizeChatStage } from "@/types/inbox";
 import ExceptionBadge from "@/components/bandeja/ExceptionBadge";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
@@ -105,11 +106,11 @@ const STAGE_MAP: Record<ChatStage, StageInfo> = {
   payment:   { num: "05", label: "Pago",      cls: "st-05" },
   dispatch:  { num: "06", label: "Despacho",  cls: "st-06" },
   closed:    { num: "07", label: "Cerrada",   cls: "st-07" },
-  ml_answer: { num: "ML", label: "Resp. ML",  cls: "st-respml" },
 };
 
-function StageChip({ stage }: { stage: ChatStage }) {
-  const info = STAGE_MAP[stage] ?? { num: "?", label: stage, cls: "st-07" };
+function StageChip({ stage }: { stage: ChatStage | string }) {
+  const s = normalizeChatStage(stage == null ? undefined : String(stage)) ?? "contact";
+  const info = STAGE_MAP[s] ?? { num: "?", label: String(stage), cls: "st-07" };
   return (
     <span className={`bd-status ${info.cls}`}>
       <span className="num">{info.num}</span>
@@ -246,9 +247,14 @@ export default function ChatListItem({ chat, active }: Props) {
 
   const href = `/bandeja/${String(chat.id)}`;
 
+  const stageNorm = normalizeChatStage(
+    chat.chat_stage == null ? undefined : String(chat.chat_stage)
+  );
+
+  const isOperational = Boolean(chat.is_operational);
   const origCls  = originClass(chat.source_type);
   const slaCls   = slaClass(isUrgent, chat.sla_deadline_at ?? null);
-  const bucket   = elapsedBucket(chat.last_message_at, chat.sla_deadline_at ?? null, chat.chat_stage);
+  const bucket   = elapsedBucket(chat.last_message_at, chat.sla_deadline_at ?? null, stageNorm);
   const elapsed  = fmtElapsed(chat.last_message_at);
   const showViewingChip = presence && myUserId != null && presence.userId !== myUserId;
 
@@ -334,12 +340,17 @@ export default function ChatListItem({ chat, active }: Props) {
             origCls,
             slaCls,
             active ? "bd-inbox-row--active" : "",
+            isOperational ? "bd-inbox-row--operational" : "",
           ].filter(Boolean).join(" ")}
         >
           {/* Avatar */}
           <div
             className="bd-avatar"
-            style={{ background: av.bg, color: av.color }}
+            style={
+              isOperational
+                ? { background: "var(--mu-panel-2, #2a2a2a)", color: "var(--mu-ink-mute, #888)", filter: "grayscale(1)" }
+                : { background: av.bg, color: av.color }
+            }
             aria-hidden="true"
           >
             {ini}
@@ -357,14 +368,36 @@ export default function ChatListItem({ chat, active }: Props) {
             <div className="bd-row-tags">
               <ChannelOriginIcon sourceType={chat.source_type} mlQuestionId={chat.ml_question_id} />
 
-              {chat.chat_stage !== "closed" && elapsed !== "—" && (
+              {stageNorm !== "closed" && elapsed !== "—" && (
                 <span className={`bd-elapsed ${bucket}`}>
                   {ClockSvg}
                   {elapsed}
                 </span>
               )}
 
-              {chat.chat_stage && <StageChip stage={chat.chat_stage} />}
+              {isOperational ? (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    padding: "2px 7px",
+                    borderRadius: 4,
+                    background: "rgba(200,200,200,0.12)",
+                    color: "var(--mu-ink-mute, #999)",
+                    border: "1px solid rgba(200,200,200,0.2)",
+                  }}
+                >
+                  <i className="ti ti-building" style={{ fontSize: 9 }} />
+                  No cliente
+                </span>
+              ) : (
+                stageNorm && <StageChip stage={stageNorm} />
+              )}
 
               {/* Bloque 2 — excepción activa */}
               {(chat.has_active_exception ?? false) && (

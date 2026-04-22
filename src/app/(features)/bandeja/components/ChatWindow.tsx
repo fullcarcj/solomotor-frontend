@@ -54,8 +54,30 @@ export default function ChatWindow({ messages, loading, loadingMore, error, onLo
 
   if (loading) {
     return (
-      <div className="bandeja-chat-window flex-grow-1 d-flex align-items-center justify-content-center">
-        <div className="spinner-border text-primary" role="status" aria-label="Cargando" />
+      <div className="bandeja-chat-window flex-grow-1" style={{ padding: "16px 12px", display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* Skeletons con forma de burbujas para que el usuario sienta que hay conversación */}
+        {[
+          { align: "flex-start", width: "62%"  },
+          { align: "flex-end",   width: "45%"  },
+          { align: "flex-start", width: "78%"  },
+          { align: "flex-end",   width: "55%"  },
+          { align: "flex-start", width: "40%"  },
+          { align: "flex-end",   width: "68%"  },
+        ].map((s, i) => (
+          <div key={i} style={{ display: "flex", justifyContent: s.align }}>
+            <div
+              style={{
+                width: s.width,
+                height: 38,
+                borderRadius: s.align === "flex-end" ? "16px 4px 16px 16px" : "4px 16px 16px 16px",
+                background: "var(--wa-bg-secondary, rgba(255,255,255,0.07))",
+                animation: "mu-pulse 1.4s ease-in-out infinite",
+                animationDelay: `${i * 0.12}s`,
+              }}
+            />
+          </div>
+        ))}
+        <style>{`@keyframes mu-pulse{0%,100%{opacity:.4}50%{opacity:.9}}`}</style>
       </div>
     );
   }

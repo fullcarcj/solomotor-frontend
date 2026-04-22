@@ -6,7 +6,7 @@ import { useSupervisorExceptions } from '@/hooks/useSupervisorExceptions';
 import { useInbox } from '@/hooks/useInbox';
 import { useAiResponderStats } from '@/hooks/useAiResponderStats';
 import type { InboxChat } from '@/types/inbox';
-import { CHAT_STAGE_LABELS } from '@/types/inbox';
+import { CHAT_STAGE_LABELS, normalizeChatStage } from '@/types/inbox';
 import { EXCEPTION_KIND_LABELS } from '@/types/supervisor';
 import './observacion.scss';
 
@@ -375,8 +375,11 @@ export default function ObservacionPage() {
               <tbody>
                 {inboxTable.chats.map(chat => {
                   const ch = channelBadge(chat);
-                  const stageLabel = chat.chat_stage
-                    ? (CHAT_STAGE_LABELS[chat.chat_stage] ?? chat.chat_stage)
+                  const st = chat.chat_stage
+                    ? (normalizeChatStage(String(chat.chat_stage)) ?? undefined)
+                    : undefined;
+                  const stageLabel = st
+                    ? (CHAT_STAGE_LABELS[st] ?? st)
                     : '—';
                   const orderId = chat.order?.id ?? null;
                   return (

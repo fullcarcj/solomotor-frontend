@@ -2,6 +2,11 @@
 
 import type { ReactNode } from "react";
 import { useCallback, useState } from "react";
+import { useBandejaInbox } from "../BandejaInboxContext";
+import {
+  DEFAULT_TRIAJE_SELECTION,
+  triajeSelectionToInboxFilters,
+} from "./triajeFilters";
 import {
   ChannelIcon,
   type ChannelIconVariant,
@@ -59,36 +64,44 @@ interface Props {
  * La lista de chats vive en `children` para mantener la misma UI que el detalle.
  */
 export default function BandejaTriajeMock({ children }: Props) {
+  const { setFilters } = useBandejaInbox();
   const [tab, setTab] = useState<
     "pend" | "arch" | "asig" | "audit" | "prod"
   >("pend");
   /** Por defecto colapsado (no expandido). */
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filterSel, setFilterSel] = useState<Set<string>>(
-    () =>
-      new Set([
-        "orig-wa",
-        "canal-wa",
-        "canal-mlpreg",
-        "ciclo-cotizar",
-        "res-sinconv",
-      ])
+    () => new Set(DEFAULT_TRIAJE_SELECTION)
   );
 
   const activeFilterCount = filterSel.size;
 
-  const toggleFilter = useCallback((id: string) => {
-    setFilterSel((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
+  const applySelection = useCallback(
+    (next: Set<string>) => {
+      setFilters(triajeSelectionToInboxFilters(next));
+    },
+    [setFilters]
+  );
+
+  const toggleFilter = useCallback(
+    (id: string) => {
+      setFilterSel((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        queueMicrotask(() => {
+          applySelection(next);
+        });
+        return next;
+      });
+    },
+    [applySelection]
+  );
 
   const clearFilters = useCallback(() => {
     setFilterSel(new Set());
-  }, []);
+    applySelection(new Set());
+  }, [applySelection]);
 
   return (
     <div className="bd-triaje">

@@ -1,6 +1,9 @@
 export interface Customer {
   id:                  number;
   full_name:           string;
+  /** V, E, J, G, P o null */
+  id_type:             string | null;
+  id_number:           string | null;
   email:               string | null;
   phone:               string | null;
   phone_2:             string | null;

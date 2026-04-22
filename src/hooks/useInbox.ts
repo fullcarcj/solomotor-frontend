@@ -4,7 +4,14 @@ import type { InboxChat, InboxFilters } from "@/types/inbox";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearAutoReleased, setMyPending, setMyPendingResponded } from "@/store/realtimeSlice";
 
-const DEFAULT_FILTERS: InboxFilters = { filter: "", src: "", search: "", limit: 30 };
+const DEFAULT_FILTERS: InboxFilters = {
+  filter: "",
+  src: "",
+  search: "",
+  limit: 30,
+  stage: "",
+  result: "",
+};
 
 function errMsg(e: unknown) { return e instanceof Error ? e.message : "Error desconocido."; }
 
@@ -74,6 +81,8 @@ export function useInbox(initialFilters?: Partial<InboxFilters>) {
       if (f.filter) p.set("filter", f.filter);
       if (f.src)    p.set("src",    f.src);
       if (f.search) p.set("search", f.search);
+      if (f.stage)  p.set("stage",  f.stage);
+      if (f.result) p.set("result", f.result);
       if (cursor)   p.set("cursor", cursor);
       p.set("limit", String(f.limit));
       const res = await fetch(`/api/bandeja?${p}`, { credentials: "include" });

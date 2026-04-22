@@ -14,7 +14,7 @@ interface Props {
 }
 
 export default function ChatFilters({ filters, onChange }: Props) {
-  const isDirty = filters.search || filters.src;
+  const isDirty = Boolean(filters.search || filters.src || filters.stage || filters.result);
   return (
     <div className="bandeja-wa-filters-block">
       <div className="bandeja-wa-search-row">
@@ -45,7 +45,7 @@ export default function ChatFilters({ filters, onChange }: Props) {
           <button
             type="button"
             className="btn btn-sm btn-outline-secondary flex-shrink-0"
-            onClick={() => onChange({ search: "", src: "" })}
+            onClick={() => onChange({ search: "", src: "", stage: "", result: "" })}
             title="Limpiar filtros"
           >
             <i className="ti ti-x" />

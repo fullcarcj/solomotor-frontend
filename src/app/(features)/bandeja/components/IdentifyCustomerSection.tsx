@@ -27,14 +27,18 @@ interface IdentityCandidates {
  * backend todavía no expone el endpoint completo.
  */
 function normalizeCandidates(raw: unknown): IdentityCandidates {
-  const obj = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
-  const phone = (obj.phoneMatches ?? obj.phone_matches);
-  const ml    = (obj.mlBuyerMatches ?? obj.ml_buyer_matches);
-  const hint  = (obj.keywordHint ?? obj.keyword_hint);
+  const obj = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const nested =
+    obj.candidates != null && typeof obj.candidates === "object"
+      ? (obj.candidates as Record<string, unknown>)
+      : obj;
+  const phone = nested.phoneMatches ?? nested.phone_matches ?? obj.phoneMatches ?? obj.phone_matches;
+  const ml = nested.mlBuyerMatches ?? nested.ml_buyer_matches ?? obj.mlBuyerMatches ?? obj.ml_buyer_matches;
+  const hint = nested.keywordHint ?? nested.keyword_hint ?? obj.keywordHint ?? obj.keyword_hint;
   return {
     phoneMatches:   Array.isArray(phone) ? (phone as PhoneMatch[]) : [],
-    mlBuyerMatches: Array.isArray(ml)    ? (ml    as MlBuyerMatch[]) : [],
-    keywordHint:    typeof hint === 'string' && hint.length > 0 ? hint : null,
+    mlBuyerMatches: Array.isArray(ml) ? (ml as MlBuyerMatch[]) : [],
+    keywordHint: typeof hint === "string" && hint.length > 0 ? hint : null,
   };
 }
 
@@ -51,31 +55,34 @@ export function IdentifyCustomerSection({ chatId, onLinked }: Props) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetch(`/api/inbox/${encodeURIComponent(String(chatId))}/identity-candidates`, {
-      credentials: 'include',
-      cache: 'no-store',
-    })
-      .then(async r => {
-        if (!r.ok) throw new Error(await r.text() || `HTTP ${r.status}`);
-        return r.json();
+    // Diferir 300 ms para no competir con los fetches críticos del chat (mensajes + contexto)
+    const timer = setTimeout(() => {
+      fetch(`/api/inbox/${encodeURIComponent(String(chatId))}/identity-candidates`, {
+        credentials: 'include',
+        cache: 'no-store',
       })
-      .then((data: unknown) => {
-        if (!cancelled) {
-          setCandidates(normalizeCandidates(data));
-          setLoading(false);
-        }
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setCandidates(normalizeCandidates(null));
-          setLoading(false);
-          notification.error({
-            message: 'Error al buscar candidatos',
-            description: err instanceof Error ? err.message : String(err),
-          });
-        }
-      });
-    return () => { cancelled = true; };
+        .then(async r => {
+          if (!r.ok) throw new Error(await r.text() || `HTTP ${r.status}`);
+          return r.json();
+        })
+        .then((data: unknown) => {
+          if (!cancelled) {
+            setCandidates(normalizeCandidates(data));
+            setLoading(false);
+          }
+        })
+        .catch((err: unknown) => {
+          if (!cancelled) {
+            setCandidates(normalizeCandidates(null));
+            setLoading(false);
+            notification.error({
+              message: 'Error al buscar candidatos',
+              description: err instanceof Error ? err.message : String(err),
+            });
+          }
+        });
+    }, 300);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [chatId]);
 
   async function handleLink(linkType: 'phone' | 'ml_buyer', customerId: number) {
@@ -120,15 +127,7 @@ export function IdentifyCustomerSection({ chatId, onLinked }: Props) {
     !!candidates.keywordHint;
 
   if (!hasAny) {
-    return (
-      <Alert
-        type="info"
-        showIcon
-        message="Sin coincidencias automáticas"
-        description="Buscar manualmente en el listado de clientes para vincular."
-        style={{ marginTop: 8 }}
-      />
-    );
+    return null;
   }
 
   return (

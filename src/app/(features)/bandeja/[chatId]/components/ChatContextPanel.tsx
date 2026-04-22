@@ -1,17 +1,43 @@
 "use client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import type { InboxChat } from "@/types/inbox";
-import { CHAT_STAGE_LABELS, CHAT_STAGE_ORDER } from "@/types/inbox";
+import { normalizeChatStage } from "@/types/inbox";
+import PipelineMini from "@/app/(features)/bandeja/components/PipelineMini";
 import type { CustomerDetail } from "@/types/customers";
 import type { Sale } from "@/types/sales";
 import SaleStatusBadge from "@/app/(features)/ventas/pedidos/components/SaleStatusBadge";
 import { IdentifyCustomerSection } from "@/app/(features)/bandeja/components/IdentifyCustomerSection";
 import BotActionsTimeline from "@/components/bandeja/BotActionsTimeline";
 import ExceptionsPanel from "@/components/bandeja/ExceptionsPanel";
+import LinkMlOrderModal from "./LinkMlOrderModal";
+import LinkCustomerModal from "./LinkCustomerModal";
+import QuotePanel from "./QuotePanel";
+import PaymentLinkPanel from "./PaymentLinkPanel";
+import PriceAdjustPanel from "./PriceAdjustPanel";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import "@/app/(features)/supervisor/supervisor-theme.scss";
 
 type ActionType = "quote" | "pay" | "pos" | "dispatch" | null;
+
+/** Marca/desmarca un chat como interno (NO CLIENTE). */
+async function toggleOperational(chatId: string, currentlyOperational: boolean): Promise<boolean> {
+  if (currentlyOperational) {
+    const res = await fetch(
+      `/api/inbox/whitelist/mark-chat/${encodeURIComponent(chatId)}`,
+      { method: "DELETE", credentials: "include" }
+    );
+    return res.ok;
+  }
+  const res = await fetch("/api/inbox/whitelist/mark-chat", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: Number(chatId) }),
+  });
+  return res.ok;
+}
 
 interface Props {
   chatId:            string;
@@ -24,6 +50,9 @@ interface Props {
   activeAction:      ActionType;
   onSetAction:       (a: ActionType) => void;
   onCustomerLinked?: () => void;
+  onOrderLinked?:    () => void;
+  /** Abre el modal de edición de cliente (zona Cliente). */
+  onEditCustomer?:   () => void;
 }
 
 /* ── Utilidades ──────────────────────────────────────────────── */
@@ -105,6 +134,9 @@ function fmtCurrency(amount: number | null, currency: string | null): string {
   return `${sym} ${amount.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+/** Delay antes de fetches de paneles secundarios: deja pasar los fetches críticos (mensajes + contexto) */
+const SECONDARY_FETCH_DELAY_MS = 300;
+
 function MlOrderSection({ chatId }: { chatId: string }) {
   const [loading, setLoading] = useState(true);
   const [data, setData]       = useState<MlOrderData | null>(null);
@@ -113,22 +145,24 @@ function MlOrderSection({ chatId }: { chatId: string }) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true); setError(null);
-    void (async () => {
-      try {
-        const res = await fetch(`/api/inbox/${encodeURIComponent(chatId)}/ml-order`, {
-          credentials: "include", cache: "no-store",
-        });
-        const j = await res.json().catch(() => null) as MlOrderData | null;
-        if (cancelled) return;
-        if (!res.ok) { setError("No se pudo cargar la orden"); return; }
-        setData(j);
-      } catch {
-        if (!cancelled) setError("No se pudo cargar la orden");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch(`/api/inbox/${encodeURIComponent(chatId)}/ml-order`, {
+            credentials: "include", cache: "no-store",
+          });
+          const j = await res.json().catch(() => null) as MlOrderData | null;
+          if (cancelled) return;
+          if (!res.ok) { setError("No se pudo cargar la orden"); return; }
+          setData(j);
+        } catch {
+          if (!cancelled) setError("No se pudo cargar la orden");
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      })();
+    }, SECONDARY_FETCH_DELAY_MS);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [chatId]);
 
   if (loading) return (
@@ -401,22 +435,24 @@ function MlQuestionContextSection({ chatId, chat }: { chatId: string; chat: Inbo
   useEffect(() => {
     let cancelled = false;
     setLoadingQ(true); setQError(null);
-    void (async () => {
-      try {
-        const res = await fetch(`/api/inbox/${encodeURIComponent(chatId)}/ml-question`, {
-          credentials: "include", cache: "no-store",
-        });
-        const j = (await res.json().catch(() => null)) as MlQuestionData | null;
-        if (cancelled) return;
-        if (!res.ok) { setQError("No se pudo cargar la pregunta"); return; }
-        setQData(j);
-      } catch {
-        if (!cancelled) setQError("No se pudo cargar la pregunta");
-      } finally {
-        if (!cancelled) setLoadingQ(false);
-      }
-    })();
-    return () => { cancelled = true; };
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch(`/api/inbox/${encodeURIComponent(chatId)}/ml-question`, {
+            credentials: "include", cache: "no-store",
+          });
+          const j = (await res.json().catch(() => null)) as MlQuestionData | null;
+          if (cancelled) return;
+          if (!res.ok) { setQError("No se pudo cargar la pregunta"); return; }
+          setQData(j);
+        } catch {
+          if (!cancelled) setQError("No se pudo cargar la pregunta");
+        } finally {
+          if (!cancelled) setLoadingQ(false);
+        }
+      })();
+    }, SECONDARY_FETCH_DELAY_MS);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [chatId]);
 
   const mlUrl = useMemo(
@@ -591,30 +627,6 @@ function MlQuestionContextSection({ chatId, chat }: { chatId: string; chat: Inbo
   );
 }
 
-/* ── Pipeline stage en ficha ─────────────────────────────────── */
-function FichaStageSection({ chat }: { chat: InboxChat | null }) {
-  if (!chat?.chat_stage) return null;
-  const currentIdx = CHAT_STAGE_ORDER.indexOf(chat.chat_stage);
-
-  return (
-    <div className="mu-ficha-section">
-      <h4 className="mu-ficha-title">Etapa del pipeline</h4>
-      <div className="chat-stage-pipeline">
-        {CHAT_STAGE_ORDER.map((stage, idx) => {
-          const isPast    = idx < currentIdx;
-          const isCurrent = idx === currentIdx;
-          return (
-            <div key={stage} className={`chat-stage-step${isPast ? " past" : isCurrent ? " current" : ""}`}>
-              <div className="chat-stage-dot" />
-              <div className="chat-stage-label">{CHAT_STAGE_LABELS[stage]}</div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 /* ── Orden vinculada (CONDICIONAL — Decisión 6 Sprint 6A) ──────
    Regla: si chat.order !== null → mostrar. Si null → NO renderizar.
    NO se muestra placeholder "sin orden". */
@@ -646,48 +658,204 @@ function FichaOrdenSection({ chat }: { chat: InboxChat }) {
   );
 }
 
-/* ── Acciones (placeholder visual, funcionalidad en Sprint 6B) ─ */
-const ACTIONS: { key: ActionType; label: string; icon: string }[] = [
-  { key: "quote",    label: "Cotizar",    icon: "ti-file-invoice" },
-  { key: "pay",      label: "Cobrar",     icon: "ti-cash" },
-  { key: "pos",      label: "POS",        icon: "ti-shopping-cart" },
-  { key: "dispatch", label: "Despachar",  icon: "ti-truck" },
-];
+/* ── (Acciones removidas por punto 3 del sprint — QuotePanel es el punto de entrada) ── */
 
-function FichaAccionesSection({ activeAction, onSetAction }: { activeAction: ActionType; onSetAction: (a: ActionType) => void }) {
-  return (
-    <div className="mu-ficha-section">
-      <h4 className="mu-ficha-title">Acciones</h4>
-      <div className="mu-ficha-actions">
-        {ACTIONS.map(a => (
-          <button
-            key={a.key}
-            type="button"
-            className={`mu-ficha-action-btn${activeAction === a.key ? " mu-ficha-action-btn--primary" : ""}`}
-            onClick={() => onSetAction(activeAction === a.key ? null : a.key)}
-          >
-            <i className={`ti ${a.icon}`} style={{ fontSize: "0.9rem" }} />
-            {a.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+// Placeholder vacío para mantener compatibilidad de llamada en la vista principal.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function FichaAccionesSection(_props: {
+  activeAction: ActionType;
+  onSetAction: (a: ActionType) => void;
+  onCotizar: () => void;
+  quoteActive: boolean;
+}) {
+  return null;
 }
 
 /* ── Componente principal ─────────────────────────────────────── */
 
-type FichaTab = "ficha" | "bot" | "excepciones";
+type FichaTab = "ficha" | "bot" | "excepciones" | "precios";
 
 export default function ChatContextPanel({
   chatId, chat, customerId, customer, recentOrders,
   loadingCustomer, loadingOrders, activeAction, onSetAction,
-  onCustomerLinked,
+  onCustomerLinked, onOrderLinked, onEditCustomer,
 }: Props) {
+  const router = useRouter();
+  const { user: currentUser } = useCurrentUser();
+  const canAdjustPrices = currentUser?.role != null &&
+    ["SUPERUSER", "ADMIN", "SUPERVISOR"].includes(currentUser.role);
+
   const hasCustomer = customerId !== null && customerId !== undefined;
-  const [activeTab, setActiveTab] = useState<FichaTab>("ficha");
+  const [activeTab, setActiveTab]         = useState<FichaTab>("ficha");
+  const [linkOrderOpen, setLinkOrderOpen] = useState(false);
+  const [linkCustomerOpen, setLinkCustomerOpen] = useState(false);
+
+  /** Estado del buscador de producto en la pestaña Precios (misma API y criterios que QuotePanel) */
+  const [priceSearchMode, setPriceSearchMode] = useState<"sku" | "name">("name");
+  const [priceSearch, setPriceSearch]     = useState("");
+  const [debPriceSearch, setDebPriceSearch] = useState("");
+  const [priceResults, setPriceResults]   = useState<Array<{ id: number; sku: string; name: string; unit_price_usd: number | null }>>([]);
+  const [priceSearching, setPriceSearching] = useState(false);
+  const [selectedPriceProduct, setSelectedPriceProduct] = useState<{ id: number; sku: string; name: string; unit_price_usd: number | null } | null>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebPriceSearch(priceSearch), 280);
+    return () => clearTimeout(t);
+  }, [priceSearch]);
+
+  useEffect(() => {
+    setPriceSearch("");
+    setDebPriceSearch("");
+    setPriceResults([]);
+  }, [priceSearchMode]);
+
+  useEffect(() => {
+    if (!canAdjustPrices) return;
+    if (debPriceSearch.trim().length < 2) { setPriceResults([]); return; }
+    let alive = true;
+    setPriceSearching(true);
+    const params = new URLSearchParams({
+      search: debPriceSearch.trim(),
+      limit: "12",
+      search_by: priceSearchMode,
+    });
+    fetch(`/api/inventario/productos?${params}`, { credentials: "include", cache: "no-store" })
+      .then(r => r.json().catch(() => ({})))
+      .then((d: Record<string, unknown>) => {
+        if (!alive) return;
+        const data = (d.data ?? d) as Record<string, unknown>;
+        const raw = (data.products ?? []) as Array<Record<string, unknown>>;
+        const mapped = raw.map(p => ({
+          id: Number(p.id),
+          sku: String(p.sku ?? ""),
+          name: String(p.name ?? ""),
+          unit_price_usd: p.unit_price_usd != null ? Number(p.unit_price_usd) : null,
+        }));
+        mapped.sort((a, b) => a.name.localeCompare(b.name, "es", { sensitivity: "base" }));
+        setPriceResults(mapped);
+      })
+      .catch(() => { if (alive) setPriceResults([]); })
+      .finally(() => { if (alive) setPriceSearching(false); });
+    return () => { alive = false; };
+  }, [debPriceSearch, priceSearchMode, canAdjustPrices]);
+
+  const [opToggling, setOpToggling]       = useState(false);
+  const [opState, setOpState]             = useState<boolean | null>(null);
+  const [quoteForceOpen, setQuoteForceOpen] = useState(false);
+  const [activeSentQuote, setActiveSentQuote] = useState<{
+    id: number;
+    reference: string;
+    totalUsd: number;
+  } | null>(null);
+  const [waFromPhoneBusy, setWaFromPhoneBusy] = useState(false);
+  const [waFromPhoneErr, setWaFromPhoneErr]   = useState<string | null>(null);
+
+  // Estado local sincronizado con la prop del chat
+  const isOperational = opState !== null ? opState : Boolean(chat?.is_operational);
+
+  // Mostrar zona ML cuando el chat es WA sin orden ML asociada (aunque aún no haya cliente CRM).
+  // Así el operador puede vincular la orden ML y fusionar datos / teléfono antes o después de identificar.
+  const canLinkMlOrder =
+    chat?.source_type === "wa_inbound" &&
+    chat?.ml_order_id == null;
+
+  const canLinkCustomerManual =
+    !hasCustomer &&
+    (chat?.source_type === "ml_question" || chat?.source_type === "ml_message");
+
+  const handleToggleOperational = async () => {
+    if (!chat || opToggling) return;
+    setOpToggling(true);
+    const ok = await toggleOperational(String(chat.id), isOperational);
+    if (ok) setOpState(!isOperational);
+    setOpToggling(false);
+  };
+
+  const displayPhone =
+    customer?.phone != null && String(customer.phone).trim() !== ""
+      ? String(customer.phone).trim()
+      : chat?.phone != null && String(chat.phone).trim() !== ""
+        ? String(chat.phone).trim()
+        : null;
+  const canOpenWaThread = Boolean(displayPhone);
+
+  const handleOpenWaThreadFromPhone = async () => {
+    if (!canOpenWaThread || waFromPhoneBusy || !displayPhone) return;
+    setWaFromPhoneErr(null);
+    setWaFromPhoneBusy(true);
+    try {
+      const res = await fetch("/api/inbox/wa-chat/from-customer-phone", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: displayPhone,
+          customer_id:
+            customerId != null && String(customerId).trim() !== ""
+              ? Number(customerId)
+              : undefined,
+          customer_name: customer?.full_name ?? chat?.customer_name ?? "",
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        chat_id?: number;
+        message?: string;
+        error?: string;
+      };
+      if (!res.ok) {
+        setWaFromPhoneErr(
+          typeof data.message === "string" && data.message
+            ? data.message
+            : typeof data.error === "string" && data.error
+              ? data.error
+              : `Error ${res.status}`
+        );
+        return;
+      }
+      const cid = data.chat_id;
+      if (cid == null || !Number.isFinite(Number(cid))) {
+        setWaFromPhoneErr("Respuesta sin chat");
+        return;
+      }
+      router.push(`/bandeja/${String(cid)}`);
+    } finally {
+      setWaFromPhoneBusy(false);
+    }
+  };
+
+  /**
+   * Pregunta ML sin orden vinculada en el chat: aún no hay compra ML que aprobar/pagar.
+   * El pipeline no debe mostrarse en ORDEN ni adelantar etapas; se fuerza CONTACTO
+   * (inicio del ciclo) hasta que exista `chat.order`.
+   */
+  const mlQuestionSinOrdenMl = Boolean(
+    chat?.source_type === "ml_question" && chat?.order == null
+  );
+
+  const stageForPanel = useMemo(() => {
+    if (mlQuestionSinOrdenMl) return normalizeChatStage("contact");
+    return normalizeChatStage(chat?.chat_stage == null ? undefined : String(chat.chat_stage));
+  }, [mlQuestionSinOrdenMl, chat?.chat_stage]);
+
+  const pipelineMiniStage = useMemo(() => {
+    if (mlQuestionSinOrdenMl) return "contact";
+    return chat?.chat_stage;
+  }, [mlQuestionSinOrdenMl, chat?.chat_stage]);
+
+  // Posición contextual del pipeline en la franja operativa (usa etapa efectiva).
+  // contact/payment/dispatch/closed → antes de QuotePanel (primer paso visible)
+  // quote  → antes de Órdenes recientes
+  // order  → antes de FichaOrdenSection
+  const pipelineAt: "before_quote" | "before_orders" | "before_orden" =
+    stageForPanel === "order"  ? "before_orden"  :
+    stageForPanel === "quote"  ? "before_orders" :
+    "before_quote";
+
+  /** En pregunta ML el foco es aprobar/pagar en ML; no listar pedidos ERP aquí. */
+  const showRecentOrdersSection = hasCustomer && chat?.source_type !== "ml_question";
 
   return (
+    <>
     <div className="mu-ficha">
 
       {/* ── Tab bar ──────────────────────────────────────────────── */}
@@ -722,6 +890,16 @@ export default function ChatContextPanel({
           {/* NEW */}
           <span className="sup-queue-new-tag ms-1">NEW</span>
         </button>
+        {canAdjustPrices && (
+          <button
+            type="button"
+            className={`mu-ficha-tab${activeTab === "precios" ? " mu-ficha-tab--active" : ""}`}
+            onClick={() => setActiveTab("precios")}
+          >
+            <i className="ti ti-tag" style={{ fontSize: 11, marginRight: 4 }} />
+            Precios
+          </button>
+        )}
       </div>
 
       {/* ── Tab: Timeline bot ────────────────────────────────── */}
@@ -738,16 +916,243 @@ export default function ChatContextPanel({
         </div>
       )}
 
+      {/* ── Tab: Precios (SUPERUSER / ADMIN / SUPERVISOR) ────── */}
+      {activeTab === "precios" && canAdjustPrices && (
+        <div style={{ padding: "8px 0", display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* Modo búsqueda — mismo criterio que cotización (search_by + limit 12 + debounce) */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
+            <span style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 8, letterSpacing: "0.1em", fontWeight: 800,
+              color: "var(--mu-ink-mute,#8b949e)", textTransform: "uppercase",
+            }}>
+              Buscar por
+            </span>
+            <div style={{
+              display: "inline-flex", borderRadius: 8, padding: 2,
+              background: priceSearchMode === "sku" ? "rgba(234,179,8,0.1)" : "rgba(56,189,248,0.1)",
+              border: priceSearchMode === "sku"
+                ? "1px solid rgba(250,204,21,0.35)"
+                : "1px solid rgba(56,189,248,0.35)",
+            }}>
+              <button
+                type="button"
+                onClick={() => setPriceSearchMode("sku")}
+                style={{
+                  border: "none", borderRadius: 6, padding: "5px 10px",
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 800,
+                  letterSpacing: "0.06em", cursor: "pointer",
+                  background: priceSearchMode === "sku"
+                    ? "linear-gradient(180deg, #fbbf24 0%, #d97706 100%)"
+                    : "transparent",
+                  color: priceSearchMode === "sku" ? "#1a1408" : "var(--mu-ink-mute,#8b949e)",
+                }}
+              >
+                SKU
+              </button>
+              <button
+                type="button"
+                onClick={() => setPriceSearchMode("name")}
+                style={{
+                  border: "none", borderRadius: 6, padding: "5px 10px",
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 800,
+                  letterSpacing: "0.06em", cursor: "pointer",
+                  background: priceSearchMode === "name"
+                    ? "linear-gradient(180deg, #38bdf8 0%, #0284c7 100%)"
+                    : "transparent",
+                  color: priceSearchMode === "name" ? "#f0f9ff" : "var(--mu-ink-mute,#8b949e)",
+                }}
+              >
+                Nombre
+              </button>
+            </div>
+          </div>
+
+          {/* Buscador de producto */}
+          <div style={{ position: "relative" }}>
+            <div style={{
+              position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
+              color: "#6e7681", pointerEvents: "none", lineHeight: 0,
+            }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 13, height: 13 }}>
+                <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
+              </svg>
+            </div>
+            <input
+              type="text"
+              placeholder={priceSearchMode === "sku" ? "Código SKU…" : "Nombre del producto…"}
+              value={priceSearch}
+              onChange={e => {
+                setPriceSearch(e.target.value);
+                if (selectedPriceProduct) setSelectedPriceProduct(null);
+              }}
+              style={{
+                width: "100%", boxSizing: "border-box",
+                padding: "9px 10px 9px 32px",
+                borderRadius: 8,
+                background: "var(--mu-panel-3,#232a35)",
+                border: "1px solid var(--mu-border,rgba(255,255,255,0.08))",
+                color: "var(--mu-text,#e6edf3)",
+                fontSize: 12, fontFamily: "inherit", outline: "none",
+              }}
+            />
+          </div>
+
+          {/* Resultados de búsqueda (tras debounce, misma API que cotización) */}
+          {!selectedPriceProduct && debPriceSearch.trim().length >= 2 && (
+            <div style={{
+              background: "var(--mu-panel-3,#232a35)",
+              border: "1px solid var(--mu-border,rgba(255,255,255,0.08))",
+              borderRadius: 8, overflow: "hidden",
+              boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+            }}>
+              {priceSearching ? (
+                <div style={{ padding: "8px 12px", fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: "#6e7681" }}>
+                  Buscando…
+                </div>
+              ) : priceResults.length === 0 ? (
+                <div style={{ padding: "8px 12px", fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: "#6e7681" }}>
+                  Sin resultados.
+                </div>
+              ) : priceResults.map(p => (
+                <div
+                  key={p.id}
+                  onClick={() => { setSelectedPriceProduct(p); setPriceSearch(p.name); setPriceResults([]); }}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "8px 12px", cursor: "pointer",
+                    borderBottom: "1px solid rgba(255,255,255,0.04)",
+                    transition: "background 0.1s",
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                >
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "var(--mu-text,#e6edf3)" }}>{p.name}</div>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: "#6e7681", marginTop: 2 }}>{p.sku}</div>
+                  </div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: "#d8b4fe", flexShrink: 0 }}>
+                    {p.unit_price_usd != null ? `$${Number(p.unit_price_usd).toFixed(2)}` : "—"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Panel de ajuste para el producto seleccionado */}
+          {selectedPriceProduct && (
+            <PriceAdjustPanel
+              productId={selectedPriceProduct.id}
+              productInfo={selectedPriceProduct}
+              onAdjusted={(newPrice) => {
+                setSelectedPriceProduct(prev => prev ? { ...prev, unit_price_usd: newPrice } : prev);
+              }}
+            />
+          )}
+
+          {!selectedPriceProduct && priceSearch.trim().length < 2 && (
+            <div style={{
+              padding: "20px 12px", textAlign: "center",
+              background: "rgba(197,130,255,0.04)",
+              border: "1px dashed rgba(197,130,255,0.2)",
+              borderRadius: 8,
+            }}>
+              <i className="ti ti-tag" style={{ fontSize: 22, color: "#8b3fc8", display: "block", marginBottom: 6 }} />
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--mu-text,#e6edf3)", marginBottom: 3 }}>
+                Ajuste de precios de catálogo
+              </div>
+              <div style={{ fontSize: 10, color: "#8b949e" }}>
+                Elegí <strong>Nombre</strong> o <strong>SKU</strong> y escribí al menos 2 caracteres; el buscador usa la misma lógica que en cotización.
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Tab: Ficha 360° (contenido original) ─────────────── */}
       {activeTab === "ficha" && <>
 
-      {/* ML question: aplica para preguntas pendientes Y respondidas */}
+      {/* ── Pipeline contextual: antes de QuotePanel para stage=contact/… ── */}
+      {pipelineAt === "before_quote" && chat && (
+        <div style={{ marginBottom: 10 }}>
+          <PipelineMini stage={pipelineMiniStage} />
+        </div>
+      )}
+
+      {/* ── Panel de cotización (siempre disponible, colapsado sin ítems) ── */}
+      <QuotePanel
+        chatId={chatId}
+        customerId={customerId ?? null}
+        customerName={customer?.full_name ?? chat?.customer_name ?? null}
+        forceOpen={quoteForceOpen}
+        onForceOpenConsumed={() => setQuoteForceOpen(false)}
+        onSentQuoteChange={setActiveSentQuote}
+      />
+
+      {/* ── Pago y conciliación ─────────────────────────────────────── */}
+      <PaymentLinkPanel
+        chatId={chatId}
+        customerId={customerId ? Number(customerId) : null}
+        activeQuotationId={activeSentQuote?.id ?? null}
+        activeQuotationRef={activeSentQuote?.reference ?? null}
+        activeQuotationTotalUsd={activeSentQuote?.totalUsd ?? null}
+      />
+
+      {/* ── Banner NO CLIENTE ───────────────────────────────────── */}
+      {isOperational && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "8px 14px",
+            background: "rgba(180,180,180,0.08)",
+            border: "1px solid rgba(180,180,180,0.18)",
+            borderRadius: 8,
+            marginBottom: 10,
+          }}
+        >
+          <i className="ti ti-building" style={{ fontSize: 14, color: "var(--mu-ink-mute)" }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--mu-ink-mute)" }}>
+              No cliente · Personal de empresa
+            </div>
+            <div style={{ fontSize: 10, color: "var(--mu-ink-mute)", marginTop: 2 }}>
+              Este número está marcado como contacto interno.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleToggleOperational}
+            disabled={opToggling}
+            title="Quitar marca No Cliente"
+            style={{
+              background: "none",
+              border: "1px solid rgba(180,180,180,0.3)",
+              borderRadius: 5,
+              padding: "3px 8px",
+              fontSize: 10,
+              color: "var(--mu-ink-mute)",
+              cursor: "pointer",
+              opacity: opToggling ? 0.5 : 1,
+            }}
+          >
+            {opToggling ? "…" : "Quitar"}
+          </button>
+        </div>
+      )}
+
+      {/* ml_question CON orden vinculada: la orden es lo primero (más operativo) */}
+      {chat?.source_type === "ml_question" && chat.order != null && (
+        <MlOrderSection chatId={chatId} />
+      )}
+
+      {/* Publicación ML + texto de pregunta */}
       {(chat?.source_type === "ml_question" || chat?.source_type === "ml_message") && chat?.ml_question_id != null && (
         <MlQuestionContextSection chatId={chatId} chat={chat} />
       )}
 
-      {/* Orden ML con ítems, producto y ubicación WMS — para todos los chats ml_message
-          (el backend extrae el order_id del campo phone si ml_order_id es null) */}
+      {/* Orden ML con ítems, producto y ubicación WMS — para chats ml_message */}
       {chat?.source_type === "ml_message" && (
         <MlOrderSection chatId={chatId} />
       )}
@@ -755,11 +1160,30 @@ export default function ChatContextPanel({
       {/* ── Sección: Cliente ─────────────────────────── */}
       <div className="mu-ficha-section">
         <h4 className="mu-ficha-title">
-          Cliente
+          <span>Cliente</span>
           {hasCustomer && customerId && (
-            <Link href={`/clientes/historial?id=${customerId}`} className="mu-ficha-link">
-              VER FICHA →
-            </Link>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+              {onEditCustomer && (
+                <button
+                  type="button"
+                  onClick={onEditCustomer}
+                  className="mu-ficha-link"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                    font: "inherit",
+                    letterSpacing: "0.1em",
+                  }}
+                >
+                  Editar cliente
+                </button>
+              )}
+              <Link href={`/clientes/historial?id=${customerId}`} className="mu-ficha-link">
+                VER FICHA →
+              </Link>
+            </span>
           )}
         </h4>
 
@@ -769,6 +1193,30 @@ export default function ChatContextPanel({
               <i className="ti ti-user-question" />
               <span>Cliente no identificado</span>
             </div>
+            {canLinkCustomerManual && (
+              <div style={{ marginBottom: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => setLinkCustomerOpen(true)}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "5px 12px",
+                    borderRadius: 6,
+                    background: "#ff7400",
+                    color: "#fff",
+                    fontWeight: 700,
+                    fontSize: 11,
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  <i className="ti ti-link" style={{ fontSize: 13 }} />
+                  Vincular Cliente
+                </button>
+              </div>
+            )}
             <IdentifyCustomerSection chatId={chatId} onLinked={onCustomerLinked ?? (() => {})} />
           </div>
         ) : loadingCustomer ? (
@@ -791,7 +1239,33 @@ export default function ChatContextPanel({
 
             <dl className="mu-kv">
               <dt>Teléfono</dt>
-              <dd>{customer.phone ?? chat?.phone ?? "—"}</dd>
+              <dd>
+                {canOpenWaThread ? (
+                  <button
+                    type="button"
+                    onClick={handleOpenWaThreadFromPhone}
+                    disabled={waFromPhoneBusy}
+                    title="Abrir hilo de WhatsApp; si hace tiempo sin mensajes, se envía un saludo para retomar contacto"
+                    className="mu-ficha-link"
+                    style={{
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      cursor: waFromPhoneBusy ? "wait" : "pointer",
+                      font: "inherit",
+                      textDecoration: "underline",
+                      textUnderlineOffset: 2,
+                    }}
+                  >
+                    {displayPhone}
+                  </button>
+                ) : (
+                  "—"
+                )}
+                {waFromPhoneErr ? (
+                  <div style={{ fontSize: 10, color: "#ef4444", marginTop: 4 }}>{waFromPhoneErr}</div>
+                ) : null}
+              </dd>
 
               {customer.city && (
                 <>
@@ -808,34 +1282,75 @@ export default function ChatContextPanel({
               )}
             </dl>
 
-            {/* Stats compactos */}
-            <div className="mu-ficha-stats" style={{ marginTop: 10 }}>
-              <div className="mu-stat-box">
-                <div className="mu-stat-value">{customer.total_orders}</div>
-                <div className="mu-stat-label">Órdenes</div>
-              </div>
-              <div className="mu-stat-box">
-                <div className="mu-stat-value" style={{ fontSize: 16 }}>{fmtUSD(customer.total_spent_usd)}</div>
-                <div className="mu-stat-label">Total gastado</div>
-              </div>
-            </div>
           </>
         ) : (
           <p style={{ color: "var(--mu-ink-mute)", fontSize: 11, margin: 0 }}>Sin datos del cliente</p>
         )}
       </div>
 
+      {/* ── Pipeline contextual: antes de FichaOrden para stage=order/payment/dispatch ── */}
+      {pipelineAt === "before_orden" && chat && (
+        <div style={{ marginBottom: 10 }}>
+          <PipelineMini stage={pipelineMiniStage} />
+        </div>
+      )}
+
       {/* ── Sección: Orden vinculada (CONDICIONAL) ─── */}
-      {chat && <FichaOrdenSection chat={chat} />}
+      {/* Para ml_question con orden se omite: ya se muestra MlOrderSection arriba con datos completos */}
+      {chat && chat.source_type !== "ml_question" && <FichaOrdenSection chat={chat} />}
 
-      {/* ── Sección: Etapa pipeline ──────────────────── */}
-      <FichaStageSection chat={chat} />
+      {/* ── Sección: Vincular Orden ML (solo chats WA sin orden asociada) ── */}
+      {canLinkMlOrder && (
+        <div className="mu-ficha-section">
+          <h4 className="mu-ficha-title">Canal · Zona MercadoLibre</h4>
+          {!hasCustomer && (
+            <p style={{ fontSize: 10, color: "var(--mu-ink-mute)", margin: "0 0 8px", lineHeight: 1.45 }}>
+              Podés vincular la orden ML aunque el cliente aún no esté identificado en CRM: se asocia el hilo de WhatsApp
+              a la compra ML y luego se puede fusionar el contacto cuando corresponda.
+            </p>
+          )}
+          <div
+            style={{
+              padding: "8px 12px",
+              borderRadius: 8,
+              background: "rgba(255,116,0,0.06)",
+              border: "1px solid rgba(255,116,0,0.2)",
+              marginBottom: 4,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setLinkOrderOpen(true)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "5px 12px",
+                borderRadius: 6,
+                background: "#ff7400",
+                color: "#fff",
+                fontWeight: 700,
+                fontSize: 11,
+                border: "none",
+                cursor: "pointer",
+              }}
+            >
+              <i className="ti ti-link" style={{ fontSize: 13 }} />
+              Vincular Orden ML
+            </button>
+          </div>
+        </div>
+      )}
 
-      {/* ── Sección: Acciones ────────────────────────── */}
-      <FichaAccionesSection activeAction={activeAction} onSetAction={onSetAction} />
+      {/* ── Pipeline contextual: antes de Órdenes recientes para stage=quote ── */}
+      {pipelineAt === "before_orders" && chat && (
+        <div style={{ marginBottom: 10 }}>
+          <PipelineMini stage={pipelineMiniStage} />
+        </div>
+      )}
 
       {/* ── Sección: Órdenes recientes ───────────────── */}
-      {hasCustomer && (
+      {showRecentOrdersSection && (
         <div className="mu-ficha-section">
           <h4 className="mu-ficha-title">Órdenes recientes</h4>
           {loadingOrders ? (
@@ -899,5 +1414,27 @@ export default function ChatContextPanel({
       </>}
 
     </div>
+
+    {/* ── Modal: vincular Orden ML ── */}
+    <LinkMlOrderModal
+      open={linkOrderOpen}
+      chatId={chatId}
+      onClose={() => setLinkOrderOpen(false)}
+      onSuccess={() => {
+        setLinkOrderOpen(false);
+        onOrderLinked?.();
+      }}
+    />
+
+    <LinkCustomerModal
+      open={linkCustomerOpen}
+      chatId={chatId}
+      onClose={() => setLinkCustomerOpen(false)}
+      onSuccess={() => {
+        setLinkCustomerOpen(false);
+        onCustomerLinked?.();
+      }}
+    />
+    </>
   );
 }

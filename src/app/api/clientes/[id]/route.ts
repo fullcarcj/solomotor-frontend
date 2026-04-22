@@ -11,7 +11,8 @@ const BACKEND_URL =
 /**
  * BFF proxy → backend PATCH /api/crm/customers/:id
  * Actualización parcial del cliente CRM.
- * Campos permitidos: full_name, phone, email, customer_type, notes, tags, is_active.
+ * Campos permitidos: full_name, id_type, id_number, phone, phone_2, email, crm_status,
+ * customer_type, address, city, notes, tags, is_active.
  */
 export async function PATCH(
   req: NextRequest,

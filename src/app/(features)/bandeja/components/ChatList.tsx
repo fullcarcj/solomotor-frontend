@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { useInbox } from "@/hooks/useInbox";
+import { useBandejaInbox } from "../BandejaInboxContext";
 import { useAiResponderStats } from "@/hooks/useAiResponderStats";
 import InboxCountBadges from "./InboxCountBadges";
 import ChatFilters from "./ChatFilters";
@@ -10,8 +10,6 @@ import AiReviewDrawer from "./AiReviewDrawer";
 
 interface Props {
   activeChatId?: string | number;
-  initialSrc?:   string;
-  initialFilter?: string;
   /** En panel triaje (/bandeja): oculta el header “Spacework” para alinear con bandeja general. */
   variant?: "default" | "embedded";
 }
@@ -31,13 +29,10 @@ function SkeletonItem() {
 
 export default function ChatList({
   activeChatId,
-  initialSrc = "",
-  initialFilter = "",
   variant = "default",
 }: Props) {
-  const { chats, nextCursor, total, loading, loadingMore, error, filters, setFilters, loadMore } = useInbox(
-    initialSrc || initialFilter ? { src: initialSrc, filter: initialFilter } : undefined
-  );
+  const { chats, nextCursor, total, loading, loadingMore, error, filters, setFilters, loadMore } =
+    useBandejaInbox();
   const { stats } = useAiResponderStats();
   const [drawerOpen, setDrawerOpen] = useState(false);
 

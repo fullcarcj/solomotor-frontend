@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import type { InboxChat } from "@/types/inbox";
+import { normalizeChatStage } from "@/types/inbox";
 import { useChatMessages } from "@/hooks/useChatMessages";
 import { useChatContext } from "@/hooks/useChatContext";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -168,6 +169,8 @@ export default function ChatDetailPage() {
               payment_status: String(orderRaw.payment_status ?? ""),
               fulfillment_type: String(orderRaw.fulfillment_type ?? ""),
               channel_id: orderRaw.channel_id != null ? Number(orderRaw.channel_id) : null,
+              customer_id: orderRaw.customer_id != null ? Number(orderRaw.customer_id) : null,
+              status: orderRaw.status != null ? String(orderRaw.status) : null,
             }
           : null;
       const mapped: InboxChat = {
@@ -187,6 +190,9 @@ export default function ChatDetailPage() {
         status: raw.status != null ? (raw.status as InboxChat["status"]) : "UNASSIGNED",
         sla_deadline_at: raw.sla_deadline_at != null ? String(raw.sla_deadline_at) : null,
         last_outbound_at: raw.last_outbound_at != null ? String(raw.last_outbound_at) : null,
+        chat_stage: normalizeChatStage(
+          typeof d.chat_stage === "string" ? d.chat_stage : undefined
+        ),
       };
       setChat(mapped);
     } catch (e: unknown) {
@@ -203,16 +209,18 @@ export default function ChatDetailPage() {
   useEffect(() => {
     if (!chatId) return;
     const url = `/api/bandeja/${encodeURIComponent(chatId)}/presence`;
-    const open = () => {
+    // Diferir 800ms: presence no es crítico para el usuario y no debe competir
+    // con los fetches de mensajes y contexto que sí bloquean la UI.
+    const timer = setTimeout(() => {
       void fetch(url, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ viewing: true }),
       }).catch(() => {});
-    };
-    open();
+    }, 800);
     return () => {
+      clearTimeout(timer);
       void fetch(url, {
         method: "POST",
         credentials: "include",
@@ -303,6 +311,10 @@ export default function ChatDetailPage() {
                 showRelease={showRelease}
                 onRelease={showRelease ? handleRelease : undefined}
                 releasePending={showRelease ? releasePending : undefined}
+                onOperationalChanged={() => {
+                  void fetchChat();
+                  dispatch(bumpInboxRefetch());
+                }}
               />
             ) : (
               <div className="bandeja-chat-header-wa">
@@ -382,10 +394,10 @@ export default function ChatDetailPage() {
               <EditCustomerModal
                 open={editCustomerOpen}
                 customerId={Number(customerId)}
-                currentName={chat?.customer_name ?? null}
-                currentPhone={chat?.phone ?? null}
+                chatId={chatId}
+                sourceType={chat?.source_type ?? null}
                 onClose={() => setEditCustomerOpen(false)}
-                onSuccess={() => { setEditCustomerOpen(false); fetchChat(); }}
+                onSuccess={() => { setEditCustomerOpen(false); void fetchChat(); }}
               />
             )}
 
@@ -454,6 +466,8 @@ export default function ChatDetailPage() {
               activeAction={activeAction}
               onSetAction={setActiveAction}
               onCustomerLinked={fetchChat}
+              onOrderLinked={fetchChat}
+              onEditCustomer={() => setEditCustomerOpen(true)}
             />
           </div>
         </div>

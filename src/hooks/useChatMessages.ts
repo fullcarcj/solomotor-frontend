@@ -61,6 +61,19 @@ function parseMessages(raw: unknown): { messages: ChatMessage[]; meta: Record<st
   return { messages: msgs, meta: (r.meta as Record<string, unknown>) ?? {} };
 }
 
+/** Última fila gana — orden de entrada se conserva. */
+function dedupeByMessageId(msgs: ChatMessage[]): ChatMessage[] {
+  const seen = new Set<string>();
+  const out: ChatMessage[] = [];
+  for (const m of msgs) {
+    const k = String(m.id);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(m);
+  }
+  return out;
+}
+
 export function useChatMessages(chatId: string | number | null) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [meta, setMeta]         = useState<Record<string, unknown>>({});
@@ -70,32 +83,42 @@ export function useChatMessages(chatId: string | number | null) {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const latestIdRef = useRef<string | number | null>(null);
 
-  const load = useCallback(async (id: string | number, beforeId?: string | number) => {
-    const isMore = beforeId !== undefined;
-    if (isMore) setLoadingMore(true); else { setLoading(true); setError(null); }
-    try {
-      const p = new URLSearchParams({ limit: "50" });
-      if (beforeId !== undefined) p.set("before_id", String(beforeId));
-      const res = await fetch(`/api/bandeja/${encodeURIComponent(String(id))}/messages?${p}`, { credentials: "include" });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({})) as Record<string, unknown>;
-        throw new Error((d.error as string) ?? `HTTP ${res.status}`);
+  const load = useCallback(
+    async (id: string | number, beforeId?: string | number, options?: { silent?: boolean }) => {
+      const silent = Boolean(options?.silent);
+      const isMore = beforeId !== undefined;
+      if (isMore) setLoadingMore(true);
+      else if (!silent) {
+        setLoading(true);
+        setError(null);
       }
-      const data: unknown = await res.json();
-      const { messages: msgs, meta: m } = parseMessages(data);
-      if (isMore) {
-        setMessages(prev => [...msgs, ...prev]);
-      } else {
-        setMessages(msgs);
-        if (msgs.length > 0) latestIdRef.current = msgs[msgs.length - 1].id;
+      try {
+        const p = new URLSearchParams({ limit: "50" });
+        if (beforeId !== undefined) p.set("before_id", String(beforeId));
+        const res = await fetch(`/api/bandeja/${encodeURIComponent(String(id))}/messages?${p}`, { credentials: "include" });
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({})) as Record<string, unknown>;
+          throw new Error((d.error as string) ?? `HTTP ${res.status}`);
+        }
+        const data: unknown = await res.json();
+        const { messages: rawList, meta: m } = parseMessages(data);
+        const msgs = dedupeByMessageId(rawList);
+        if (isMore) {
+          setMessages(prev => dedupeByMessageId([...msgs, ...prev]));
+        } else {
+          setMessages(msgs);
+          if (msgs.length > 0) latestIdRef.current = msgs[msgs.length - 1].id;
+        }
+        setMeta(m);
+      } catch (e) {
+        if (!isMore && !silent) setError(errMsg(e));
+      } finally {
+        if (isMore) setLoadingMore(false);
+        else if (!silent) setLoading(false);
       }
-      setMeta(m);
-    } catch (e) {
-      if (!isMore) setError(errMsg(e));
-    } finally {
-      if (isMore) setLoadingMore(false); else setLoading(false);
-    }
-  }, []);
+    },
+    []
+  );
 
   /* poll for new messages */
   const poll = useCallback(async (id: string | number) => {
@@ -111,9 +134,9 @@ export function useChatMessages(chatId: string | number | null) {
       setMessages(prev => {
         const existingIds = new Set(prev.map(m => String(m.id)));
         const toAdd = newMsgs.filter(m => !existingIds.has(String(m.id)));
-        if (toAdd.length === 0) return prev;
         latestIdRef.current = latestNew;
-        return [...prev, ...toAdd];
+        if (toAdd.length === 0) return prev;
+        return dedupeByMessageId([...prev, ...toAdd]);
       });
     } catch { /* silent */ }
   }, []);
@@ -154,15 +177,8 @@ export function useChatMessages(chatId: string | number | null) {
         }
         throw new Error((d.error as string) ?? `HTTP ${res.status}`);
       }
-      /* optimistic: add locally */
-      const optimistic: ChatMessage = {
-        id: `local-${Date.now()}`, chat_id: chatId, customer_id: null,
-        external_message_id: null, direction: "outbound", type: "text",
-        content: { text, caption: null, mediaUrl: null, mimeType: null },
-        sent_by: sentBy ?? "agent", is_read: true, is_priority: false,
-        created_at: new Date().toISOString(), ai_reply_status: null, ai_reply_text: null,
-      };
-      setMessages(prev => [...prev, optimistic]);
+      /* Sincronizar con BD: el optimista local + el mensaje real compartían texto y duplicaban el hilo. */
+      await load(chatId, undefined, { silent: true });
       return true;
     } catch (e) {
       if (process.env.NODE_ENV === "development") {
@@ -171,7 +187,7 @@ export function useChatMessages(chatId: string | number | null) {
       }
       return false;
     }
-  }, [chatId]);
+  }, [chatId, load]);
 
   const refetch = useCallback(() => { if (chatId) void load(chatId); }, [chatId, load]);
 

@@ -213,16 +213,8 @@ export default function ChatActionSlideOver({
 }: Props) {
   if (!action) return null;
 
-  /* Para 'quote' usamos directamente el modal Bootstrap — no necesita slide-over wrapper */
-  if (action === "quote") {
-    return (
-      <NewQuotationModal
-        open={true}
-        onClose={onClose}
-        onSuccess={() => onSuccess()}
-      />
-    );
-  }
+  /* 'quote' ya está integrado en QuotePanel dentro del ChatContextPanel — no se abre aquí */
+  if (action === "quote") return null;
 
   const titles: Record<Exclude<NonNullable<ActionType>, "quote">, string> = {
     pay:      "Cobrar",

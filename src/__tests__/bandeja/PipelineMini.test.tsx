@@ -3,10 +3,10 @@ import { render, screen } from "@testing-library/react";
 import PipelineMini from "@/app/(features)/bandeja/components/PipelineMini";
 
 describe("PipelineMini", () => {
-  it("renderiza todos los stages", () => {
+  it("renderiza los 7 stages", () => {
     const { container } = render(<PipelineMini stage="quote" />);
     const steps = container.querySelectorAll(".mu-pm");
-    expect(steps).toHaveLength(8); // 8 stages en CHAT_STAGE_ORDER
+    expect(steps).toHaveLength(7);
   });
 
   it("marca el stage actual como --current", () => {
@@ -19,8 +19,7 @@ describe("PipelineMini", () => {
   it("marca stages previos como --done", () => {
     const { container } = render(<PipelineMini stage="quote" />);
     const done = container.querySelectorAll(".mu-pm--done");
-    // contact (0) y ml_answer (1) son previos a quote (2)
-    expect(done).toHaveLength(2);
+    expect(done).toHaveLength(1);
   });
 
   it("el primer stage (contact) no tiene done ni current cuando stage=contact", () => {
@@ -37,14 +36,20 @@ describe("PipelineMini", () => {
     expect(container.querySelectorAll(".mu-pm--done")).toHaveLength(0);
   });
 
-  it("el último stage (closed) tiene 7 done y 1 current", () => {
+  it("el último stage (closed) tiene 6 done y 1 current", () => {
     const { container } = render(<PipelineMini stage="closed" />);
-    expect(container.querySelectorAll(".mu-pm--done")).toHaveLength(7);
+    expect(container.querySelectorAll(".mu-pm--done")).toHaveLength(6);
     expect(container.querySelectorAll(".mu-pm--current")).toHaveLength(1);
   });
 
   it("tiene aria-label con el stage legible", () => {
     render(<PipelineMini stage="payment" />);
     expect(screen.getByLabelText("Etapa: Pago")).toBeDefined();
+  });
+
+  it("legacy ml_answer se normaliza a quote (mismo índice que cotización)", () => {
+    const { container } = render(<PipelineMini stage="ml_answer" />);
+    expect(container.querySelectorAll(".mu-pm")).toHaveLength(7);
+    expect(container.querySelector(".mu-pm--current")?.textContent).toContain("COT.");
   });
 });

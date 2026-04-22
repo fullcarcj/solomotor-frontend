@@ -130,17 +130,17 @@ describe("Tipos de mensaje multimedia", () => {
   });
 });
 
-/* ── 5. Pipeline con los 8 stages ───────────────────────────── */
+/* ── 5. Pipeline con los 6 stages ───────────────────────────── */
 describe("PipelineMini — todos los stages del dominio", () => {
   const stages = [
-    "contact", "ml_answer", "quote", "approved",
+    "contact", "quote",
     "order", "payment", "dispatch", "closed",
   ] as const;
 
   for (const stage of stages) {
-    it(`stage '${stage}' → renderiza 8 pasos`, () => {
+    it(`stage '${stage}' → renderiza 6 pasos`, () => {
       const { container, unmount } = render(<PipelineMini stage={stage} />);
-      expect(container.querySelectorAll(".mu-pm")).toHaveLength(8);
+      expect(container.querySelectorAll(".mu-pm")).toHaveLength(6);
       unmount();
     });
   }

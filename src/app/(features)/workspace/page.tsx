@@ -21,8 +21,7 @@ import {
 import { useInbox } from '@/hooks/useInbox';
 import { useChatMessages } from '@/hooks/useChatMessages';
 import { useChatContext } from '@/hooks/useChatContext';
-import type { ChatStage } from '@/constants/chatStage';
-import { CHAT_STAGE_LABELS } from '@/constants/chatStage';
+import { CHAT_STAGE_LABELS, normalizeChatStage } from '@/constants/chatStage';
 import MessageBubble from '@/app/(features)/bandeja/components/MessageBubble';
 
 import {
@@ -187,7 +186,7 @@ export default function WorkspacePage() {
     });
   }, [selectedChatId]);
 
-  const stage = selected?.chat_stage as ChatStage | undefined;
+  const stage = normalizeChatStage(selected?.chat_stage != null ? String(selected.chat_stage) : undefined);
   const miniPm = useMemo(() => miniPipelineFromStage(stage) ?? [], [stage]);
 
   const headerSub = useMemo(() => {
@@ -304,7 +303,7 @@ export default function WorkspacePage() {
                       const active = String(c.id) === String(selectedChatId);
                       const ini = initials(c.customer_name, c.phone);
                       const { channel, letter } = sourceToChannel(c.source_type);
-                      const st = c.chat_stage as ChatStage | undefined;
+                      const st = normalizeChatStage(c.chat_stage != null ? String(c.chat_stage) : undefined);
                       return (
                         <div
                           key={String(c.id)}

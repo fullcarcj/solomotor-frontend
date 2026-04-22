@@ -13,9 +13,10 @@ export const dynamic = "force-dynamic";
  * - keepAlive para reutilizar el socket TCP
  */
 const sseAgent = new Agent({
-  headersTimeout: 30_000,
+  /** Arranque lento del receiver local; evita cortar justo antes de la primera cabecera SSE */
+  headersTimeout: 120_000,
   bodyTimeout: 0,
-  connectTimeout: 30_000,
+  connectTimeout: 45_000,
 });
 
 export async function GET(req: NextRequest) {
@@ -41,20 +42,38 @@ export async function GET(req: NextRequest) {
      */
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
+        let closed = false;
+        const safeClose = () => {
+          if (closed) return;
+          closed = true;
+          try {
+            controller.close();
+          } catch {
+            /* ya cerrado */
+          }
+        };
         body.on("data", (chunk: Buffer) => {
-          controller.enqueue(new Uint8Array(chunk));
+          try {
+            controller.enqueue(new Uint8Array(chunk));
+          } catch {
+            /* stream cerrado */
+          }
         });
         body.on("end", () => {
-          controller.close();
+          safeClose();
+        });
+        body.on("close", () => {
+          safeClose();
         });
         body.on("error", (err: Error) => {
-          controller.error(err);
+          console.warn("[BFF realtime/stream] upstream cerrado o error:", err?.message || err);
+          safeClose();
         });
 
         // Si el cliente (navegador) desconecta → destruir el upstream
         req.signal?.addEventListener("abort", () => {
           body.destroy();
-          try { controller.close(); } catch { /* ya cerrado */ }
+          safeClose();
         }, { once: true });
       },
       cancel() {

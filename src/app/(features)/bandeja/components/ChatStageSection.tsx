@@ -1,16 +1,17 @@
 'use client';
 
 import type { ChatStage } from '@/types/inbox';
-import { CHAT_STAGE_ORDER, CHAT_STAGE_LABELS } from '@/types/inbox';
+import { CHAT_STAGE_ORDER, CHAT_STAGE_LABELS, normalizeChatStage } from '@/types/inbox';
 
 interface Props {
-  currentStage?: ChatStage;
+  currentStage?: ChatStage | string;
 }
 
 export function ChatStageSection({ currentStage }: Props) {
-  const currentIndex = currentStage
-    ? CHAT_STAGE_ORDER.indexOf(currentStage)
-    : -1;
+  const st = normalizeChatStage(
+    currentStage == null ? undefined : String(currentStage)
+  );
+  const currentIndex = st ? CHAT_STAGE_ORDER.indexOf(st) : -1;
 
   return (
     <div className="p-3 border-bottom bg-white mt-0">
@@ -21,7 +22,7 @@ export function ChatStageSection({ currentStage }: Props) {
         Etapa del chat
       </div>
 
-      {!currentStage ? (
+      {!st ? (
         <p className="text-muted small mb-0">Sin etapa asignada</p>
       ) : (
         <div className="chat-stage-pipeline">

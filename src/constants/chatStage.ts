@@ -1,16 +1,14 @@
 /**
- * Etapas del ciclo de venta de un chat (8 valores canónicos).
+ * Etapas del ciclo de venta de un chat (6 valores canónicos).
  * Proviene del backend vía BE-1.9 (campo chat_stage en GET /api/inbox).
- * NO derivar en frontend — usar el campo tal como llega.
  *
- * Este archivo vive en `constants/` (no solo en `types/`) para que el bundler
- * siempre incluya los valores en runtime; `src/types/inbox.ts` reexporta.
+ * No existe etapa "Resp. ML" ni "Aprobada":
+ *   - ml_answer → se normaliza como `quote`.
+ *   - approved  → se normaliza como `order` (cotización aprobada = ya hay orden).
  */
 export type ChatStage =
   | 'contact'
-  | 'ml_answer'
   | 'quote'
-  | 'approved'
   | 'order'
   | 'payment'
   | 'dispatch'
@@ -18,9 +16,7 @@ export type ChatStage =
 
 export const CHAT_STAGE_LABELS: Record<ChatStage, string> = {
   contact:   'Contacto',
-  ml_answer: 'Resp. ML',
   quote:     'Cotización',
-  approved:  'Aprobada',
   order:     'Con orden',
   payment:   'Pago',
   dispatch:  'Despacho',
@@ -29,11 +25,18 @@ export const CHAT_STAGE_LABELS: Record<ChatStage, string> = {
 
 export const CHAT_STAGE_ORDER: ChatStage[] = [
   'contact',
-  'ml_answer',
   'quote',
-  'approved',
   'order',
   'payment',
   'dispatch',
   'closed',
 ];
+
+/** Compatibilidad con respuestas antiguas que envían `ml_answer` o `approved`. */
+export function normalizeChatStage(raw: string | null | undefined): ChatStage | undefined {
+  if (raw == null || String(raw).trim() === "") return undefined;
+  if (raw === "ml_answer") return "quote";
+  if (raw === "approved") return "order";
+  if ((CHAT_STAGE_ORDER as readonly string[]).includes(raw)) return raw as ChatStage;
+  return undefined;
+}

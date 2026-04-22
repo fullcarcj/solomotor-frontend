@@ -6,7 +6,7 @@ function base() { const r = BACKEND_URL.trim().replace(/\/+$/, ""); return /^htt
 function hdr(req: NextRequest) {
   return { "Content-Type": "application/json", Accept: "application/json", cookie: req.headers.get("cookie") ?? "", ...(req.headers.get("authorization") ? { authorization: req.headers.get("authorization")! } : {}) };
 }
-const FWD = ["filter", "src", "search", "cursor", "limit"] as const;
+const FWD = ["filter", "src", "search", "cursor", "limit", "stage", "result"] as const;
 export async function GET(req: NextRequest) {
   const p = new URLSearchParams();
   for (const k of FWD) { const v = req.nextUrl.searchParams.get(k); if (v !== null && v !== "") p.set(k, v); }
