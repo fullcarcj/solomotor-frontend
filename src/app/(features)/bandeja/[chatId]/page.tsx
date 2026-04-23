@@ -118,6 +118,7 @@ export default function ChatDetailPage() {
     loading: msgLoading,
     loadingMore,
     messagesBootstrapping,
+    hasMore: msgHasMore,
     error: msgError,
     loadMore,
     sendMessage,
@@ -403,6 +404,7 @@ export default function ChatDetailPage() {
               bootstrapping={messagesBootstrapping}
               chatKey={chatId}
               error={msgError}
+              hasMore={msgHasMore}
               onLoadMore={loadMore}
             />
 

@@ -18,6 +18,10 @@ import PaymentLinkPanel from "./PaymentLinkPanel";
 import PriceAdjustPanel from "./PriceAdjustPanel";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import OperativeFranjaSection from "@/app/(features)/bandeja/components/OperativeFranjaSection";
+import {
+  OpFranjaActionButton,
+  opFranjaActionButtonStyle,
+} from "@/app/(features)/bandeja/components/operativeFranjaShared";
 import "@/app/(features)/supervisor/supervisor-theme.scss";
 
 type ActionType = "quote" | "pay" | "pos" | "dispatch" | null;
@@ -74,6 +78,24 @@ function fmtUSD(v: number | string | null | undefined): string {
   if (v == null) return "—";
   const n = Number(v);
   return Number.isFinite(n) ? `$${n.toFixed(2)}` : "—";
+}
+
+function trimCustomerStr(v: string | null | undefined): string {
+  return v != null && String(v).trim() !== "" ? String(v).trim() : "";
+}
+
+/** Una línea `tel1 / tel2` para resumen colapsado y ficha expandida. */
+function formatCustomerPhonesLine(p1: string, p2: string): string {
+  if (p1 && p2) return `${p1} / ${p2}`;
+  if (p1) return p1;
+  if (p2) return p2;
+  return "";
+}
+
+function truncateCustomerSummaryName(name: string, max: number): string {
+  const t = name.replace(/\s+/g, " ").trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, Math.max(0, max - 1))}…`;
 }
 
 /* ── Skeleton ──────────────────────────────────────────────────*/
@@ -433,7 +455,7 @@ function MlOrderSection({
       <MlEmbeddedWrap label={titleBar} first={embeddedFirst}>
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
           <a href={orderUrl} target="_blank" rel="noopener noreferrer" className="mu-ficha-link">
-            Ver orden en ML →
+            VER ORDEN EN ML →
           </a>
         </div>
         {orderBody}
@@ -452,7 +474,7 @@ function MlOrderSection({
       resetKey={chatId}
       titleAside={(
         <a href={orderUrl} target="_blank" rel="noopener noreferrer" className="mu-ficha-link">
-          ML →
+          VER ORDEN EN ML →
         </a>
       )}
     >
@@ -534,6 +556,89 @@ function fmtPrice(price: number | null, currency: string | null): string {
   if (price == null) return "—";
   const sym = currency === "USD" ? "$" : currency === "VES" ? "Bs." : (currency ?? "$");
   return `${sym} ${price.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function truncateOperativeFranjaText(s: string, max: number): string {
+  const t = s.replace(/\s+/g, " ").trim();
+  if (!t) return "";
+  if (t.length <= max) return t;
+  return `${t.slice(0, Math.max(0, max - 1))}…`;
+}
+
+/** Resumen cabecera franja «Mercado Libre»: producto, descripción, cantidad y precio por ítem. */
+function buildMlOrderOperativeSummary(data: MlOrderData | null): ReactNode {
+  if (!data) return null;
+  if (data.not_synced) {
+    return <>Orden #{String(data.ml_order_id)} · pendiente de sincronizar en catálogo</>;
+  }
+  const items = data.items ?? [];
+  if (items.length === 0) {
+    return <>Orden #{String(data.ml_order_id)} · sin ítems en respuesta</>;
+  }
+  const maxItems = 3;
+  const rows: ReactNode[] = [];
+  for (let i = 0; i < Math.min(items.length, maxItems); i++) {
+    const it = items[i];
+    const productName = (it.product?.name ?? it.title ?? "—").trim();
+    const descRaw = (it.product?.description ?? "").trim();
+    const desc =
+      descRaw && descRaw !== productName ? truncateOperativeFranjaText(descRaw, 100) : "";
+    const qty = it.quantity ?? "—";
+    const price = fmtCurrency(it.unit_price, it.currency_id);
+    const line1 = `${truncateOperativeFranjaText(productName, 90)} · ×${qty} · ${price}`;
+    rows.push(
+      <div key={i} style={{ marginTop: i > 0 ? 6 : 0 }}>{line1}</div>
+    );
+    if (desc) {
+      rows.push(
+        <div
+          key={`${i}-desc`}
+          style={{
+            fontSize: 9,
+            color: "var(--mu-ink-mute)",
+            marginTop: 2,
+            lineHeight: 1.35,
+          }}
+        >
+          {desc}
+        </div>
+      );
+    }
+  }
+  if (items.length > maxItems) {
+    rows.push(
+      <div key="more" style={{ marginTop: 4, fontSize: 9, color: "var(--mu-ink-mute)" }}>
+        +{items.length - maxItems} ítem(s) más
+      </div>
+    );
+  }
+  if (data.total_amount != null) {
+    rows.push(
+      <div key="tot" style={{ marginTop: 6, fontWeight: 600, color: "var(--mu-ink)" }}>
+        Total: {fmtCurrency(data.total_amount, data.currency_id)}
+      </div>
+    );
+  }
+  return <>{rows}</>;
+}
+
+function buildListingOperativeSummary(listing: MlItemListing | null): ReactNode {
+  if (!listing) {
+    return <>Publicación · sin datos de anuncio aún</>;
+  }
+  const title = truncateOperativeFranjaText((listing.title ?? "Sin título").trim(), 96);
+  const price = fmtPrice(listing.price, listing.currency);
+  const stock =
+    listing.stock != null ? ` · Stock ${listing.stock}` : "";
+  return (
+    <>
+      {title}
+      <div style={{ marginTop: 4, fontWeight: 600, color: "var(--mu-ink)" }}>
+        {price}
+        {stock}
+      </div>
+    </>
+  );
 }
 
 function ItemStatusBadge({ status }: { status: string | null }) {
@@ -770,7 +875,7 @@ function MlQuestionContextSection({
           {mlUrl ? (
             <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
               <MlExternalLink href={mlUrl} className="mu-ficha-link">
-                Abrir anuncio en ML →
+                VER EN ML →
               </MlExternalLink>
             </div>
           ) : null}
@@ -793,11 +898,11 @@ function MlQuestionContextSection({
         title="Publicación"
         subtitle={pubSubtitle}
         subtitleHighlight={publicationSubtitleHighlight}
-        defaultOpen
+        defaultOpen={publicationSubtitleHighlight}
         resetKey={chatId}
         titleAside={mlUrl ? (
           <MlExternalLink href={mlUrl} className="mu-ficha-link">
-            ML →
+            VER EN ML →
           </MlExternalLink>
         ) : undefined}
       >
@@ -812,7 +917,7 @@ function MlQuestionContextSection({
         title="Pregunta del comprador"
         subtitle={loadingQ ? "Cargando… · click para abrir" : "Texto del comprador · click para abrir"}
         subtitleHighlight={!loadingQ && Boolean(qData?.question_text)}
-        defaultOpen
+        defaultOpen={!loadingQ && Boolean(qData?.question_text && String(qData.question_text).trim() !== "")}
         resetKey={chatId}
       >
         {questionMain}
@@ -858,34 +963,167 @@ function MercadoLibreOperativeSection({
     /** WhatsApp (u otro origen con `canLinkMlOrder`) sin cliente: mostrar franja solo para vincular orden ML. */
     (!showFullFranja && canLinkMlOrder);
 
-  if (!showOuter) return null;
-
   const showPublication = showPublicationMlQuestionOrItem;
   const showOrderMlQuestion = isMlQuestionOrigin && chat.order != null;
-  const showWaSinOrden =
-    !isMlQuestionOrigin &&
-    !isMlMessageOrigin &&
-    !showPublicationWaMlOrder &&
-    canLinkMlOrder;
-  /** Si la sección está abierta y el chat puede vincular orden ML, el botón debe verse aunque aún no haya cliente CRM. */
   const showLinkCta = canLinkMlOrder;
 
-  const mlSubtitleHighlight =
+  const needsOrderFetch =
+    showOuter &&
+    (showPublicationMlOrderOnly || showPublicationWaMlOrder || showOrderMlQuestion);
+  const needsListingFetch = showOuter && showPublication && !needsOrderFetch;
+
+  const [ordLoading, setOrdLoading] = useState(false);
+  const [ordData, setOrdData] = useState<MlOrderData | null>(null);
+  const [ordErr, setOrdErr] = useState<string | null>(null);
+
+  const [listLoading, setListLoading] = useState(false);
+  const [listListing, setListListing] = useState<MlItemListing | null>(null);
+  const [listErr, setListErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!needsOrderFetch) {
+      setOrdLoading(false);
+      setOrdData(null);
+      setOrdErr(null);
+      return;
+    }
+    let cancelled = false;
+    setOrdLoading(true);
+    setOrdErr(null);
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch(`/api/inbox/${encodeURIComponent(chatId)}/ml-order`, {
+            credentials: "include",
+            cache: "no-store",
+          });
+          const j = (await res.json().catch(() => null)) as MlOrderData | null;
+          if (cancelled) return;
+          if (!res.ok) {
+            setOrdErr("No se pudo cargar la orden");
+            setOrdData(null);
+            return;
+          }
+          setOrdData(j);
+        } catch {
+          if (!cancelled) {
+            setOrdErr("No se pudo cargar la orden");
+            setOrdData(null);
+          }
+        } finally {
+          if (!cancelled) setOrdLoading(false);
+        }
+      })();
+    }, SECONDARY_FETCH_DELAY_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [chatId, needsOrderFetch]);
+
+  useEffect(() => {
+    if (!needsListingFetch) {
+      setListLoading(false);
+      setListListing(null);
+      setListErr(null);
+      return;
+    }
+    let cancelled = false;
+    setListLoading(true);
+    setListErr(null);
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch(`/api/inbox/${encodeURIComponent(chatId)}/ml-question`, {
+            credentials: "include",
+            cache: "no-store",
+          });
+          const j = (await res.json().catch(() => null)) as MlQuestionData | null;
+          if (cancelled) return;
+          if (!res.ok) {
+            setListErr("No se pudo cargar la publicación");
+            setListListing(null);
+            return;
+          }
+          setListListing(j?.item_listing ?? null);
+        } catch {
+          if (!cancelled) {
+            setListErr("No se pudo cargar la publicación");
+            setListListing(null);
+          }
+        } finally {
+          if (!cancelled) setListLoading(false);
+        }
+      })();
+    }, SECONDARY_FETCH_DELAY_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [chatId, needsListingFetch]);
+
+  let mlSubtitleContent: ReactNode = null;
+  let mlSubtitleHighlight = false;
+
+  if (showOuter) {
+    if (needsOrderFetch) {
+      if (ordLoading) {
+        mlSubtitleContent = "Cargando ítems de la orden…";
+      } else if (ordErr) {
+        mlSubtitleContent = ordErr;
+      } else {
+        mlSubtitleContent = buildMlOrderOperativeSummary(ordData);
+        mlSubtitleHighlight =
+          Boolean(ordData?.not_synced) ||
+          (ordData?.items != null && ordData.items.length > 0);
+      }
+    } else if (needsListingFetch) {
+      if (listLoading) {
+        mlSubtitleContent = "Cargando publicación…";
+      } else if (listErr) {
+        mlSubtitleContent = listErr;
+      } else {
+        mlSubtitleContent = buildListingOperativeSummary(listListing);
+        mlSubtitleHighlight = listListing != null;
+      }
+    } else if (showLinkCta) {
+      mlSubtitleContent = "Sin orden vinculada.";
+    }
+  }
+
+  if (!showOuter) return null;
+
+  const hasMlExpandedBody =
     showPublication ||
     showPublicationMlOrderOnly ||
     showPublicationWaMlOrder ||
-    showOrderMlQuestion ||
-    showWaSinOrden;
+    showOrderMlQuestion;
 
   return (
     <OperativeFranjaSection
       accent="orange"
       iconClass="ti ti-shopping-bag"
-      title="Mercado Libre"
-      subtitle="Publicación, orden del contexto y vínculos · click para abrir"
+      title="Mercadolibre"
+      subtitle={mlSubtitleContent != null && mlSubtitleContent !== false ? mlSubtitleContent : false}
       subtitleHighlight={mlSubtitleHighlight}
-      defaultOpen
+      defaultOpen={hasMlExpandedBody}
+      collapsible={hasMlExpandedBody}
       resetKey={`${chatId}-ml-operative`}
+      titleAside={
+        showLinkCta ? (
+          <OpFranjaActionButton
+            type="button"
+            variant="accent"
+            iconClass="ti ti-link"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenLinkOrder();
+            }}
+          >
+            Vincular orden ML
+          </OpFranjaActionButton>
+        ) : undefined
+      }
     >
       {(() => {
         let first = true;
@@ -894,6 +1132,7 @@ function MercadoLibreOperativeSection({
           first = false;
           return v;
         };
+        if (!hasMlExpandedBody) return null;
         return (
           <>
             {showPublication && (
@@ -921,13 +1160,6 @@ function MercadoLibreOperativeSection({
                 embeddedFirst={nextFirst()}
               />
             )}
-            {showWaSinOrden && (
-              <MlEmbeddedWrap label="Sin orden ML vinculada" first={nextFirst()}>
-                <p style={{ fontSize: 11, color: "var(--mu-ink-mute)", margin: 0, lineHeight: 1.45 }}>
-                  Sin orden de Mercado Libre vinculada a este chat. En la siguiente sección puede vincular la orden para ver publicación e ítems.
-                </p>
-              </MlEmbeddedWrap>
-            )}
             {showOrderMlQuestion && (
               <MlOrderSection
                 chatId={chatId}
@@ -936,78 +1168,9 @@ function MercadoLibreOperativeSection({
                 embeddedFirst={nextFirst()}
               />
             )}
-            {showLinkCta && (
-              <MlEmbeddedWrap label="Canal · vincular orden" first={nextFirst()}>
-                <div
-                  style={{
-                    padding: "8px 12px",
-                    borderRadius: 8,
-                    background: "rgba(255,116,0,0.06)",
-                    border: "1px solid rgba(255,116,0,0.2)",
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={onOpenLinkOrder}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                      padding: "5px 12px",
-                      borderRadius: 6,
-                      background: "#ff7400",
-                      color: "#fff",
-                      fontWeight: 700,
-                      fontSize: 11,
-                      border: "none",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <i className="ti ti-link" style={{ fontSize: 13 }} />
-                    Vincular Orden ML
-                  </button>
-                </div>
-              </MlEmbeddedWrap>
-            )}
           </>
         );
       })()}
-    </OperativeFranjaSection>
-  );
-}
-
-/* ── Orden vinculada (CONDICIONAL — Decisión 6 Sprint 6A) ──────
-   Regla: si chat.order !== null → mostrar. Si null → NO renderizar.
-   NO se muestra placeholder "sin orden". */
-function FichaOrdenSection({ chat }: { chat: InboxChat }) {
-  if (!chat.order) return null;
-
-  const o = chat.order;
-  const statusLabel = o.payment_status ?? "—";
-  const fulfillLabel = o.fulfillment_type ?? "—";
-
-  return (
-    <OperativeFranjaSection
-      accent="lime"
-      iconClass="ti ti-clipboard-data"
-      title="Estado"
-      subtitle={`Orden #${o.id} · pago y entrega · click para abrir`}
-      subtitleHighlight
-      defaultOpen
-      resetKey={o.id}
-      titleAside={<Link href="/ventas/pedidos" className="mu-ficha-link">HISTORIAL →</Link>}
-    >
-      <div className="mu-estado-card">
-        <div className="mu-estado-tipo">
-          ORDEN · #{o.id}
-        </div>
-        <div className="mu-estado-num">
-          Pago: {statusLabel} · Entrega: {fulfillLabel}
-        </div>
-        <div style={{ fontSize: 10, color: "var(--mu-ink-mute)", fontFamily: "monospace", marginTop: 4 }}>
-          CH-{o.channel_id}
-        </div>
-      </div>
     </OperativeFranjaSection>
   );
 }
@@ -1222,31 +1385,14 @@ export default function ChatContextPanel({
     String(chat.ml_order_id).trim() !== "";
 
   /**
-   * Resumen colapsado (2 líneas): (1) nombre y teléfonos phone / phone_2;
-   * (2) ID MERCADOLIBRE: primary_ml_buyer_id.
+   * Resumen colapsado: nombre (línea 1); teléfonos (línea 2, «Ir a Chat» a la derecha);
+   * ID MERCADOLIBRE (línea 3, «Editar cliente» a la derecha).
    */
   const clienteOperativeSubtitle = useMemo((): ReactNode => {
     const chatName =
       chat?.customer_name != null && String(chat.customer_name).trim() !== ""
         ? String(chat.customer_name).trim()
         : null;
-
-    const trimStr = (v: string | null | undefined) =>
-      v != null && String(v).trim() !== "" ? String(v).trim() : "";
-
-    const formatPhonesLine = (p1: string, p2: string) => {
-      if (p1 && p2) return `${p1} / ${p2}`;
-      if (p1) return p1;
-      if (p2) return p2;
-      return "";
-    };
-
-    const lineBlock = (line1: string, line2: string) => (
-      <>
-        <div>{line1}</div>
-        <div style={{ marginTop: 3 }}>{line2}</div>
-      </>
-    );
 
     const mlLine = (id: number | null | undefined) => {
       if (id != null && String(id).trim() !== "" && Number(id) > 0) {
@@ -1255,12 +1401,99 @@ export default function ChatContextPanel({
       return "ID MERCADOLIBRE: —";
     };
 
+    const showEdit =
+      hasCustomer &&
+      customerId != null &&
+      onEditCustomer != null &&
+      !loadingCustomer;
+
+    const editAside = showEdit ? (
+      <OpFranjaActionButton
+        type="button"
+        variant="neutral"
+        iconClass="ti ti-pencil"
+        onClick={(e) => {
+          e.stopPropagation();
+          onEditCustomer();
+        }}
+      >
+        Editar cliente
+      </OpFranjaActionButton>
+    ) : null;
+
+    const chatAside = canOpenWaThread ? (
+      <OpFranjaActionButton
+        type="button"
+        variant="accent"
+        style={{ flexShrink: 0 }}
+        onClick={(e) => {
+          e.stopPropagation();
+          void handleGoToWaChatByPhone();
+        }}
+        disabled={waGoToChatBusy}
+        loading={waGoToChatBusy}
+        loadingLabel="Abriendo…"
+        iconClass={waGoToChatBusy ? undefined : "ti ti-message"}
+        title="Ir al hilo de WhatsApp de la bandeja asociado a este número"
+      >
+        Ir a Chat
+      </OpFranjaActionButton>
+    ) : null;
+
+    const phoneRow = (phonesLine: string | null) => {
+      const left =
+        phonesLine != null && String(phonesLine).trim() !== ""
+          ? phonesLine
+          : "—";
+      return (
+        <div style={{ marginTop: 3 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+            }}
+          >
+            <span
+              style={{
+                fontVariantNumeric: "tabular-nums",
+                wordBreak: "break-all",
+                minWidth: 0,
+                flex: "1 1 auto",
+              }}
+            >
+              {left}
+            </span>
+            {chatAside}
+          </div>
+          {waGoToChatErr ? (
+            <div style={{ marginTop: 4, fontSize: 10, color: "#ef4444" }}>{waGoToChatErr}</div>
+          ) : null}
+        </div>
+      );
+    };
+
+    const mlRow = (ml: string) => (
+      <div style={{ marginTop: 3 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+          }}
+        >
+          <span style={{ minWidth: 0, flex: "1 1 auto", wordBreak: "break-word" }}>{ml}</span>
+          {editAside}
+        </div>
+      </div>
+    );
+
     if (!hasCustomer) {
-      const l1 =
-        chatName != null
-          ? `${chatName} · identificación pendiente`
-          : "Identificación pendiente";
-      return lineBlock(l1, mlLine(null));
+      return "Cliente no identificado.";
     }
 
     if (loadingCustomer) {
@@ -1270,19 +1503,32 @@ export default function ChatContextPanel({
           ? String(customer.full_name).trim()
           : null) ||
         "Cargando datos…";
-      const p1 = customer?.phone != null ? trimStr(customer.phone) : "";
-      const p1b = !p1 ? trimStr(displayPhone ?? undefined) : "";
-      const p2 = customer?.phone_2 != null ? trimStr(customer.phone_2) : "";
+      const nameLine = truncateCustomerSummaryName(nameLoading, 110);
+      const p1 = trimCustomerStr(customer?.phone ?? undefined);
+      const p1b = !p1 ? trimCustomerStr(displayPhone ?? undefined) : "";
+      const p2 = trimCustomerStr(customer?.phone_2 ?? undefined);
       const p2b =
-        !p2 && customer?.alternative_phone != null ? trimStr(customer.alternative_phone) : "";
-      const phones = formatPhonesLine(p1 || p1b, p2 || p2b);
-      const l1 = phones ? `${nameLoading} ${phones}` : nameLoading;
-      return lineBlock(l1, mlLine(customer?.primary_ml_buyer_id ?? null));
+        !p2 ? trimCustomerStr(customer?.alternative_phone ?? undefined) : "";
+      const phones = formatCustomerPhonesLine(p1 || p1b, p2 || p2b);
+      return (
+        <>
+          <div>{nameLine}</div>
+          {phoneRow(phones || null)}
+          {mlRow(mlLine(customer?.primary_ml_buyer_id ?? null))}
+        </>
+      );
     }
 
     if (!customer) {
-      const l1Parts = [chatName || "Cliente", trimStr(displayPhone ?? undefined)].filter(Boolean);
-      return lineBlock(l1Parts.join(" "), mlLine(null));
+      const nameC = chatName || "Cliente";
+      const ph = trimCustomerStr(displayPhone ?? undefined);
+      return (
+        <>
+          <div>{nameC}</div>
+          {phoneRow(ph || null)}
+          {mlRow(mlLine(null))}
+        </>
+      );
     }
 
     const name =
@@ -1292,20 +1538,20 @@ export default function ChatContextPanel({
       chatName ||
       "—";
 
+    const nameLine = truncateCustomerSummaryName(name, 110);
     const phone1 =
-      trimStr(customer.phone) || trimStr(displayPhone ?? undefined);
+      trimCustomerStr(customer.phone) || trimCustomerStr(displayPhone ?? undefined);
     const phone2 =
-      trimStr(customer.phone_2) || trimStr(customer.alternative_phone);
-    const phones = formatPhonesLine(phone1, phone2);
-    const line1 = phones ? `${name} ${phones}` : name;
+      trimCustomerStr(customer.phone_2) || trimCustomerStr(customer.alternative_phone);
+    const phones = formatCustomerPhonesLine(phone1, phone2);
 
-    let line1Out = line1;
-    const maxLen = 200;
-    if (line1Out.length > maxLen) {
-      line1Out = `${line1Out.slice(0, maxLen - 1)}…`;
-    }
-
-    return lineBlock(line1Out, mlLine(customer.primary_ml_buyer_id));
+    return (
+      <>
+        <div>{nameLine}</div>
+        {phoneRow(phones || null)}
+        {mlRow(mlLine(customer.primary_ml_buyer_id))}
+      </>
+    );
   }, [
     hasCustomer,
     loadingCustomer,
@@ -1313,6 +1559,11 @@ export default function ChatContextPanel({
     chat?.customer_name,
     displayPhone,
     customerId,
+    canOpenWaThread,
+    waGoToChatBusy,
+    waGoToChatErr,
+    onEditCustomer,
+    handleGoToWaChatByPhone,
   ]);
 
   return (
@@ -1549,24 +1800,17 @@ export default function ChatContextPanel({
           collapsible={false}
           resetKey={chatId}
           titleAside={(
-            <button
+            <OpFranjaActionButton
               type="button"
+              variant="neutral"
               onClick={handleToggleOperational}
               disabled={opToggling}
               title="Quitar marca No Cliente"
-              style={{
-                background: "none",
-                border: "1px solid rgba(180,180,180,0.3)",
-                borderRadius: 5,
-                padding: "3px 8px",
-                fontSize: 10,
-                color: "var(--mu-ink-mute)",
-                cursor: "pointer",
-                opacity: opToggling ? 0.5 : 1,
-              }}
+              loading={opToggling}
+              loadingLabel="…"
             >
-              {opToggling ? "…" : "Quitar"}
-            </button>
+              Quitar
+            </OpFranjaActionButton>
           )}
         >
           <p style={{ fontSize: 11, color: "var(--mu-ink-mute)", margin: 0, lineHeight: 1.45 }}>
@@ -1581,65 +1825,42 @@ export default function ChatContextPanel({
         iconClass="ti ti-user"
         title="Cliente"
         subtitle={clienteOperativeSubtitle}
-        subtitleHighlight={!loadingCustomer}
+        subtitleHighlight={hasCustomer && !loadingCustomer}
         defaultOpen
         resetKey={chatId}
-        titleAside={hasCustomer && customerId ? (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
-            {onEditCustomer && (
-              <button
-                type="button"
-                onClick={onEditCustomer}
-                className="mu-ficha-link"
-                style={{
-                  background: "none",
-                  border: "none",
-                  padding: 0,
-                  cursor: "pointer",
-                  font: "inherit",
-                  letterSpacing: "0.1em",
-                }}
-              >
-                Editar cliente
-              </button>
-            )}
-            <Link href={`/clientes/historial?id=${customerId}`} className="mu-ficha-link">
-              VER FICHA →
+        titleAside={
+          hasCustomer && customerId ? (
+            <Link
+              href={`/clientes/historial?id=${customerId}`}
+              onClick={(e) => {
+                e.stopPropagation();
+              }}
+              style={{
+                ...opFranjaActionButtonStyle({ variant: "accent" }),
+                textDecoration: "none",
+              }}
+            >
+              <i className="ti ti-external-link" style={{ fontSize: 13 }} aria-hidden />
+              Ver ficha
             </Link>
-          </span>
-        ) : undefined}
+          ) : !hasCustomer && canLinkCustomerManual ? (
+            <OpFranjaActionButton
+              type="button"
+              variant="accent"
+              iconClass="ti ti-user-plus"
+              onClick={(e) => {
+                e.stopPropagation();
+                setLinkCustomerOpen(true);
+              }}
+            >
+              Vincular o crear
+            </OpFranjaActionButton>
+          ) : undefined
+        }
       >
 
         {!hasCustomer ? (
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, color: "var(--mu-ink-mute)", fontSize: 12 }}>
-              <i className="ti ti-user-question" />
-              <span>Cliente no identificado</span>
-            </div>
-            {canLinkCustomerManual && (
-              <div style={{ marginBottom: 10 }}>
-                <button
-                  type="button"
-                  onClick={() => setLinkCustomerOpen(true)}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "5px 12px",
-                    borderRadius: 6,
-                    background: "#ff7400",
-                    color: "#fff",
-                    fontWeight: 700,
-                    fontSize: 11,
-                    border: "none",
-                    cursor: "pointer",
-                  }}
-                >
-                  <i className="ti ti-user-plus" style={{ fontSize: 13 }} />
-                  Cliente: vincular o crear
-                </button>
-              </div>
-            )}
             <IdentifyCustomerSection chatId={chatId} onLinked={onCustomerLinked ?? (() => {})} />
           </div>
         ) : loadingCustomer ? (
@@ -1663,59 +1884,24 @@ export default function ChatContextPanel({
             <dl className="mu-kv">
               <dt>Teléfono</dt>
               <dd>
-                {canOpenWaThread ? (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      alignItems: "center",
-                      gap: "8px 10px",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <span style={{ fontVariantNumeric: "tabular-nums", wordBreak: "break-all" }}>
-                      {displayPhone}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => void handleGoToWaChatByPhone()}
-                      disabled={waGoToChatBusy}
-                      title="Ir al hilo de WhatsApp de la bandeja asociado a este número"
+                {(() => {
+                  const phone1Ex =
+                    trimCustomerStr(customer.phone) || trimCustomerStr(displayPhone ?? "");
+                  const phone2Ex =
+                    trimCustomerStr(customer.phone_2) || trimCustomerStr(customer.alternative_phone);
+                  const phonesExpanded = formatCustomerPhonesLine(phone1Ex, phone2Ex);
+                  const phonesLabel = phonesExpanded || "—";
+                  return (
+                    <span
                       style={{
-                        flexShrink: 0,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 6,
-                        padding: "4px 10px",
-                        borderRadius: 6,
-                        border: "1px solid var(--mu-line, #2a2c24)",
-                        background: "var(--mu-panel-2, #1c1e18)",
-                        color: "var(--mu-accent, #d4ff3a)",
-                        fontWeight: 700,
-                        fontSize: 11,
-                        cursor: waGoToChatBusy ? "wait" : "pointer",
-                        opacity: waGoToChatBusy ? 0.7 : 1,
+                        fontVariantNumeric: "tabular-nums",
+                        wordBreak: "break-all",
                       }}
                     >
-                      {waGoToChatBusy ? (
-                        <>
-                          <span className="spinner-border spinner-border-sm" style={{ width: 12, height: 12 }} />
-                          Abriendo…
-                        </>
-                      ) : (
-                        <>
-                          <i className="ti ti-message" style={{ fontSize: 13 }} aria-hidden />
-                          Ir a Chat
-                        </>
-                      )}
-                    </button>
-                  </div>
-                ) : (
-                  "—"
-                )}
-                {waGoToChatErr ? (
-                  <div style={{ fontSize: 10, color: "#ef4444", marginTop: 4 }}>{waGoToChatErr}</div>
-                ) : null}
+                      {phonesLabel}
+                    </span>
+                  );
+                })()}
               </dd>
 
               {customer.city && (
@@ -1799,8 +1985,6 @@ export default function ChatContextPanel({
             activeQuotationTotalUsd={activeSentQuote?.totalUsd ?? null}
           />
 
-          {chat && !isMlQuestionThreadChat(chat) && <FichaOrdenSection chat={chat} />}
-
           {/* ── 5. DESPACHO Y CIERRE ──────────────────────────────────────────── */}
           <OperativeFranjaSection
             accent="cyan"
@@ -1815,27 +1999,14 @@ export default function ChatContextPanel({
               Solicitar despacho de pedidos pagados y revisar estado en ventas.
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <button
+              <OpFranjaActionButton
                 type="button"
+                variant="accent"
+                iconClass="ti ti-truck"
                 onClick={() => onSetAction("dispatch")}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6,
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  background: "var(--mu-panel-2)",
-                  border: "1px solid var(--mu-line)",
-                  color: "var(--mu-ink)",
-                  fontWeight: 600,
-                  fontSize: 11,
-                  cursor: "pointer",
-                }}
               >
-                <i className="ti ti-truck" style={{ fontSize: 14 }} />
                 Solicitar despacho
-              </button>
+              </OpFranjaActionButton>
               <Link
                 href="/ventas/pedidos"
                 className="mu-ficha-link"

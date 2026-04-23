@@ -42,7 +42,8 @@ export default function OperativeFranjaSection({
   subtitle,
   subtitleHighlight = false,
   titleAside,
-  defaultOpen = true,
+  /** Por defecto contraída; abrir explícitamente cuando la sección tenga contenido útil. */
+  defaultOpen = false,
   collapsible = true,
   className,
   children,
@@ -64,9 +65,20 @@ export default function OperativeFranjaSection({
         <i className={iconClass} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          <span style={OP_FRANJA_TITLE}>{title}</span>
-          {titleAside != null && titleAside !== false ? titleAside : null}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+            flexWrap: "wrap",
+            width: "100%",
+          }}
+        >
+          <span style={{ ...OP_FRANJA_TITLE, minWidth: 0 }}>{title}</span>
+          {titleAside != null && titleAside !== false ? (
+            <span style={{ flexShrink: 0 }}>{titleAside}</span>
+          ) : null}
         </div>
         {subtitle != null && subtitle !== false ? (
           <div style={subtitleWrapStyle}>{subtitle}</div>

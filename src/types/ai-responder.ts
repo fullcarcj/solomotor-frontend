@@ -12,6 +12,36 @@ export interface AiResponderLogEntry {
   n: number;
 }
 
+// ── Cuota / rate limit (stats + settings) ─────────────────────────────────
+
+export interface AiQuotaAlerts {
+  active: boolean;
+  unavailable?: boolean;
+  window_days: number;
+  total_usage_log_hits: number;
+  total_payment_attempt_hits: number;
+  by_provider: Array<{
+    provider_id: string;
+    function_called: string;
+    n: number;
+    last_at: string | null;
+  }>;
+  recent_errors: Array<{
+    provider_id: string;
+    function_called: string;
+    error_message: string | null;
+    created_at: string | null;
+  }>;
+  provider_row_hints: Array<{
+    provider_id: string;
+    last_error: string | null;
+    circuit_open: boolean;
+    circuit_breaker_until: string | null;
+  }>;
+  headline: string | null;
+  action_hint?: string | null;
+}
+
 // ── Stats (/api/ai-responder/stats) ───────────────────────────────────────
 
 export interface AiResponderStats {
@@ -57,6 +87,9 @@ export interface AiResponderStats {
     human_rejected: number;
     errors:         number;
   };
+
+  /** Diagnóstico de cuota / 429 / límites (últimos window_days días). */
+  quota_alerts?: AiQuotaAlerts | null;
 }
 
 // ── Pending messages (/api/ai-responder/pending) ───────────────────────────

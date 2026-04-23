@@ -61,6 +61,15 @@ function parseMessages(raw: unknown): { messages: ChatMessage[]; meta: Record<st
   return { messages: msgs, meta: (r.meta as Record<string, unknown>) ?? {} };
 }
 
+/** Backend (`listMessages`) expone `meta.has_more` (snake); aceptar camel por compat. */
+function readHasMore(meta: Record<string, unknown>): boolean {
+  const v = meta.has_more ?? meta.hasMore;
+  return v === true || v === "true" || v === 1 || v === "1";
+}
+
+/** Primera página y «cargar anteriores»: menos payload inicial; más peticiones si el hilo es largo. */
+const MESSAGES_PAGE_SIZE = 20;
+
 /** Última fila gana — orden de entrada se conserva. */
 function dedupeByMessageId(msgs: ChatMessage[]): ChatMessage[] {
   const seen = new Set<string>();
@@ -77,6 +86,7 @@ function dedupeByMessageId(msgs: ChatMessage[]): ChatMessage[] {
 export function useChatMessages(chatId: string | number | null) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [meta, setMeta]         = useState<Record<string, unknown>>({});
+  const [hasMore, setHasMore]   = useState(false);
   const [loading, setLoading]   = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError]       = useState<string | null>(null);
@@ -104,9 +114,12 @@ export function useChatMessages(chatId: string | number | null) {
         setError(null);
       }
       try {
-        const p = new URLSearchParams({ limit: "50" });
+        const p = new URLSearchParams({ limit: String(MESSAGES_PAGE_SIZE) });
         if (beforeId !== undefined) p.set("before_id", String(beforeId));
-        const res = await fetch(`/api/bandeja/${encodeURIComponent(String(id))}/messages?${p}`, { credentials: "include" });
+        const res = await fetch(`/api/bandeja/${encodeURIComponent(String(id))}/messages?${p}`, {
+          credentials: "include",
+          cache: "no-store",
+        });
         if (!res.ok) {
           const d = await res.json().catch(() => ({})) as Record<string, unknown>;
           throw new Error((d.error as string) ?? `HTTP ${res.status}`);
@@ -121,6 +134,7 @@ export function useChatMessages(chatId: string | number | null) {
           if (msgs.length > 0) latestIdRef.current = msgs[msgs.length - 1].id;
         }
         setMeta(m);
+        setHasMore(readHasMore(m));
       } catch (e) {
         if (!isMore && !suppressError) setError(errMsg(e));
       } finally {
@@ -157,6 +171,7 @@ export function useChatMessages(chatId: string | number | null) {
       prevChatIdRef.current = null;
       setMessages([]);
       setMeta({});
+      setHasMore(false);
       setError(null);
       setMessagesBootstrapping(false);
       if (intervalRef.current) {
@@ -173,6 +188,7 @@ export function useChatMessages(chatId: string | number | null) {
     const switched = prev !== null && String(prev) !== String(chatId);
     prevChatIdRef.current = chatId;
     setMessages([]);
+    setHasMore(false);
     latestIdRef.current = null;
     setError(null);
     if (switched) setMessagesBootstrapping(true);
@@ -189,10 +205,10 @@ export function useChatMessages(chatId: string | number | null) {
   }, [chatId, load, poll]);
 
   const loadMore = useCallback(() => {
-    if (!chatId || messages.length === 0) return;
+    if (!chatId || messages.length === 0 || loadingMore || !hasMore) return;
     const oldestId = messages[0].id;
     void load(chatId, oldestId);
-  }, [chatId, load, messages]);
+  }, [chatId, load, messages, loadingMore, hasMore]);
 
   const sendMessage = useCallback(async (text: string, sentBy?: string): Promise<boolean> => {
     if (!chatId) return false;
@@ -231,6 +247,7 @@ export function useChatMessages(chatId: string | number | null) {
   return {
     messages,
     meta,
+    hasMore,
     loading,
     loadingMore,
     messagesBootstrapping,

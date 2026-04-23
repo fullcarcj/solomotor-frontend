@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import type { ChatMessage } from "@/types/inbox";
 import MessageBubble from "./MessageBubble";
 
@@ -33,6 +33,10 @@ function buildGroups(messages: ChatMessage[]): GroupedItem[] {
   return items;
 }
 
+/** px desde el tope del scroll para disparar carga de historial */
+const SCROLL_LOAD_TOP_THRESHOLD = 120;
+const SCROLL_LOAD_DEBOUNCE_MS = 400;
+
 interface Props {
   messages:    ChatMessage[];
   loading:     boolean;
@@ -42,6 +46,8 @@ interface Props {
   /** Id de chat activo: scroll al final al cambiar (misma UX que /workspace). */
   chatKey?:    string | number | null;
   error:       string | null;
+  /** Hay más mensajes antiguos en servidor (`meta.has_more` del CRM). */
+  hasMore?:    boolean;
   onLoadMore:  () => void;
 }
 
@@ -52,12 +58,27 @@ export default function ChatWindow({
   bootstrapping = false,
   chatKey = null,
   error,
+  hasMore = false,
   onLoadMore,
 }: Props) {
   const rootRef   = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevLen   = useRef(0);
+  const prevNewestIdRef = useRef<string | number | null>(null);
   const lastChatKeyRef = useRef<string | number | null>(null);
+  /** Guardar altura/scroll y cantidad de mensajes antes de pedir página anterior (evita salto visual al prepend). */
+  const scrollAnchorRef = useRef<{ h: number; top: number; count: number } | null>(null);
+  const wasLoadingMoreRef = useRef(false);
+  const scrollLoadCooldownUntil = useRef(0);
+
+  const triggerLoadMore = useCallback(() => {
+    if (!hasMore || loadingMore) return;
+    const el = rootRef.current;
+    if (el) {
+      scrollAnchorRef.current = { h: el.scrollHeight, top: el.scrollTop, count: messages.length };
+    }
+    onLoadMore();
+  }, [hasMore, loadingMore, messages.length, onLoadMore]);
 
   useLayoutEffect(() => {
     const el = rootRef.current;
@@ -68,18 +89,50 @@ export default function ChatWindow({
     if (switched) {
       lastChatKeyRef.current = chatKey;
       prevLen.current = messages.length;
+      prevNewestIdRef.current = messages.length ? messages[messages.length - 1].id : null;
+      scrollAnchorRef.current = null;
       el.scrollTop = el.scrollHeight;
     }
-    // Mensajes nuevos: scroll suave en useEffect(messages.length), no aquí.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatKey]);
 
-  useEffect(() => {
-    if (messages.length > prevLen.current) {
+  /* Tras prepend: restaurar posición. Tras mensajes nuevos al final: scroll suave abajo. */
+  useLayoutEffect(() => {
+    const el = rootRef.current;
+    const newest = messages.length ? messages[messages.length - 1].id : null;
+    const grew = messages.length > prevLen.current;
+
+    if (el && wasLoadingMoreRef.current && !loadingMore && scrollAnchorRef.current) {
+      const anchor = scrollAnchorRef.current;
+      if (messages.length > anchor.count) {
+        const { h, top } = anchor;
+        el.scrollTop = el.scrollHeight - h + top;
+      }
+      scrollAnchorRef.current = null;
+    } else if (grew && newest != null && newest !== prevNewestIdRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
+
     prevLen.current = messages.length;
-  }, [messages.length]);
+    prevNewestIdRef.current = newest;
+    wasLoadingMoreRef.current = loadingMore;
+  }, [messages, loadingMore]);
+
+  /* Al acercarse al tope: cargar historial (misma acción que el botón). */
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || !hasMore) return;
+    const onScroll = () => {
+      if (!hasMore || loadingMore) return;
+      if (el.scrollTop > SCROLL_LOAD_TOP_THRESHOLD) return;
+      const now = Date.now();
+      if (now < scrollLoadCooldownUntil.current) return;
+      scrollLoadCooldownUntil.current = now + SCROLL_LOAD_DEBOUNCE_MS;
+      triggerLoadMore();
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [hasMore, loadingMore, triggerLoadMore]);
 
   if (loading && messages.length === 0) {
     return (
@@ -141,7 +194,7 @@ export default function ChatWindow({
 
   return (
     <div ref={rootRef} className="bandeja-chat-window flex-grow-1">
-      {messages.length >= 50 && (
+      {hasMore && (
         <div className="text-center py-2">
           <button
             type="button"
@@ -151,7 +204,7 @@ export default function ChatWindow({
               color: "var(--wa-text-primary)",
               border: "1px solid var(--wa-border)",
             }}
-            onClick={onLoadMore}
+            onClick={() => triggerLoadMore()}
             disabled={loadingMore}
           >
             {loadingMore ? <span className="spinner-border spinner-border-sm me-1" /> : <i className="ti ti-arrow-up me-1" />}

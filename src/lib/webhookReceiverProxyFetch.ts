@@ -14,6 +14,8 @@ export async function proxyJsonToReceiver(
     method?: string;
     query?: URLSearchParams;
     body?: unknown;
+    /** Sesión del usuario (JWT en cookie o Bearer) hacia el receiver; se intenta antes que solo X-Admin-Secret. */
+    forwardRequestHeaders?: Headers;
   } = {}
 ): Promise<Response> {
   const base = getWebhookReceiverBaseUrl().replace(/\/+$/, "");
@@ -40,12 +42,20 @@ export async function proxyJsonToReceiver(
   }
 
   const method = opts.method ?? "GET";
+  const headers: Record<string, string> = {
+    "X-Admin-Secret": secret,
+  };
+  if (opts.body !== undefined) headers["Content-Type"] = "application/json";
+  const fr = opts.forwardRequestHeaders;
+  if (fr) {
+    const auth = fr.get("authorization");
+    if (auth) headers.Authorization = auth;
+    const cookie = fr.get("cookie");
+    if (cookie) headers.Cookie = cookie;
+  }
   const init: RequestInit = {
     method,
-    headers: {
-      "X-Admin-Secret": secret,
-      ...(opts.body !== undefined ? { "Content-Type": "application/json" } : {}),
-    },
+    headers,
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     cache: "no-store",
   };

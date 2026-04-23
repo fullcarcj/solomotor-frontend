@@ -14,7 +14,9 @@ interface Props {
 }
 
 export default function ChatFilters({ filters, onChange }: Props) {
-  const isDirty = Boolean(filters.search || filters.src || filters.stage || filters.result);
+  const isDirty = Boolean(
+    filters.search || filters.src || filters.stage || filters.result || filters.pipelineDefault === false
+  );
   return (
     <div className="bandeja-wa-filters-block">
       <div className="bandeja-wa-search-row">
@@ -41,11 +43,27 @@ export default function ChatFilters({ filters, onChange }: Props) {
         >
           {SOURCES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
+        <button
+          type="button"
+          className="btn btn-sm btn-outline-secondary flex-shrink-0 text-nowrap"
+          title={
+            filters.pipelineDefault !== false
+              ? "Ver todos los hilos del CRM (sin filtro operativo de pipeline)"
+              : "Volver a la vista por defecto: pipeline de ventas"
+          }
+          onClick={() =>
+            onChange({ pipelineDefault: !(filters.pipelineDefault !== false) })
+          }
+        >
+          {filters.pipelineDefault !== false ? "Todos los hilos" : "Solo ventas"}
+        </button>
         {isDirty && (
           <button
             type="button"
             className="btn btn-sm btn-outline-secondary flex-shrink-0"
-            onClick={() => onChange({ search: "", src: "", stage: "", result: "" })}
+            onClick={() =>
+              onChange({ search: "", src: "", stage: "", result: "", pipelineDefault: true })
+            }
             title="Limpiar filtros"
           >
             <i className="ti ti-x" />

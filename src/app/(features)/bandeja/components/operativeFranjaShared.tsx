@@ -6,9 +6,129 @@
  * **Referencia canónica:** cabecera y contenedor de
  * `PaymentLinkPanel.tsx` («Comprobantes y conciliación»).
  * Cotización y demás bloques deben reutilizar estos mismos tokens.
+ *
+ * **Botón de acción** (cuerpo de franja operativa): `OpFranjaActionButton` /
+ * `opFranjaActionButtonStyle` — mismo lenguaje visual que «Ir a Chat» en Cliente.
  */
 
-import type { CSSProperties } from "react";
+import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from "react";
+
+export type OpFranjaActionButtonVariant = "accent" | "neutral";
+
+/** Estilo base tipo chip «Ir a Chat» (borde `mu-line`, fondo panel, texto acento o neutro). */
+export function opFranjaActionButtonStyle(opts: {
+  variant?: OpFranjaActionButtonVariant;
+  disabled?: boolean;
+  loading?: boolean;
+  /** Estado seleccionado (p. ej. toggle moneda / pierna). */
+  active?: boolean;
+  /** Ancho completo + contenido centrado (CTA en bloque). */
+  block?: boolean;
+}): CSSProperties {
+  const variant = opts.variant ?? "accent";
+  const disabled = Boolean(opts.disabled);
+  const loading = Boolean(opts.loading);
+  const active = Boolean(opts.active);
+  const base: CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: opts.block ? "center" : undefined,
+    gap: 6,
+    padding: opts.block ? "6px 12px" : "4px 10px",
+    width: opts.block ? "100%" : undefined,
+    boxSizing: "border-box",
+    borderRadius: 6,
+    border: "1px solid var(--mu-line, #2a2c24)",
+    background: "var(--mu-panel-2, #1c1e18)",
+    fontWeight: 700,
+    fontSize: 11,
+    fontFamily: "inherit",
+    lineHeight: 1.2,
+    cursor: loading ? "wait" : disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.55 : 1,
+    ...(variant === "accent"
+      ? {
+          color: "var(--mu-accent, #d4ff3a)",
+          ...(active
+            ? {
+                borderColor: "rgba(197,242,74,0.45)",
+                boxShadow: "0 0 0 1px rgba(197,242,74,0.2)",
+              }
+            : {}),
+        }
+      : {
+          color: "var(--mu-text, #e6edf3)",
+          ...(active
+            ? {
+                borderColor: "rgba(197,242,74,0.35)",
+                color: "var(--mu-accent, #d4ff3a)",
+              }
+            : {}),
+        }),
+  };
+  return base;
+}
+
+export type OpFranjaActionButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: OpFranjaActionButtonVariant;
+  active?: boolean;
+  loading?: boolean;
+  /** Texto junto al spinner si `loading` (p. ej. «Abriendo…»). Si no se pasa, se reutiliza `children`. */
+  loadingLabel?: ReactNode;
+  iconClass?: string;
+  block?: boolean;
+};
+
+/** Botón de acción en franja operativa (misma familia que «Ir a Chat»). */
+export function OpFranjaActionButton({
+  variant = "accent",
+  active = false,
+  loading = false,
+  loadingLabel,
+  iconClass,
+  block = false,
+  children,
+  disabled,
+  style,
+  type = "button",
+  ...rest
+}: OpFranjaActionButtonProps) {
+  const isDisabled = Boolean(disabled || loading);
+  return (
+    <button
+      type={type}
+      disabled={isDisabled}
+      style={{
+        ...opFranjaActionButtonStyle({
+          variant,
+          disabled: isDisabled,
+          loading,
+          active,
+          block,
+        }),
+        ...style,
+      }}
+      {...rest}
+    >
+      {loading ? (
+        <>
+          <span
+            className="spinner-border spinner-border-sm"
+            style={{ width: 12, height: 12 }}
+            role="status"
+            aria-hidden
+          />
+          {loadingLabel != null ? loadingLabel : children}
+        </>
+      ) : (
+        <>
+          {iconClass ? <i className={iconClass} style={{ fontSize: 13 }} aria-hidden /> : null}
+          {children}
+        </>
+      )}
+    </button>
+  );
+}
 
 /** Contenedor de la franja (equiv. `S.section` en PaymentLinkPanel). */
 export const OP_FRANJA_SECTION: CSSProperties = {

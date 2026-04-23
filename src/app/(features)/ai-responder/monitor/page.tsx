@@ -7,6 +7,7 @@ import type { AiResponderStats }  from '@/types/ai-responder';
 import type { AiResponderLogAction, AiResponderLogProvider } from '@/types/ai-responder';
 import './ai-monitor-theme.scss';
 import AiResponderSubnav from '../AiResponderSubnav';
+import AiQuotaAlertsBanner from '../AiQuotaAlertsBanner';
 
 /** Mismo patrón que /ventas/tablero y /bandeja: el tema aplica margin-left al .page-wrapper. */
 function FeatureLayout({ children }: { children: ReactNode }) {
@@ -393,6 +394,8 @@ export default function AiResponderMonitorPage() {
           <button onClick={() => window.location.reload()}>Recargar</button>
         </div>
       )}
+
+      <AiQuotaAlertsBanner quota={stats?.quota_alerts} variant="dark" />
 
       {/* ── Topbar ─────────────────────────────────────────────────── */}
       <div className="am-topbar">

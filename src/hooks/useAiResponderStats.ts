@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AiResponderStats, AiResponderLogEntry } from '@/types/ai-responder';
+import type { AiResponderStats, AiResponderLogEntry, AiQuotaAlerts } from '@/types/ai-responder';
 
 export type { AiResponderStats, AiResponderLogEntry };
 
@@ -42,6 +42,48 @@ function parseLogByAction(raw: unknown): AiResponderLogEntry[] {
   return out;
 }
 
+function parseQuotaAlerts(raw: unknown): AiQuotaAlerts | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const q = raw as Record<string, unknown>;
+  const by = Array.isArray(q.by_provider) ? q.by_provider : [];
+  const recent = Array.isArray(q.recent_errors) ? q.recent_errors : [];
+  const hints = Array.isArray(q.provider_row_hints) ? q.provider_row_hints : [];
+  return {
+    active: Boolean(q.active),
+    unavailable: q.unavailable !== undefined ? Boolean(q.unavailable) : undefined,
+    window_days: Number(q.window_days) || 7,
+    total_usage_log_hits: Number(q.total_usage_log_hits) || 0,
+    total_payment_attempt_hits: Number(q.total_payment_attempt_hits) || 0,
+    by_provider: by
+      .filter((x): x is Record<string, unknown> => x != null && typeof x === 'object')
+      .map((r) => ({
+        provider_id: String(r.provider_id ?? ''),
+        function_called: String(r.function_called ?? ''),
+        n: Number(r.n) || 0,
+        last_at: typeof r.last_at === 'string' ? r.last_at : null,
+      })),
+    recent_errors: recent
+      .filter((x): x is Record<string, unknown> => x != null && typeof x === 'object')
+      .map((r) => ({
+        provider_id: String(r.provider_id ?? ''),
+        function_called: String(r.function_called ?? ''),
+        error_message: typeof r.error_message === 'string' ? r.error_message : null,
+        created_at: typeof r.created_at === 'string' ? r.created_at : null,
+      })),
+    provider_row_hints: hints
+      .filter((x): x is Record<string, unknown> => x != null && typeof x === 'object')
+      .map((r) => ({
+        provider_id: String(r.provider_id ?? ''),
+        last_error: typeof r.last_error === 'string' ? r.last_error : null,
+        circuit_open: Boolean(r.circuit_open),
+        circuit_breaker_until:
+          typeof r.circuit_breaker_until === 'string' ? r.circuit_breaker_until : null,
+      })),
+    headline: typeof q.headline === 'string' ? q.headline : null,
+    action_hint: typeof q.action_hint === 'string' ? q.action_hint : null,
+  };
+}
+
 function parseStatsPayload(raw: unknown): AiResponderStats | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
@@ -71,6 +113,7 @@ function parseStatsPayload(raw: unknown): AiResponderStats | null {
           };
         })()
       : undefined,
+    quota_alerts: parseQuotaAlerts(o.quota_alerts),
   };
 }
 

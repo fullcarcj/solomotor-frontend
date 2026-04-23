@@ -693,6 +693,150 @@
     }
   }
 
+  /* ── Cuota / rate limit (429, TPD, Gemini quota, límites gateway) ───── */
+  .am-quota-banner {
+    margin: 0 22px 16px;
+    padding: 14px 18px 16px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.45;
+    border: 1px solid var(--border);
+
+    &--urgent {
+      background: rgba(245, 158, 11, .1);
+      border-color: rgba(245, 158, 11, .35);
+      color: #fcd34d;
+    }
+
+    &--info {
+      background: rgba(96, 165, 250, .08);
+      border-color: rgba(96, 165, 250, .25);
+      color: var(--text-dim);
+    }
+
+    &__title {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    &__lead {
+      margin: 0 0 8px;
+      color: var(--text);
+    }
+
+    &__hint {
+      margin: 0 0 12px;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+      &:hover { text-decoration: underline; }
+    }
+  }
+
+  .am-quota-table-wrap {
+    overflow: auto;
+    margin: 10px 0 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+  }
+
+  .am-quota-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+
+    th, td {
+      padding: 8px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    th {
+      color: var(--text-faint);
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    td.dim { color: var(--text-faint); font-size: 11px; }
+
+    code {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: #93c5fd;
+    }
+
+    tr:last-child td { border-bottom: none; }
+  }
+
+  .am-quota-hints {
+    margin: 0 0 10px;
+    padding-left: 18px;
+    font-size: 12px;
+    color: var(--text-dim);
+
+    code { color: #93c5fd; }
+
+    .hint-err {
+      display: block;
+      margin-top: 4px;
+      color: var(--text-faint);
+      font-size: 11px;
+    }
+  }
+
+  .am-quota-details {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-dim);
+
+    summary {
+      cursor: pointer;
+      color: var(--accent);
+      user-select: none;
+    }
+
+    ul {
+      margin: 8px 0 0;
+      padding-left: 16px;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    li { margin-bottom: 10px; }
+
+    pre {
+      margin: 4px 0 0;
+      padding: 8px;
+      border-radius: 6px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      font-size: 10px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text-dim);
+    }
+
+    .dim { color: var(--text-faint); font-size: 11px; }
+  }
+
+  .am-quota-footer {
+    margin: 12px 0 0;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-soft);
+    font-size: 12px;
+    color: var(--text-faint);
+  }
+
   /* ── Responsive ──────────────────────────────────────────── */
   @media (max-width: 1600px) {
     .am-kpi-grid {

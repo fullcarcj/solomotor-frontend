@@ -123,4 +123,9 @@ export interface InboxFilters {
   stage:  string;
   /** no_conversion | converted | in_progress */
   result: string;
+  /**
+   * true (default): `?pipeline_default=1` — lista alineada a pipeline ventas (24 h WA contacto,
+   * 48 h cotización, orden/pago/despacho hasta cierre; pendientes primero).
+   */
+  pipelineDefault?: boolean;
 }

@@ -20,6 +20,8 @@ interface Props {
   unreadDerivedCount?: number;
   /** Evita ocultar la pestaña mientras la lista aún carga (evita parpadeo). */
   listLoading?: boolean;
+  /** Alinear totales con `?pipeline_default=1` (misma lista operativa). */
+  pipelineDefault?: boolean;
 }
 
 const BADGES = [{ key: "unread", label: "Sin atender", icon: "ti-bell" }] as const;
@@ -33,6 +35,7 @@ export default function InboxCountBadges({
   layout = "default",
   unreadDerivedCount,
   listLoading = false,
+  pipelineDefault = true,
 }: Props) {
   const dispatch = useAppDispatch();
   const [counts, setCounts] = useState<InboxCounts | null>(null);
@@ -52,6 +55,7 @@ export default function InboxCountBadges({
       if (listFilters?.stage) p.set("stage", listFilters.stage);
       if (listFilters?.result) p.set("result", listFilters.result);
       if (listFilters?.search) p.set("search", listFilters.search);
+      if (pipelineDefault) p.set("pipeline_default", "1");
       const qs = p.toString();
       const r = await fetch(`/api/bandeja/counts${qs ? `?${qs}` : ""}`, {
         credentials: "include",
@@ -68,7 +72,7 @@ export default function InboxCountBadges({
     } catch {
       /* silent */
     }
-  }, [listFilters, dispatch]);
+  }, [listFilters, dispatch, pipelineDefault]);
 
   useEffect(() => {
     void fetchCounts();

@@ -22,6 +22,7 @@ import {
   OP_FRANJA_SUBTITLE,
   OP_FRANJA_SUBTITLE_PROMINENT,
   OpFranjaChevron,
+  OpFranjaActionButton,
 } from "@/app/(features)/bandeja/components/operativeFranjaShared";
 import PendingStatementCreditsModal, {
   type PendingStatementItem,
@@ -213,25 +214,6 @@ const S = {
     color: "var(--mu-text, #e6edf3)",
     lineHeight: 1.3,
   },
-
-  btn: (variant: "primary" | "ghost" | "danger") => ({
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-    height: 28,
-    padding: "0 10px",
-    borderRadius: 6,
-    fontSize: 10,
-    fontWeight: 600,
-    cursor: "pointer",
-    border: "1px solid",
-    transition: "all 0.1s",
-    ...(variant === "primary"
-      ? { background: "#1e4a7a", color: "#93c5fd", borderColor: "rgba(147,197,253,0.3)" }
-      : variant === "danger"
-      ? { background: "rgba(239,68,68,0.08)", color: "#fca5a5", borderColor: "rgba(239,68,68,0.25)" }
-      : { background: "transparent", color: "var(--mu-ink-mute, #8b949e)", borderColor: "var(--mu-border, rgba(255,255,255,0.08))" }),
-  }) as CSSProperties,
 };
 
 /** Sin match automático con extracto bancario (`matched` = OK motor de conciliación). */
@@ -649,21 +631,6 @@ export default function PaymentLinkPanel({
     autoQuoteLinkTriedRef.current.clear();
   }, [activeQuotationId, quotationBs]);
 
-  /** Mismo estilo que «Vincular Orden ML» en ChatContextPanel (zona MercadoLibre). */
-  const mlLinkButtonStyle: CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "5px 12px",
-    borderRadius: 6,
-    background: "#ff7400",
-    color: "#fff",
-    fontWeight: 700,
-    fontSize: 11,
-    border: "none",
-    cursor: "pointer",
-  };
-
   return (
     <>
       <div style={OP_FRANJA_SECTION}>
@@ -735,9 +702,10 @@ export default function PaymentLinkPanel({
               marginBottom: 4,
             }}
           >
-            <button
+            <OpFranjaActionButton
               type="button"
-              style={mlLinkButtonStyle}
+              variant="accent"
+              iconClass="ti ti-link"
               onClick={(e) => {
                 e.stopPropagation();
                 setStmtLinkError(null);
@@ -745,9 +713,8 @@ export default function PaymentLinkPanel({
               }}
               title="Ver créditos del extracto pendientes de conciliar (sin match automático)"
             >
-              <i className="ti ti-link" style={{ fontSize: 13 }} />
-              Vincular Movimiento
-            </button>
+              Vincular movimiento
+            </OpFranjaActionButton>
             <div
               style={{
                 fontFamily: "'JetBrains Mono', monospace",
@@ -892,19 +859,10 @@ export default function PaymentLinkPanel({
                 </div>
               )}
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
-                <button
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                <OpFranjaActionButton
                   type="button"
-                  style={{
-                    padding: "8px 14px",
-                    borderRadius: 8,
-                    fontSize: 12,
-                    fontWeight: 700,
-                    border: "1px solid var(--mu-border, rgba(255,255,255,0.14))",
-                    background: "transparent",
-                    color: "var(--mu-text, #e6edf3)",
-                    cursor: stmtLinkSaving ? "not-allowed" : "pointer",
-                  }}
+                  variant="neutral"
                   disabled={stmtLinkSaving}
                   onClick={() => {
                     clearStatementDraft();
@@ -912,28 +870,17 @@ export default function PaymentLinkPanel({
                   }}
                 >
                   Cancelar
-                </button>
-                <button
+                </OpFranjaActionButton>
+                <OpFranjaActionButton
                   type="button"
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: 8,
-                    fontSize: 12,
-                    fontWeight: 800,
-                    border: "none",
-                    background: "#ff7400",
-                    color: "#fff",
-                    cursor:
-                      stmtLinkSaving || draftAttemptId == null || statementLinkTargets.length === 0
-                        ? "not-allowed"
-                        : "pointer",
-                    opacity: stmtLinkSaving || draftAttemptId == null ? 0.55 : 1,
-                  }}
+                  variant="accent"
                   disabled={stmtLinkSaving || draftAttemptId == null || statementLinkTargets.length === 0}
+                  loading={stmtLinkSaving}
+                  loadingLabel="Guardando…"
                   onClick={() => void confirmStatementLink()}
                 >
-                  {stmtLinkSaving ? "Guardando…" : "Confirmar vinculación"}
-                </button>
+                  Confirmar vinculación
+                </OpFranjaActionButton>
               </div>
             </div>
           </div>
@@ -1043,27 +990,29 @@ export default function PaymentLinkPanel({
 
                     {/* Acciones */}
                     {!isLinked && (
-                      <div style={{ display: "flex", gap: 6 }}>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
                         {a.firebase_url && (
-                          <button
+                          <OpFranjaActionButton
                             type="button"
-                            style={S.btn("ghost")}
+                            variant="neutral"
                             onClick={() => setImageUrl(a.firebase_url)}
                             title="Ver imagen"
                           >
                             Ver imagen
-                          </button>
+                          </OpFranjaActionButton>
                         )}
                         {activeQuotationId && (
-                          <button
+                          <OpFranjaActionButton
                             type="button"
-                            style={S.btn("primary")}
+                            variant="accent"
                             disabled={linking === a.id}
+                            loading={linking === a.id}
+                            loadingLabel="…"
                             onClick={() => void linkToQuotation(a.id)}
                             title={`Vincular a ${activeQuotationRef ?? `#${activeQuotationId}`}`}
                           >
-                            {linking === a.id ? "…" : `Vincular a ${activeQuotationRef ?? `#${activeQuotationId}`}`}
-                          </button>
+                            {`Vincular a ${activeQuotationRef ?? `#${activeQuotationId}`}`}
+                          </OpFranjaActionButton>
                         )}
                         {!activeQuotationId && (
                           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: "var(--mu-ink-mute, #6e7681)" }}>

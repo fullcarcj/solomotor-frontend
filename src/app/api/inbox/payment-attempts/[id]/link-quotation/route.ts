@@ -11,7 +11,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   const body = await req.json().catch(() => ({}));
   const up = await proxyJsonToReceiver(
     `/api/inbox/payment-attempts/${encodeURIComponent(id)}/link-quotation`,
-    { method: "POST", body }
+    { method: "POST", body, forwardRequestHeaders: req.headers }
   );
   return nextJsonFromUpstream(up);
 }

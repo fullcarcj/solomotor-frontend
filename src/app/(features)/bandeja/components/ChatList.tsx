@@ -101,6 +101,20 @@ export default function ChatList({
               </span>
             )}
           </div>
+          <button
+            type="button"
+            className="bd-pipeline-scope-btn"
+            title={
+              filters.pipelineDefault !== false
+                ? "Ver todos los hilos del CRM (sin filtro operativo de pipeline)"
+                : "Volver a la vista por defecto: pipeline de ventas (24 h / 48 h + órdenes activas)"
+            }
+            onClick={() =>
+              setFilters({ pipelineDefault: !(filters.pipelineDefault !== false) })
+            }
+          >
+            {filters.pipelineDefault !== false ? "Todos los hilos" : "Solo ventas"}
+          </button>
           {embedded && triajeUi && (
             <button
               type="button"
@@ -138,6 +152,7 @@ export default function ChatList({
             layout="inline"
             unreadDerivedCount={unreadDerivedCount}
             listLoading={filters.filter === "unread" ? loading : false}
+            pipelineDefault={filters.pipelineDefault !== false}
           />
           <AiReviewBadge count={pendingCount} onClick={() => setDrawerOpen(true)} />
         </div>
@@ -152,6 +167,7 @@ export default function ChatList({
           listFilters={listFiltersForCounts}
           unreadDerivedCount={unreadDerivedCount}
           listLoading={filters.filter === "unread" ? loading : false}
+          pipelineDefault={filters.pipelineDefault !== false}
         />
       )}
 
@@ -177,6 +193,7 @@ export default function ChatList({
               key={String(chat.id)}
               chat={chat}
               active={activeChatId !== undefined && String(chat.id) === String(activeChatId)}
+              pipelineDefaultActive={embedded && filters.pipelineDefault !== false}
             />
           ))}
 

@@ -27,8 +27,10 @@ import {
   OP_FRANJA_TITLE,
   OP_FRANJA_SUBTITLE,
   OpFranjaChevron,
+  OpFranjaActionButton,
 } from "@/app/(features)/bandeja/components/operativeFranjaShared";
 import { useTodayRate } from "@/hooks/useTodayRate";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 // ── Tipos locales ────────────────────────────────────────────────────────────
 
@@ -382,27 +384,6 @@ const S = {
     flex: 1,
     minWidth: 0,
   } as React.CSSProperties,
-
-  btn: (variant: "default" | "draft" | "primary" | "ghost") => ({
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-    height: 32,
-    padding: "0 11px",
-    borderRadius: 7,
-    fontSize: 11,
-    fontWeight: 600,
-    cursor: "pointer",
-    flexShrink: 0,
-    transition: "background 0.1s",
-    ...(variant === "primary"
-      ? { background: "#c5f24a", color: "#1a1f14", border: "1px solid #c5f24a", fontWeight: 700 }
-      : variant === "draft"
-      ? { background: "rgba(245,158,11,0.08)", color: "#fcd34d", border: "1px solid rgba(245,158,11,0.25)" }
-      : variant === "ghost"
-      ? { background: "transparent", color: "var(--mu-ink-mute, #8b949e)", border: "1px solid var(--mu-border, rgba(255,255,255,0.08))" }
-      : { background: "var(--mu-panel-4, #2a313c)", color: "var(--mu-text-dim, #8b949e)", border: "1px solid var(--mu-border, rgba(255,255,255,0.08))" }),
-  }) as React.CSSProperties,
 };
 
 /** Carril segmentado: opción izquierda activa → acento ámbar; derecha activa → acento azul. */
@@ -507,7 +488,6 @@ const SvgSave = () => (
 export interface QuotePanelProps {
   chatId: string;
   customerId: number | null;
-  customerName: string | null;
   /** TRUE cuando el usuario pulsa "Cotizar" en el panel de acciones */
   forceOpen?: boolean;
   /** Callback para que el padre sepa que ya consumió el forceOpen */
@@ -516,6 +496,60 @@ export interface QuotePanelProps {
   onSuccess?: () => void;
   /** Notifica al padre la cotización activa enviada (id + referencia + total USD) o null si no hay */
   onSentQuoteChange?: (q: { id: number; reference: string; totalUsd: number } | null) => void;
+}
+
+/** Línea persistida (GET presupuesto / panel solo lectura). */
+interface ReadonlyQuoteLine {
+  id: number;
+  producto_id: number;
+  sku: string | null;
+  name: string | null;
+  description: string | null;
+  cantidad: number;
+  precio_unitario: number;
+  subtotal: number;
+  stock_qty: number;
+}
+
+function normalizeReadonlyLine(r: Record<string, unknown>): ReadonlyQuoteLine {
+  return {
+    id: Number(r.id),
+    producto_id: Number(r.producto_id),
+    sku: r.sku != null ? String(r.sku) : null,
+    name: r.name != null ? String(r.name) : null,
+    description: r.description != null ? String(r.description) : null,
+    cantidad: Number(r.cantidad),
+    precio_unitario: Number(r.precio_unitario),
+    subtotal: Number(r.subtotal),
+    stock_qty: r.stock_qty != null ? Number(r.stock_qty) : 0,
+  };
+}
+
+function readonlyRowToQuoteLine(row: ReadonlyQuoteLine, idx: number): QuoteLine {
+  const p: Product = {
+    id: row.producto_id,
+    sku: row.sku ?? "",
+    name: row.name ?? `(Producto #${row.producto_id})`,
+    description: row.description,
+    category: "",
+    brand: "",
+    unit_price_usd: row.precio_unitario,
+    source: "presupuesto",
+    is_active: true,
+    stock_qty: row.stock_qty,
+    stock_min: 0,
+    stock_max: null,
+    stock_alert: false,
+    lead_time_days: 0,
+    safety_factor: 1,
+    supplier_id: null,
+  };
+  return {
+    key: `edit-${row.id}-${idx}`,
+    product: p,
+    cantidad: row.cantidad,
+    precio_unitario: row.precio_unitario,
+  };
 }
 
 interface SentQuote {
@@ -551,12 +585,12 @@ interface PaymentAllocation {
 export default function QuotePanel({
   chatId,
   customerId,
-  customerName,
   forceOpen,
   onForceOpenConsumed,
   onSuccess,
   onSentQuoteChange,
 }: QuotePanelProps) {
+  const { user: currentUser } = useCurrentUser();
   const { rate } = useTodayRate();
   const activeRate =
     rate != null &&
@@ -599,7 +633,14 @@ export default function QuotePanel({
   const [success, setSuccess]           = useState(false);
   /** Cotización ya enviada al cliente (muestra tarjeta + botones de aprobación) */
   const [sentQuote, setSentQuote]       = useState<SentQuote | null>(null);
-  const [approving, setApproving]       = useState(false);
+  /** Edición de ítems de la cotización ya enviada (PATCH presupuesto/items). */
+  const [quoteEditing, setQuoteEditing] = useState(false);
+  /** Pruebas / ajustes rápidos: solo SUPERUSER, con borrador o edición de ítems activa. */
+  const canSuperuserEditUnitUsd =
+    currentUser?.role === "SUPERUSER" && (!sentQuote || quoteEditing);
+  const [readonlyQuoteLines, setReadonlyQuoteLines] = useState<ReadonlyQuoteLine[]>([]);
+  const [loadingReadonlyDetail, setLoadingReadonlyDetail] = useState(false);
+  const [savingQuoteEdit, setSavingQuoteEdit] = useState(false);
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [orderCreatedId, setOrderCreatedId] = useState<number | null>(null);
   /** Carrera / delivery al crear orden CH-2 desde cotización (opcional). */
@@ -732,6 +773,10 @@ export default function QuotePanel({
     setSuccess(false);
     setIsOpen(false);
     setSentQuote(null);
+    setQuoteEditing(false);
+    setReadonlyQuoteLines([]);
+    setLoadingReadonlyDetail(false);
+    setSavingQuoteEdit(false);
     setDisplayCurrency("VES");
     setOrderCreatedId(null);
     setCreatingOrder(false);
@@ -767,6 +812,38 @@ export default function QuotePanel({
     const t = setInterval(() => { void loadActiveQuote(); }, 14000);
     return () => clearInterval(t);
   }, [sentQuote?.id, sentQuote?.channelId, sentQuote?.paymentFullySettled, loadActiveQuote]);
+
+  // Detalle solo lectura de la cotización enviada (alineado a conciliación / BCV en totales)
+  useEffect(() => {
+    if (!sentQuote) {
+      setReadonlyQuoteLines([]);
+      return;
+    }
+    if (!isOpen || quoteEditing) return;
+    let alive = true;
+    setLoadingReadonlyDetail(true);
+    void (async () => {
+      try {
+        const r = await fetch(
+          `/api/inbox/quotations/presupuesto/${encodeURIComponent(String(sentQuote.id))}`,
+          { credentials: "include", cache: "no-store" }
+        );
+        const data = await r.json().catch(() => ({})) as Record<string, unknown>;
+        if (!alive) return;
+        const raw = (data.lines ?? []) as Record<string, unknown>[];
+        setReadonlyQuoteLines(raw.map(normalizeReadonlyLine));
+      } catch {
+        if (alive) setReadonlyQuoteLines([]);
+      } finally {
+        if (alive) setLoadingReadonlyDetail(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [isOpen, sentQuote?.id, quoteEditing]);
+
+  useEffect(() => {
+    if (quoteEditing) setIsOpen(true);
+  }, [quoteEditing]);
 
   const vesMode = displayCurrency === "VES";
   /** true cuando tenemos ambas tasas y el switch está en VES → usamos el precio recalculado */
@@ -929,29 +1006,90 @@ export default function QuotePanel({
     }
   };
 
-  /** Actualiza el status de la cotización enviada (approved | rejected | sent) */
-  const setQuoteStatus = async (newStatus: SentQuote["status"]) => {
-    if (!sentQuote || approving) return;
-    setApproving(true);
+  const cancelQuoteEdit = useCallback(() => {
+    setQuoteEditing(false);
+    setLines([]);
+    setSearchQuery("");
+    setResults([]);
+    setError(null);
+  }, []);
+
+  const beginEditQuote = useCallback(async () => {
+    if (!sentQuote || sentQuote.paymentFullySettled) return;
+    let rows = readonlyQuoteLines;
+    if (!rows.length) {
+      try {
+        const r = await fetch(
+          `/api/inbox/quotations/presupuesto/${encodeURIComponent(String(sentQuote.id))}`,
+          { credentials: "include", cache: "no-store" }
+        );
+        const data = await r.json().catch(() => ({})) as Record<string, unknown>;
+        const raw = (data.lines ?? []) as Record<string, unknown>[];
+        rows = raw.map(normalizeReadonlyLine);
+        setReadonlyQuoteLines(rows);
+      } catch {
+        setError("No se pudieron cargar las líneas para editar.");
+        return;
+      }
+    }
+    if (!rows.length) {
+      setError("La cotización no tiene líneas para editar.");
+      return;
+    }
+    setDisplayCurrency("USD");
+    setLines(rows.map((row, idx) => readonlyRowToQuoteLine(row, idx)));
+    setQuoteEditing(true);
+    setError(null);
+  }, [sentQuote, readonlyQuoteLines]);
+
+  const saveQuoteEdit = useCallback(async () => {
+    if (!sentQuote || !chatId || lines.length === 0 || savingQuoteEdit) return;
+    setSavingQuoteEdit(true);
+    setError(null);
+    const body = {
+      chat_id: Number(chatId),
+      company_id: 1,
+      items: lines.map((l) => ({
+        producto_id: l.product.id,
+        cantidad: l.cantidad,
+        precio_unitario: l.precio_unitario,
+      })),
+    };
     try {
       const res = await fetch(
-        `/api/inbox/quotations/${encodeURIComponent(String(sentQuote.id))}/status`,
+        `/api/inbox/quotations/presupuesto/${encodeURIComponent(String(sentQuote.id))}/items`,
         {
           method: "PATCH",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: newStatus }),
+          body: JSON.stringify(body),
           cache: "no-store",
         }
       );
-      if (res.ok) {
-        setSentQuote((prev) => prev ? { ...prev, status: newStatus } : prev);
-        onSuccess?.();
+      const json = await res.json().catch(() => ({})) as Record<string, unknown>;
+      if (!res.ok) {
+        setError(String(json.message ?? json.error ?? "No se pudo guardar la cotización."));
+        return;
       }
-    } catch {/* ignore */} finally {
-      setApproving(false);
+      const pres = json.presupuesto as Record<string, unknown> | undefined;
+      const newTotal = pres?.total != null ? Number(pres.total) : NaN;
+      setSentQuote((prev) =>
+        prev && Number.isFinite(newTotal) ? { ...prev, total: newTotal } : prev
+      );
+      const rawLines = (json.lines ?? []) as Record<string, unknown>[];
+      setReadonlyQuoteLines(rawLines.map(normalizeReadonlyLine));
+      setQuoteEditing(false);
+      setLines([]);
+      setSearchQuery("");
+      setResults([]);
+      onSuccess?.();
+      await loadActiveQuote();
+    } catch {
+      setError("Error de red al guardar la cotización.");
+    } finally {
+      setSavingQuoteEdit(false);
     }
-  };
+  }, [sentQuote, chatId, lines, savingQuoteEdit, loadActiveQuote, onSuccess]);
 
   /** Imputar un comprobante a la cotización activa (VES o USD). */
   const submitPaymentAllocation = async () => {
@@ -1099,13 +1237,15 @@ export default function QuotePanel({
   const showPaymentGateway =
     Boolean(sentQuote) &&
     sentQuote!.channelId === 2 &&
-    !sentQuote!.linkedSalesOrderId;
+    !sentQuote!.linkedSalesOrderId &&
+    !quoteEditing;
 
   const showCreateOrderCta =
     Boolean(sentQuote) &&
     sentQuote!.channelId === 2 &&
     Boolean(sentQuote!.paymentFullySettled) &&
-    !sentQuote!.linkedSalesOrderId;
+    !sentQuote!.linkedSalesOrderId &&
+    !quoteEditing;
 
   useEffect(() => {
     if (!showCreateOrderCta) return;
@@ -1189,12 +1329,12 @@ export default function QuotePanel({
                 fontWeight: 800,
                 padding: "1px 6px",
                 borderRadius: 4,
-                background: "rgba(197,242,74,0.12)",
-                color: "#c5f24a",
-                border: "1px solid rgba(197,242,74,0.3)",
+                background: quoteEditing ? "rgba(45,212,191,0.12)" : "rgba(197,242,74,0.12)",
+                color: quoteEditing ? "#5eead4" : "#c5f24a",
+                border: quoteEditing ? "1px solid rgba(45,212,191,0.35)" : "1px solid rgba(197,242,74,0.3)",
                 letterSpacing: "0.04em",
               }}>
-                {lines.length} {lines.length === 1 ? "ítem" : "ítems"}
+                {quoteEditing ? "Editando · " : ""}{lines.length} {lines.length === 1 ? "ítem" : "ítems"}
               </span>
             )}
           </div>
@@ -1295,73 +1435,131 @@ export default function QuotePanel({
       {isOpen && sentQuote && (
         <div style={{
           padding: "12px 14px",
-          borderBottom: lines.length > 0
-            ? "1px solid var(--mu-border, rgba(255,255,255,0.08))"
-            : undefined,
+          borderBottom:
+            quoteEditing && lines.length > 0
+              ? "1px solid var(--mu-border, rgba(255,255,255,0.08))"
+              : undefined,
         }}>
-          {/* Fila referencia + total */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-            <div>
+          {/* Fila referencia + total (Bs con tasa activa BCV = misma base que conciliación / mensaje al cliente) */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 8 }}>
+            <div style={{ minWidth: 0 }}>
               <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 800, color: "#c5f24a", letterSpacing: "0.04em" }}>
                 {sentQuote.reference}
               </div>
-              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: "var(--mu-ink-mute, #6e7681)", marginTop: 2 }}>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: "var(--mu-ink-mute, #6e7681)", marginTop: 2, lineHeight: 1.35 }}>
                 Total · {fmtUSD(sentQuote.total)}
-                {hasBinanceQuote
-                  ? ` · ${fmtVESQuote(bsFromUsdBinance(sentQuote.total, binanceNum!))} (Binance)`
-                  : activeRate != null
-                    ? ` · ${fmtVESQuote(sentQuote.total * activeRate)} (activa)`
-                    : ""}
+                {activeRate != null
+                  ? ` · ${fmtVESQuote(sentQuote.total * activeRate)} (BCV · tasa activa)`
+                  : ""}
               </div>
             </div>
-            {/* Botón nueva cotización */}
-            <button
-              type="button"
-              style={{ ...S.btn("ghost"), height: 26, fontSize: 10, padding: "0 8px" }}
-              onClick={() => { setSentQuote(null); setLines([]); }}
-              title="Crear nueva cotización"
-            >
-              + Nueva
-            </button>
+            <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
+              <OpFranjaActionButton
+                type="button"
+                variant="neutral"
+                style={{ whiteSpace: "nowrap" }}
+                onClick={() => {
+                  setQuoteEditing(false);
+                  setReadonlyQuoteLines([]);
+                  setSentQuote(null);
+                  setLines([]);
+                }}
+                title="Crear una cotización nueva para este chat"
+              >
+                + Nueva
+              </OpFranjaActionButton>
+              <OpFranjaActionButton
+                type="button"
+                variant="accent"
+                disabled={Boolean(sentQuote.paymentFullySettled)}
+                title={sentQuote.paymentFullySettled ? "Pago cerrado: no se puede editar" : "Editar ítems y total"}
+                onClick={() => void beginEditQuote()}
+              >
+                Editar
+              </OpFranjaActionButton>
+            </div>
           </div>
 
-          {/* 3 botones de decisión */}
-          <div style={{ display: "flex", gap: 6 }}>
-            {(
-              [
-                { st: "approved" as const, label: "✓ Aprobada",    active: "rgba(52,211,153,0.15)",  border: "rgba(52,211,153,0.5)",  textColor: "#86efac" },
-                { st: "rejected" as const, label: "✗ Rechazada",   active: "rgba(239,68,68,0.12)",   border: "rgba(239,68,68,0.4)",   textColor: "#fca5a5" },
-                { st: "sent"     as const, label: "⏳ Por aprobar", active: "rgba(245,158,11,0.10)",  border: "rgba(245,158,11,0.35)", textColor: "#fcd34d" },
-              ] as const
-            ).map(({ st, label, active, border, textColor }) => {
-              const isActive = sentQuote.status === st;
-              return (
-                <button
-                  key={st}
-                  type="button"
-                  disabled={approving}
-                  onClick={() => void setQuoteStatus(st)}
-                  style={{
-                    flex: 1,
-                    height: 30,
-                    borderRadius: 7,
-                    border: `1px solid ${isActive ? border : "var(--mu-border, rgba(255,255,255,0.08))"}`,
-                    background: isActive ? active : "transparent",
-                    color: isActive ? textColor : "var(--mu-ink-mute, #6e7681)",
+          {/* Vista ítems enviada (solo lectura; tonos fríos distintos del armado editable) */}
+          {!quoteEditing && (
+            <div style={{
+              marginBottom: 12,
+              padding: "10px 10px",
+              borderRadius: 9,
+              background: "linear-gradient(160deg, rgba(15,118,110,0.12), rgba(30,41,59,0.55))",
+              border: "1px solid rgba(45,212,191,0.22)",
+            }}>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, fontWeight: 800, letterSpacing: "0.14em", color: "#5eead4", marginBottom: 8, textTransform: "uppercase" as const }}>
+                Cotización enviada · solo lectura
+              </div>
+              {loadingReadonlyDetail ? (
+                <div style={{ fontSize: 10, color: "#94a3b8" }}>Cargando detalle…</div>
+              ) : readonlyQuoteLines.length === 0 ? (
+                <div style={{ fontSize: 10, color: "#94a3b8" }}>Sin líneas en detalle.</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column" as const, gap: 6 }}>
+                  {readonlyQuoteLines.map((row) => {
+                    const title = row.description?.trim() || row.name || `Producto #${row.producto_id}`;
+                    const bsLine = activeRate != null ? row.subtotal * activeRate : null;
+                    return (
+                      <div
+                        key={row.id}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr auto",
+                          gap: "6px 10px",
+                          padding: "8px 8px",
+                          borderRadius: 7,
+                          background: "rgba(15,23,42,0.45)",
+                          border: "1px solid rgba(148,163,184,0.15)",
+                        }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: "#e2e8f0", lineHeight: 1.35, wordBreak: "break-word" as const }}>
+                            {title}
+                          </div>
+                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: "#64748b", marginTop: 3 }}>
+                            {row.sku ? `${row.sku} · ` : ""}×{row.cantidad} @ {fmtUSD(row.precio_unitario)}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: "right" as const, alignSelf: "center" }}>
+                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 800, color: "#99f6e4" }}>
+                            {fmtUSD(row.subtotal)}
+                          </div>
+                          {bsLine != null && (
+                            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, fontWeight: 600, color: "#7dd3fc", marginTop: 2 }}>
+                              {fmtVESQuote(bsLine)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginTop: 4,
+                    paddingTop: 8,
+                    borderTop: "1px solid rgba(45,212,191,0.2)",
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 9,
-                    fontWeight: 700,
-                    letterSpacing: "0.04em",
-                    cursor: approving ? "wait" : "pointer",
-                    transition: "all 0.15s",
-                    whiteSpace: "nowrap" as const,
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
+                    fontSize: 10,
+                    fontWeight: 800,
+                    color: "#ccfbf1",
+                  }}>
+                    <span>Total</span>
+                    <span style={{ textAlign: "right" as const }}>
+                      <span style={{ display: "block" }}>{fmtUSD(sentQuote.total)}</span>
+                      {activeRate != null && (
+                        <span style={{ display: "block", fontSize: 9, fontWeight: 700, color: "#7dd3fc", marginTop: 2 }}>
+                          {fmtVESQuote(sentQuote.total * activeRate)}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Módulo de pago bimoneda ──────────────────────────── */}
           {showPaymentGateway && (
@@ -1457,28 +1655,17 @@ export default function QuotePanel({
                         outline: "none",
                       }}
                     />
-                    <button
+                    <OpFranjaActionButton
                       type="button"
+                      variant="accent"
+                      block
                       disabled={cajaUsdSubmitting}
+                      loading={cajaUsdSubmitting}
+                      loadingLabel="Asociando…"
                       onClick={() => void submitCajaUsdComplement()}
-                      style={{
-                        width: "100%",
-                        minHeight: 36,
-                        padding: "8px 12px",
-                        borderRadius: 7,
-                        border: "1px solid rgba(129,140,248,0.55)",
-                        background: "linear-gradient(180deg, rgba(129,140,248,0.95) 0%, #6366f1 100%)",
-                        color: "#f8fafc",
-                        fontFamily: "inherit",
-                        fontSize: 11,
-                        fontWeight: 700,
-                        cursor: cajaUsdSubmitting ? "wait" : "pointer",
-                        lineHeight: 1.25,
-                        textAlign: "center" as const,
-                      }}
                     >
-                      {cajaUsdSubmitting ? "Asociando…" : "Asociar pago en dólares"}
-                    </button>
+                      Asociar pago en dólares
+                    </OpFranjaActionButton>
                   </div>
                   {cajaUsdError && (
                     <div style={{ marginTop: 6, fontSize: 10, color: "#fca5a5" }}>{cajaUsdError}</div>
@@ -1537,26 +1724,17 @@ export default function QuotePanel({
                               ✗ RECH.
                             </span>
                           ) : (
-                            <button
+                            <OpFranjaActionButton
                               type="button"
+                              variant="accent"
                               disabled={approvingUsd != null}
+                              loading={approvingUsd === al.id}
+                              loadingLabel="…"
                               onClick={() => void approveUsdAllocation(al.id)}
-                              style={{
-                                height: 22,
-                                padding: "0 8px",
-                                borderRadius: 5,
-                                border: "1px solid rgba(56,189,248,0.45)",
-                                background: "rgba(56,189,248,0.1)",
-                                color: "#93c5fd",
-                                fontFamily: "'JetBrains Mono', monospace",
-                                fontSize: 9,
-                                fontWeight: 800,
-                                cursor: approvingUsd != null ? "wait" : "pointer",
-                                letterSpacing: "0.04em",
-                              }}
+                              style={{ fontSize: 10, padding: "2px 8px" }}
                             >
-                              {approvingUsd === al.id ? "…" : "Aprobar · Caja"}
-                            </button>
+                              Aprobar · Caja
+                            </OpFranjaActionButton>
                           )}
                         </div>
                       )}
@@ -1579,32 +1757,24 @@ export default function QuotePanel({
                   {/* Toggle moneda */}
                   <div style={{ display: "flex", gap: 4 }}>
                     {(["VES", "USD"] as const).map((cur) => (
-                      <button
+                      <OpFranjaActionButton
                         key={cur}
                         type="button"
+                        variant="neutral"
+                        active={payForm.currency === cur}
                         onClick={() => setPayForm((f) => ({ ...f, currency: cur, amount: "" }))}
                         style={{
                           flex: 1,
-                          height: 26,
-                          borderRadius: 6,
-                          border: payForm.currency === cur
-                            ? (cur === "VES" ? "1px solid rgba(234,179,8,0.5)" : "1px solid rgba(56,189,248,0.5)")
-                            : "1px solid var(--mu-border,rgba(255,255,255,0.08))",
-                          background: payForm.currency === cur
-                            ? (cur === "VES" ? "rgba(234,179,8,0.15)" : "rgba(56,189,248,0.12)")
-                            : "transparent",
-                          color: payForm.currency === cur
-                            ? (cur === "VES" ? "#fbbf24" : "#93c5fd")
-                            : "var(--mu-ink-mute,#8b949e)",
+                          justifyContent: "center",
                           fontFamily: "'JetBrains Mono', monospace",
                           fontSize: 9,
                           fontWeight: 800,
-                          cursor: "pointer",
                           letterSpacing: "0.06em",
+                          padding: "4px 6px",
                         }}
                       >
                         {cur === "VES" ? "Bs (Pago Móvil)" : "USD (Transferencia)"}
-                      </button>
+                      </OpFranjaActionButton>
                     ))}
                   </div>
 
@@ -1647,30 +1817,22 @@ export default function QuotePanel({
                         minWidth: 0,
                       }}
                     />
-                    <button
+                    <OpFranjaActionButton
                       type="button"
+                      variant="accent"
                       disabled={payForm.submitting}
+                      loading={payForm.submitting}
+                      loadingLabel="…"
                       onClick={() => void submitPaymentAllocation()}
                       style={{
                         flexShrink: 0,
-                        height: 32,
-                        padding: "0 12px",
-                        borderRadius: 7,
-                        border: payForm.currency === "VES"
-                          ? "1px solid rgba(234,179,8,0.45)"
-                          : "1px solid rgba(56,189,248,0.45)",
-                        background: payForm.currency === "VES"
-                          ? "rgba(234,179,8,0.15)"
-                          : "rgba(56,189,248,0.12)",
-                        color: payForm.currency === "VES" ? "#fbbf24" : "#93c5fd",
                         fontFamily: "'JetBrains Mono', monospace",
                         fontSize: 10,
                         fontWeight: 800,
-                        cursor: payForm.submitting ? "wait" : "pointer",
                       }}
                     >
-                      {payForm.submitting ? "…" : "Imputar"}
-                    </button>
+                      Imputar
+                    </OpFranjaActionButton>
                   </div>
 
                   {payForm.currency === "USD" && (
@@ -1798,104 +1960,34 @@ export default function QuotePanel({
                   </div>
                 )}
               </div>
-              <button
+              <OpFranjaActionButton
                 type="button"
+                variant="accent"
+                block
                 disabled={creatingOrder}
+                loading={creatingOrder}
+                loadingLabel="Creando orden…"
+                iconClass={creatingOrder ? undefined : "ti ti-shopping-cart-plus"}
                 onClick={() => void createOrderFromVerifiedQuote()}
                 style={{
-                  width: "100%",
-                  minHeight: 36,
-                  borderRadius: 8,
-                  border: "1px solid rgba(197,242,74,0.45)",
-                  background: "linear-gradient(180deg, rgba(197,242,74,0.95) 0%, #a3cb3a 100%)",
-                  color: "#141810",
                   fontFamily: "'JetBrains Mono', monospace",
                   fontSize: 10,
                   fontWeight: 800,
                   letterSpacing: "0.06em",
-                  cursor: creatingOrder ? "wait" : "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
                   gap: 8,
-                  boxShadow: "0 1px 0 rgba(255,255,255,0.35) inset",
                 }}
               >
-                {creatingOrder ? (
-                  <>… Creando orden</>
-                ) : (
-                  <>
-                    <i className="ti ti-shopping-cart-plus" style={{ fontSize: 14 }} />
-                    Crear orden de compra · CH-2
-                  </>
-                )}
-              </button>
+                Crear orden de compra · CH-2
+              </OpFranjaActionButton>
             </div>
           )}
         </div>
       )}
 
       {/* ── Panel expandido (body + footer en un solo scroll) ───────── */}
-      {isOpen && !sentQuote && (
+      {isOpen && (!sentQuote || quoteEditing) && (
       <div style={S.expandedWrap}>
         <div style={S.scrollBody}>
-
-          {/* Cliente */}
-          <div>
-            <div style={S.secLabel}>
-              <span>Cliente</span>
-              <div style={S.line} />
-            </div>
-            {noCustomer ? (
-              <div style={{
-                padding: "9px 10px",
-                borderRadius: 8,
-                border: "1px dashed var(--mu-border, rgba(255,255,255,0.08))",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                color: "var(--mu-ink-mute, #8b949e)",
-                fontSize: 11,
-              }}>
-                <i className="ti ti-user-question" style={{ fontSize: 14 }} />
-                Identifica al cliente primero
-              </div>
-            ) : (
-              <div style={{
-                padding: "8px 10px",
-                borderRadius: 8,
-                background: "var(--mu-panel-4, #2a313c)",
-                border: "1px solid var(--mu-border, rgba(255,255,255,0.08))",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}>
-                <div style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: "50%",
-                  background: "#1e4a7a",
-                  color: "#93c5fd",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  flexShrink: 0,
-                }}>
-                  {(customerName ?? "?").slice(0, 2).toUpperCase()}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {customerName ?? `Cliente #${customerId}`}
-                  </div>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: "var(--mu-ink-mute, #6e7681)", letterSpacing: "0.04em" }}>
-                    ID {customerId}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
 
           {/* Buscar productos — fila: MONEDA + switch (izq.) · Agregar productos + SKU/Nombre (der.) */}
           <div>
@@ -2248,6 +2340,66 @@ export default function QuotePanel({
                             <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: "#fca5a5" }}>Sin tasa</div>
                           </>
                         )}
+                        {canSuperuserEditUnitUsd ? (
+                          <div
+                            style={{
+                              marginTop: 6,
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "flex-end",
+                              gap: 4,
+                              width: "100%",
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: 7,
+                                fontWeight: 800,
+                                letterSpacing: "0.08em",
+                                color: "var(--mu-ink-mute, #8b949e)",
+                                textTransform: "uppercase" as const,
+                              }}
+                            >
+                              P. unit. USD · SU
+                            </span>
+                            <input
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              value={l.precio_unitario}
+                              onChange={(e) => {
+                                const n = parseFloat(e.target.value);
+                                setLines((prev) =>
+                                  prev.map((x) =>
+                                    x.key === l.key
+                                      ? {
+                                          ...x,
+                                          precio_unitario:
+                                            Number.isFinite(n) && n >= 0 ? n : x.precio_unitario,
+                                        }
+                                      : x
+                                  )
+                                );
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              title="Precio unitario USD de la línea (prueba · SUPERUSER). Con vista VES los totales usan la fórmula del panel sobre este valor."
+                              style={{
+                                width: 80,
+                                boxSizing: "border-box",
+                                padding: "4px 6px",
+                                borderRadius: 6,
+                                border: "1px solid var(--mu-border, rgba(255,255,255,0.15))",
+                                background: "var(--mu-panel-2, #1c222b)",
+                                color: "var(--mu-text, #e6edf3)",
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: 11,
+                                fontWeight: 700,
+                                textAlign: "right" as const,
+                              }}
+                            />
+                          </div>
+                        ) : null}
                       </div>
                       {/* Remove */}
                       <button
@@ -2345,7 +2497,7 @@ export default function QuotePanel({
         <div style={S.footer}>
           <div style={S.totalBlock}>
             <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: "var(--mu-ink-mute, #6e7681)", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 700 }}>
-              Total cotización
+              {quoteEditing && sentQuote ? "Total (edición · USD)" : "Total cotización"}
             </div>
             {!vesMode ? (
               <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 800, lineHeight: 1, letterSpacing: "-0.01em", color: "#c5f24a", textShadow: "0 0 14px rgba(197,242,74,0.15)" }}>
@@ -2378,26 +2530,52 @@ export default function QuotePanel({
               </>
             )}
           </div>
-          <button
-            type="button"
-            style={S.btn("draft")}
-            disabled={submitting || noCustomer}
-            onClick={() => void submit(true)}
-            title="Guardar como borrador"
-          >
-            <SvgSave />
-            {submitting ? "…" : "Borrador"}
-          </button>
-          <button
-            type="button"
-            style={S.btn("primary")}
-            disabled={submitting || noCustomer}
-            onClick={() => void submit(false)}
-            title="Crear y enviar cotización al cliente"
-          >
-            <SvgSend />
-            {submitting ? "…" : "Enviar"}
-          </button>
+          {quoteEditing && sentQuote ? (
+            <>
+              <OpFranjaActionButton
+                type="button"
+                variant="neutral"
+                disabled={savingQuoteEdit}
+                onClick={cancelQuoteEdit}
+              >
+                Cancelar
+              </OpFranjaActionButton>
+              <OpFranjaActionButton
+                type="button"
+                variant="accent"
+                disabled={savingQuoteEdit || noCustomer}
+                loading={savingQuoteEdit}
+                loadingLabel="…"
+                onClick={() => void saveQuoteEdit()}
+                title="Guardar cambios en la cotización enviada"
+              >
+                Guardar
+              </OpFranjaActionButton>
+            </>
+          ) : (
+            <>
+              <OpFranjaActionButton
+                type="button"
+                variant="neutral"
+                disabled={submitting || noCustomer}
+                onClick={() => void submit(true)}
+                title="Guardar como borrador"
+              >
+                <SvgSave />
+                {submitting ? "…" : "Borrador"}
+              </OpFranjaActionButton>
+              <OpFranjaActionButton
+                type="button"
+                variant="accent"
+                disabled={submitting || noCustomer}
+                onClick={() => void submit(false)}
+                title="Crear y enviar cotización al cliente"
+              >
+                <SvgSend />
+                {submitting ? "…" : "Enviar"}
+              </OpFranjaActionButton>
+            </>
+          )}
         </div>
         )}
       </div>

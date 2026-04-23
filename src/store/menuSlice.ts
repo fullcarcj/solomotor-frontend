@@ -103,6 +103,14 @@ function augmentMenuWithSupervisor(menu: MenuSection[] | null): MenuSection[] | 
         pendingMigration: false,
         future:           false,
       },
+      {
+        id:               "ai_responder_config",
+        label:            "Config AI",
+        path:             "/ai-responder/configuracion",
+        minRole:          "admin",
+        pendingMigration: false,
+        future:           false,
+      },
     ],
   };
 

@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   const up = await proxyJsonToReceiver("/api/inbox/payment-attempts", {
     query: req.nextUrl.searchParams,
+    forwardRequestHeaders: req.headers,
   });
   return nextJsonFromUpstream(up);
 }

@@ -219,9 +219,11 @@ const ClockSvg = (
 interface Props {
   chat:    InboxChat;
   active?: boolean;
+  /** Vista `pipeline_default`: permite ocultar manual contacto/cotización del panel operativo. */
+  pipelineDefaultActive?: boolean;
 }
 
-export default function ChatListItem({ chat, active }: Props) {
+export default function ChatListItem({ chat, active, pipelineDefaultActive }: Props) {
   const router   = useRouter();
   const dispatch = useAppDispatch();
   const { patchChat } = useBandejaInbox();
@@ -232,6 +234,7 @@ export default function ChatListItem({ chat, active }: Props) {
   const [mlPackBusy, setMlPackBusy] = useState(false);
   const [mlPackErr, setMlPackErr]   = useState<string | null>(null);
   const [markAttendedBusy, setMarkAttendedBusy] = useState(false);
+  const [hideFromDefaultBusy, setHideFromDefaultBusy] = useState(false);
   const myUserId            = useAppSelector((s) => s.auth.userId);
   const presence            = useAppSelector((s) => s.realtime.presenceByChat[String(chat.id)]);
   const urgentRedux         = useAppSelector((s) => s.realtime.urgentChats[String(chat.id)]);
@@ -326,6 +329,36 @@ export default function ChatListItem({ chat, active }: Props) {
       router.push(href);
     },
     [chat.id, dispatch, href, router]
+  );
+
+  const showHideFromDefault =
+    Boolean(pipelineDefaultActive) &&
+    !isOperational &&
+    (stageNorm === "contact" || stageNorm === "quote");
+
+  const onHideFromDefaultClick = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (hideFromDefaultBusy) return;
+      setHideFromDefaultBusy(true);
+      try {
+        const res = await fetch(
+          `/api/bandeja/${encodeURIComponent(String(chat.id))}/sales-default-visibility`,
+          {
+            method: "PATCH",
+            credentials: "include",
+            cache: "no-store",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ hidden: true }),
+          }
+        );
+        if (res.ok) dispatch(bumpInboxRefetch());
+      } finally {
+        setHideFromDefaultBusy(false);
+      }
+    },
+    [hideFromDefaultBusy, chat.id, dispatch]
   );
 
   const onMarkAttendedClick = useCallback(
@@ -423,6 +456,19 @@ export default function ChatListItem({ chat, active }: Props) {
                 </span>
               ) : (
                 stageNorm && <StageChip stage={stageNorm} />
+              )}
+
+              {showHideFromDefault && (
+                <button
+                  type="button"
+                  className="bd-hide-from-default-btn"
+                  title="Ocultar de la vista por defecto (sigue disponible con «Todos los hilos» o búsqueda)"
+                  aria-label="Ocultar de la vista por defecto"
+                  disabled={hideFromDefaultBusy}
+                  onClick={(e) => void onHideFromDefaultClick(e)}
+                >
+                  <i className="ti ti-eye-off" aria-hidden />
+                </button>
               )}
 
               {mlOid != null && (

@@ -10,6 +10,7 @@ const DEFAULT_FILTERS: InboxFilters = {
   limit: 30,
   stage: "",
   result: "",
+  pipelineDefault: true,
 };
 
 function errMsg(e: unknown) { return e instanceof Error ? e.message : "Error desconocido."; }
@@ -73,6 +74,7 @@ export function useInbox(initialFilters?: Partial<InboxFilters>) {
       if (f.result) p.set("result", f.result);
       if (cursor)   p.set("cursor", cursor);
       p.set("limit", String(f.limit));
+      if (f.pipelineDefault !== false) p.set("pipeline_default", "1");
       const res = await fetch(`/api/bandeja?${p}`, {
         credentials: "include",
         cache: "no-store",

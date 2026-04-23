@@ -12,19 +12,32 @@ interface CustomerRow {
 interface Props {
   open:      boolean;
   chatId:    string;
+  /** Teléfono del chat (p. ej. WhatsApp) para prellenar alta nueva. */
+  initialChatPhone?: string | null;
   onClose:   () => void;
   onSuccess: () => void;
 }
 
-type Phase = "idle" | "searching" | "ready" | "linking" | "error";
+type Phase = "idle" | "searching" | "ready" | "linking" | "creating" | "error";
 
-export default function LinkCustomerModal({ open, chatId, onClose, onSuccess }: Props) {
-  const [q, setQ]               = useState("");
-  const [deb, setDeb]           = useState("");
-  const [rows, setRows]         = useState<CustomerRow[]>([]);
-  const [phase, setPhase]       = useState<Phase>("idle");
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [sel, setSel]           = useState<number | null>(null);
+type TabKey = "link" | "create";
+
+function trimPhone(v: string | null | undefined): string {
+  if (v == null) return "";
+  return String(v).trim();
+}
+
+export default function LinkCustomerModal({ open, chatId, initialChatPhone, onClose, onSuccess }: Props) {
+  const [tab, setTab]               = useState<TabKey>("link");
+  const [q, setQ]                   = useState("");
+  const [deb, setDeb]               = useState("");
+  const [rows, setRows]             = useState<CustomerRow[]>([]);
+  const [phase, setPhase]           = useState<Phase>("idle");
+  const [errorMsg, setErrorMsg]     = useState<string | null>(null);
+  const [sel, setSel]               = useState<number | null>(null);
+
+  const [createName, setCreateName] = useState("");
+  const [createPhone, setCreatePhone] = useState("");
 
   useEffect(() => {
     const t = setTimeout(() => setDeb(q.trim()), 320);
@@ -75,8 +88,15 @@ export default function LinkCustomerModal({ open, chatId, onClose, onSuccess }: 
       setSel(null);
       setPhase("idle");
       setErrorMsg(null);
+      setTab("link");
+      setCreateName("");
+      setCreatePhone("");
+      return;
     }
-  }, [open]);
+    const p = trimPhone(initialChatPhone);
+    setCreatePhone(p);
+    if (p) setTab("create");
+  }, [open, initialChatPhone]);
 
   async function handleLink() {
     if (sel == null || phase === "linking") return;
@@ -104,9 +124,58 @@ export default function LinkCustomerModal({ open, chatId, onClose, onSuccess }: 
     }
   }
 
+  async function handleCreateAndLink() {
+    const name = createName.trim();
+    if (name.length < 2 || phase === "creating") return;
+    setPhase("creating");
+    setErrorMsg(null);
+    try {
+      const resCreate = await fetch("/api/clientes/nuevo", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          full_name: name,
+          phone: trimPhone(createPhone) || undefined,
+          status: "active",
+        }),
+      });
+      const created = (await resCreate.json().catch(() => ({}))) as {
+        id?: number;
+        message?: string;
+        error?: string;
+      };
+      if (!resCreate.ok) {
+        throw new Error(created.message ?? created.error ?? `Error al crear (${resCreate.status})`);
+      }
+      const newId = created.id != null ? Number(created.id) : NaN;
+      if (!Number.isFinite(newId) || newId <= 0) {
+        throw new Error("Respuesta de creación sin id de cliente");
+      }
+      const resLink = await fetch(
+        `/api/inbox/${encodeURIComponent(chatId)}/link-customer`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ link_type: "manual", customer_id: newId }),
+        }
+      );
+      if (!resLink.ok) {
+        const j = await resLink.json().catch(() => ({})) as { message?: string; error?: string };
+        throw new Error(j.message ?? j.error ?? "Cliente creado pero no se pudo vincular al chat");
+      }
+      onSuccess();
+      onClose();
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : "No se pudo crear el cliente");
+      setPhase("error");
+    }
+  }
+
   if (!open) return null;
 
-  const isLinking = phase === "linking";
+  const isBusy = phase === "linking" || phase === "creating";
 
   return (
     <>
@@ -122,7 +191,7 @@ export default function LinkCustomerModal({ open, chatId, onClose, onSuccess }: 
       <div
         role="dialog"
         aria-modal
-        aria-label="Vincular cliente"
+        aria-label="Cliente y chat"
         style={{
           position: "fixed",
           top: "50%",
@@ -158,10 +227,10 @@ export default function LinkCustomerModal({ open, chatId, onClose, onSuccess }: 
               >
                 <i className="ti ti-user-plus" style={{ fontSize: 14, color: "#fff" }} />
               </span>
-              Vincular Cliente
+              Cliente y chat
             </h6>
             <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--mu-ink-mute, #999)" }}>
-              Busca en el directorio y confirma el vínculo con este chat.
+              Vincular un cliente existente o crear uno nuevo con el número de este chat.
             </p>
           </div>
           <button
@@ -169,18 +238,62 @@ export default function LinkCustomerModal({ open, chatId, onClose, onSuccess }: 
             className="btn-close btn-close-white"
             style={{ opacity: 0.6, flexShrink: 0, marginLeft: 12 }}
             onClick={onClose}
-            disabled={isLinking}
+            disabled={isBusy}
           />
         </div>
 
-        <input
-          type="text"
-          className="form-control form-control-sm mb-2"
-          placeholder="Nombre, teléfono o documento…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          autoFocus
-        />
+        <div
+          role="tablist"
+          style={{
+            display: "flex",
+            gap: 6,
+            marginBottom: 12,
+            padding: 3,
+            borderRadius: 8,
+            background: "var(--mu-panel-2, #252b35)",
+          }}
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "link"}
+            onClick={() => { setTab("link"); setErrorMsg(null); }}
+            disabled={isBusy}
+            style={{
+              flex: 1,
+              padding: "6px 10px",
+              borderRadius: 6,
+              border: "none",
+              cursor: isBusy ? "wait" : "pointer",
+              fontWeight: 700,
+              fontSize: 11,
+              background: tab === "link" ? "#ff7400" : "transparent",
+              color: tab === "link" ? "#fff" : "var(--mu-ink-mute)",
+            }}
+          >
+            Vincular existente
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "create"}
+            onClick={() => { setTab("create"); setErrorMsg(null); }}
+            disabled={isBusy}
+            style={{
+              flex: 1,
+              padding: "6px 10px",
+              borderRadius: 6,
+              border: "none",
+              cursor: isBusy ? "wait" : "pointer",
+              fontWeight: 700,
+              fontSize: 11,
+              background: tab === "create" ? "#ff7400" : "transparent",
+              color: tab === "create" ? "#fff" : "var(--mu-ink-mute)",
+            }}
+          >
+            Crear nuevo
+          </button>
+        </div>
 
         {errorMsg && phase === "error" && (
           <div className="alert alert-danger py-1 px-2 small mb-2" role="alert">
@@ -188,54 +301,108 @@ export default function LinkCustomerModal({ open, chatId, onClose, onSuccess }: 
           </div>
         )}
 
-        <div style={{ flex: 1, overflowY: "auto", marginBottom: "1rem", minHeight: 120 }}>
-          {phase === "searching" && (
-            <div className="text-muted small py-3 text-center">Buscando…</div>
-          )}
-          {phase !== "searching" && deb.length >= 2 && rows.length === 0 && (
-            <div className="text-muted small py-3 text-center">Sin resultados</div>
-          )}
-          {rows.map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => setSel(r.id)}
-              style={{
-                display: "block",
-                width: "100%",
-                textAlign: "left",
-                padding: "10px 12px",
-                marginBottom: 6,
-                borderRadius: 8,
-                border: sel === r.id ? "2px solid #ff7400" : "1px solid var(--mu-border, rgba(255,255,255,0.12))",
-                background: sel === r.id ? "rgba(255,116,0,0.08)" : "var(--mu-panel-2, #252b35)",
-                color: "inherit",
-                cursor: "pointer",
-              }}
-            >
-              <div style={{ fontWeight: 700, fontSize: 13 }}>{r.full_name ?? `Cliente #${r.id}`}</div>
-              <div style={{ fontSize: 11, color: "var(--mu-ink-mute)", marginTop: 2 }}>
-                {r.phone ?? "—"}
-                {r.document_id ? ` · ${r.document_id}` : ""}
-              </div>
-            </button>
-          ))}
-        </div>
+        {tab === "link" && (
+          <>
+            <input
+              type="text"
+              className="form-control form-control-sm mb-2"
+              placeholder="Nombre, teléfono o documento…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              autoFocus
+            />
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onClose} disabled={isLinking}>
-            Cancelar
-          </button>
-          <button
-            type="button"
-            className="btn btn-sm"
-            style={{ background: "#ff7400", color: "#fff", fontWeight: 700 }}
-            disabled={sel == null || isLinking}
-            onClick={() => void handleLink()}
-          >
-            {isLinking ? "Vinculando…" : "Vincular"}
-          </button>
-        </div>
+            <div style={{ flex: 1, overflowY: "auto", marginBottom: "1rem", minHeight: 120 }}>
+              {phase === "searching" && (
+                <div className="text-muted small py-3 text-center">Buscando…</div>
+              )}
+              {phase !== "searching" && deb.length >= 2 && rows.length === 0 && (
+                <div className="text-muted small py-3 text-center">Sin resultados</div>
+              )}
+              {rows.map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => setSel(r.id)}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "10px 12px",
+                    marginBottom: 6,
+                    borderRadius: 8,
+                    border: sel === r.id ? "2px solid #ff7400" : "1px solid var(--mu-border, rgba(255,255,255,0.12))",
+                    background: sel === r.id ? "rgba(255,116,0,0.08)" : "var(--mu-panel-2, #252b35)",
+                    color: "inherit",
+                    cursor: "pointer",
+                  }}
+                >
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>{r.full_name ?? `Cliente #${r.id}`}</div>
+                  <div style={{ fontSize: 11, color: "var(--mu-ink-mute)", marginTop: 2 }}>
+                    {r.phone ?? "—"}
+                    {r.document_id ? ` · ${r.document_id}` : ""}
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onClose} disabled={isBusy}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm"
+                style={{ background: "#ff7400", color: "#fff", fontWeight: 700 }}
+                disabled={sel == null || isBusy}
+                onClick={() => void handleLink()}
+              >
+                {phase === "linking" ? "Vinculando…" : "Vincular"}
+              </button>
+            </div>
+          </>
+        )}
+
+        {tab === "create" && (
+          <>
+            <label className="small text-muted mb-1" htmlFor="link-cust-create-name">Nombre completo</label>
+            <input
+              id="link-cust-create-name"
+              type="text"
+              className="form-control form-control-sm mb-2"
+              placeholder="Nombre y apellido"
+              value={createName}
+              onChange={(e) => setCreateName(e.target.value)}
+              autoFocus
+            />
+            <label className="small text-muted mb-1" htmlFor="link-cust-create-phone">Teléfono (este chat)</label>
+            <input
+              id="link-cust-create-phone"
+              type="text"
+              className="form-control form-control-sm mb-2"
+              placeholder="+58…"
+              value={createPhone}
+              onChange={(e) => setCreatePhone(e.target.value)}
+            />
+            <p className="text-muted small mb-3" style={{ fontSize: 10, margin: 0 }}>
+              El número se toma del chat cuando aplica (p. ej. WhatsApp); puede corregirse antes de guardar.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onClose} disabled={isBusy}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm"
+                style={{ background: "#ff7400", color: "#fff", fontWeight: 700 }}
+                disabled={createName.trim().length < 2 || isBusy}
+                onClick={() => void handleCreateAndLink()}
+              >
+                {phase === "creating" ? "Creando…" : "Crear y vincular"}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </>
   );
