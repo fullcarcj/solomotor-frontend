@@ -242,7 +242,8 @@ export default function ChatListItem({ chat, active }: Props) {
   );
 
   const isUrgent = Boolean(urgentRedux || chat.is_urgent);
-  const unread   = Number(chat.unread_count);
+  /** P1: pendiente de respuesta = último mensaje inbound (misma regla que campana “Sin atender”). */
+  const waitingReply = Boolean(chat.customer_waiting_reply);
 
   const displayName = chat.customer_name ?? chat.phone;
   const preview = chat.last_message_text
@@ -507,19 +508,27 @@ export default function ChatListItem({ chat, active }: Props) {
             </div>
           </div>
 
-          {/* Badge no leídos — servidor o fuga local */}
-          {(unread > 0 || isAutoReleased) && (
+          {/* Pendiente atención (P1) o abandono local; no el acumulado unread_count */}
+          {(waitingReply || isAutoReleased) && (
             <div
               className="bd-unread-count"
               aria-label={
-                isAutoReleased && unread === 0
+                isAutoReleased && !waitingReply
                   ? "Sin respuesta — requiere atención"
-                  : `${unread} mensajes sin leer`
+                  : waitingReply
+                    ? "Pendiente de respuesta"
+                    : "Requiere atención"
               }
-              style={isAutoReleased && unread === 0 ? { background: "#f97316" } : undefined}
-              title={isAutoReleased ? "Chat abandonado sin respuesta" : undefined}
+              style={isAutoReleased ? { background: "#f97316" } : undefined}
+              title={
+                isAutoReleased
+                  ? "Chat abandonado sin respuesta antes de cambiar de conversación"
+                  : waitingReply
+                    ? "El último mensaje es del cliente — pendiente de respuesta"
+                    : undefined
+              }
             >
-              {unread > 0 ? (unread > 99 ? "99+" : unread) : "!"}
+              {isAutoReleased ? "!" : waitingReply ? "1" : "!"}
             </div>
           )}
         </div>

@@ -10,7 +10,7 @@ interface Props {
 
 const BADGES = [
   { key: "",                label: "Todos",        icon: "ti-messages" },
-  { key: "unread",          label: "Sin leer",     icon: "ti-bell" },
+  { key: "unread",          label: "Sin atender",  icon: "ti-bell" },
   { key: "payment_pending", label: "Pago pendiente", icon: "ti-clock-hour-3" },
   { key: "quote",           label: "Cotizar",      icon: "ti-file-invoice" },
   { key: "dispatch",        label: "Despachar",    icon: "ti-truck" },

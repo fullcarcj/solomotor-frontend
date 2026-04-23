@@ -23,8 +23,7 @@ export const SidebarData = [
             showSubRoute: false,
 
             submenuItems: [
-              { label: "Dashboard ERP",       link: route.erpDashboard,    showSubRoute: false },
-              { label: "Panel Administrador", link: "/admin-dashboard" },
+              { label: "Dashboard", link: route.dashboard, showSubRoute: false },
               { label: "Panel de Ventas", link: "/sales-dashboard" },
               { label: "Monitor de canales", link: route.channelsMonitor, showSubRoute: false },
             ],
@@ -131,7 +130,7 @@ export const SidebarData = [
         showSubRoute: false,
         submenuItems: [
           { label: "Omnicanal",                  link: route.bandeja,                      icon: "messages",       showSubRoute: false, submenu: false },
-          { label: "Sin leer",                 link: `${route.bandeja}?filter=unread`,   icon: "bell",           showSubRoute: false, submenu: false },
+          { label: "Sin atender",              link: `${route.bandeja}?filter=unread`,   icon: "bell",           showSubRoute: false, submenu: false },
           { label: "Pago pendiente",           link: `${route.bandeja}?filter=payment_pending`, icon: "clock-hour-3", showSubRoute: false, submenu: false },
           { label: "Cotizar",                  link: `${route.bandeja}?filter=quote`,    icon: "file-invoice",   showSubRoute: false, submenu: false },
           { label: "Despachar",                link: `${route.bandeja}?filter=dispatch`, icon: "truck",          showSubRoute: false, submenu: false },

@@ -5,7 +5,19 @@
 import type { ChatStage } from '@/constants/chatStage';
 
 export type { ChatStage } from '@/constants/chatStage';
-export { CHAT_STAGE_LABELS, CHAT_STAGE_ORDER, normalizeChatStage } from '@/constants/chatStage';
+export {
+  CHAT_STAGE_LABELS,
+  CHAT_STAGE_ORDER,
+  normalizeChatStage,
+  bandejaMlQuestionPipelineStage,
+  isBandejaSalesOrderActiveForPipeline,
+  isMlQuestionThreadChat,
+} from '@/constants/chatStage';
+export type {
+  BandejaMlQuestionStageInput,
+  BandejaMlQuestionOrderLike,
+  MlQuestionThreadChatInput,
+} from '@/constants/chatStage';
 
 export interface InboxOrder {
   id:               number;
@@ -56,6 +68,10 @@ export interface InboxChat {
   top_exception_code?:    string | null;
   /** Derivado de status en UI — bot activo cuando status es UNASSIGNED. */
   handoff_active?:        boolean;
+  /**
+   * Último mensaje del hilo es inbound (BE listInbox). P1: pendiente de respuesta del agente.
+   */
+  customer_waiting_reply?: boolean;
   /**
    * TRUE cuando el número está en whitelist con mode='muted' (personal de empresa).
    * Aparece en bandeja con badge "NO CLIENTE" y sin pipeline de ventas.
