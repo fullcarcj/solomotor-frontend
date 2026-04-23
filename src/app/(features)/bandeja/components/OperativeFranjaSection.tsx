@@ -8,6 +8,7 @@ import {
   opFranjaIconBox,
   OP_FRANJA_TITLE,
   OP_FRANJA_SUBTITLE,
+  OP_FRANJA_SUBTITLE_PROMINENT,
   OpFranjaChevron,
   OP_FRANJA_BODY_PAD,
   type OpFranjaIconTone,
@@ -20,6 +21,8 @@ type Props = {
   iconClass: string;
   title: ReactNode;
   subtitle?: ReactNode;
+  /** Si hay información útil ya resumida en cabecera, resalta el subtítulo; si no, estilo apagado. */
+  subtitleHighlight?: boolean;
   titleAside?: ReactNode;
   defaultOpen?: boolean;
   collapsible?: boolean;
@@ -37,6 +40,7 @@ export default function OperativeFranjaSection({
   iconClass,
   title,
   subtitle,
+  subtitleHighlight = false,
   titleAside,
   defaultOpen = true,
   collapsible = true,
@@ -52,6 +56,8 @@ export default function OperativeFranjaSection({
 
   const showBody = !collapsible || open;
 
+  const subtitleWrapStyle = subtitleHighlight ? OP_FRANJA_SUBTITLE_PROMINENT : OP_FRANJA_SUBTITLE;
+
   const headInner = (
     <>
       <div style={opFranjaIconBox(accent)}>
@@ -63,7 +69,7 @@ export default function OperativeFranjaSection({
           {titleAside != null && titleAside !== false ? titleAside : null}
         </div>
         {subtitle != null && subtitle !== false ? (
-          <div style={OP_FRANJA_SUBTITLE}>{subtitle}</div>
+          <div style={subtitleWrapStyle}>{subtitle}</div>
         ) : null}
       </div>
       {collapsible ? (

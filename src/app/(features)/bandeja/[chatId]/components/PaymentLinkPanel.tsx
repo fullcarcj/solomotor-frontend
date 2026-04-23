@@ -12,13 +12,15 @@
  * La vinculación comprobante ↔ extracto se confirma en este panel (el modal solo elige el movimiento).
  */
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useTodayRate } from "@/hooks/useTodayRate";
 import {
   OP_FRANJA_SECTION,
   opFranjaHeader,
   opFranjaIconBox,
   OP_FRANJA_BODY_SCROLL,
+  OP_FRANJA_SUBTITLE,
+  OP_FRANJA_SUBTITLE_PROMINENT,
   OpFranjaChevron,
 } from "@/app/(features)/bandeja/components/operativeFranjaShared";
 import PendingStatementCreditsModal, {
@@ -34,6 +36,7 @@ interface PaymentAttempt {
   firebase_url: string;
   extracted_reference: string | null;
   extracted_amount_bs: string | null;
+  extracted_amount_usd?: string | null;
   extracted_date: string | null;
   extracted_bank: string | null;
   extracted_payment_type: string | null;
@@ -90,6 +93,36 @@ function parseAmountBs(raw: string | null | undefined): number | null {
   if (raw == null || String(raw).trim() === "") return null;
   const n = parseFloat(String(raw).replace(",", "."));
   return Number.isFinite(n) ? n : null;
+}
+
+function parseAmountUsd(raw: string | null | undefined): number | null {
+  if (raw == null || String(raw).trim() === "") return null;
+  const n = parseFloat(String(raw).replace(",", "."));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** Cuerpo POST alineado a `inboxQuotationHandler` (allocated_* o extracción en BD). */
+function buildLinkQuotationBody(
+  quotationId: number,
+  attempt: PaymentAttempt
+): Record<string, string | number> | null {
+  const bs = parseAmountBs(attempt.extracted_amount_bs);
+  if (bs != null && bs > 0) {
+    return {
+      quotation_id: quotationId,
+      allocated_amount_bs: bs,
+      source_currency: "VES",
+    };
+  }
+  const usd = parseAmountUsd(attempt.extracted_amount_usd ?? null);
+  if (usd != null) {
+    return {
+      quotation_id: quotationId,
+      allocated_amount_usd: usd,
+      source_currency: "USD",
+    };
+  }
+  return null;
 }
 
 function fmtDate(raw: string | null): string {
@@ -287,6 +320,9 @@ export default function PaymentLinkPanel({
   const [imageUrl, setImageUrl]   = useState<string | null>(null);
   const [linking, setLinking]     = useState<number | null>(null);
   const [linked, setLinked]       = useState<Set<number>>(new Set());
+  /** Mensaje de error al vincular a cotización (manual o automático). */
+  const [quotationLinkErr, setQuotationLinkErr] = useState<string | null>(null);
+  const autoQuoteLinkTriedRef = useRef(new Set<number>());
   const [pendingStatementsOpen, setPendingStatementsOpen] = useState(false);
   const [draftStatement, setDraftStatement] = useState<PendingStatementItem | null>(null);
   const [draftAttemptId, setDraftAttemptId] = useState<number | null>(null);
@@ -318,6 +354,8 @@ export default function PaymentLinkPanel({
     setDraftAttemptId(null);
     setStmtLinkError(null);
     setStmtLinkOkMsg(null);
+    setQuotationLinkErr(null);
+    autoQuoteLinkTriedRef.current.clear();
     setMlOrderRef(null);
     void load();
   }, [chatId, customerId, load]);
@@ -385,6 +423,9 @@ export default function PaymentLinkPanel({
   }, [isOpen, load]);
 
   const unlinkedCount = attempts.filter((a) => !linked.has(a.id)).length;
+
+  const paymentFranjaSubtitleStyle =
+    !loading && unlinkedCount > 0 ? OP_FRANJA_SUBTITLE_PROMINENT : OP_FRANJA_SUBTITLE;
 
   const needsManualStatement = useMemo(
     () => attempts.some((a) => attemptNeedsManualStatement(a)),
@@ -512,26 +553,101 @@ export default function PaymentLinkPanel({
     }
   };
 
-  const linkToQuotation = async (attemptId: number) => {
-    if (!activeQuotationId || linking) return;
-    setLinking(attemptId);
-    try {
-      const res = await fetch(
-        `/api/inbox/payment-attempts/${encodeURIComponent(String(attemptId))}/link-quotation`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ quotation_id: activeQuotationId }),
-        }
-      );
-      if (res.ok) {
-        setLinked((prev) => new Set([...prev, attemptId]));
+  const linkToQuotation = useCallback(
+    async (attemptId: number, opts?: { auto?: boolean }) => {
+      if (!activeQuotationId || linking) return;
+      const attempt = attempts.find((x) => x.id === attemptId);
+      if (!attempt) {
+        setQuotationLinkErr("No se encontró el comprobante en la lista.");
+        return;
       }
-    } catch {/* ignore */} finally {
-      setLinking(null);
+      const body = buildLinkQuotationBody(activeQuotationId, attempt);
+      if (!body) {
+        setQuotationLinkErr(
+          "Indicá allocated_amount_bs o allocated_amount_usd (> 0), o que el comprobante tenga monto extraído."
+        );
+        return;
+      }
+      setLinking(attemptId);
+      setQuotationLinkErr(null);
+      try {
+        const res = await fetch(
+          `/api/inbox/payment-attempts/${encodeURIComponent(String(attemptId))}/link-quotation`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          }
+        );
+        const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+        if (res.ok) {
+          setLinked((prev) => new Set([...prev, attemptId]));
+          void load();
+        } else {
+          const msg =
+            (typeof data.message === "string" && data.message.trim()) ||
+            (typeof data.error === "string" && data.error.trim()) ||
+            `Error ${res.status}`;
+          setQuotationLinkErr(msg);
+        }
+      } catch {
+        setQuotationLinkErr("Error de red al vincular con la cotización.");
+      } finally {
+        setLinking(null);
+      }
+    },
+    [activeQuotationId, linking, load, attempts]
+  );
+
+  /** Mismo chat + monto dentro de tolerancia → vincular a cotización activa sin clic. */
+  useEffect(() => {
+    if (!activeQuotationId || quotationBs == null || loading || linking != null) return;
+    const tol = tolQuotationVsAttemptBs(quotationBs);
+    for (const a of attempts) {
+      if (linked.has(a.id) || autoQuoteLinkTriedRef.current.has(a.id)) continue;
+      if (String(a.reconciliation_status) === "matched") continue;
+      const sameChat = a.chat_id != null && String(a.chat_id) === String(chatId);
+      if (!sameChat) continue;
+      const amtBs = parseAmountBs(a.extracted_amount_bs);
+      if (amtBs != null && amtBs > 0) {
+        if (Math.abs(amtBs - quotationBs) <= tol) {
+          autoQuoteLinkTriedRef.current.add(a.id);
+          void linkToQuotation(a.id, { auto: true });
+          return;
+        }
+        continue;
+      }
+      const amtUsd = parseAmountUsd(a.extracted_amount_usd ?? null);
+      if (
+        amtUsd != null &&
+        vesPerUsd != null &&
+        Number.isFinite(vesPerUsd) &&
+        vesPerUsd > 0
+      ) {
+        const refBs = amtUsd * vesPerUsd;
+        if (Math.abs(refBs - quotationBs) <= tol) {
+          autoQuoteLinkTriedRef.current.add(a.id);
+          void linkToQuotation(a.id, { auto: true });
+          return;
+        }
+      }
     }
-  };
+  }, [
+    attempts,
+    activeQuotationId,
+    quotationBs,
+    vesPerUsd,
+    chatId,
+    loading,
+    linked,
+    linking,
+    linkToQuotation,
+  ]);
+
+  useEffect(() => {
+    autoQuoteLinkTriedRef.current.clear();
+  }, [activeQuotationId, quotationBs]);
 
   /** Mismo estilo que «Vincular Orden ML» en ChatContextPanel (zona MercadoLibre). */
   const mlLinkButtonStyle: CSSProperties = {
@@ -589,15 +705,7 @@ export default function PaymentLinkPanel({
               )}
             </div>
             {!isOpen && (
-              <div
-                style={{
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 9,
-                  color: "var(--mu-ink-mute, #6e7681)",
-                  letterSpacing: "0.06em",
-                  marginTop: 1,
-                }}
-              >
+              <div style={paymentFranjaSubtitleStyle}>
                 {unlinkedCount === 0 && !loading
                   ? "Sin pendientes · click para abrir"
                   : loading
@@ -606,15 +714,7 @@ export default function PaymentLinkPanel({
               </div>
             )}
             {isOpen && (
-              <div
-                style={{
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 9,
-                  color: "var(--mu-ink-mute, #6e7681)",
-                  letterSpacing: "0.06em",
-                  marginTop: 1,
-                }}
-              >
+              <div style={paymentFranjaSubtitleStyle}>
                 {loading ? "Cargando…" : `${unlinkedCount} sin conciliar / vincular`}
               </div>
             )}
@@ -660,6 +760,14 @@ export default function PaymentLinkPanel({
               {needsManualStatement
                 ? "Sin conciliación automática · revisá el listado y vinculá al extracto"
                 : "Extracto bancario · usá el listado cuando haya comprobantes"}
+            </div>
+          </div>
+        )}
+
+        {isOpen && quotationLinkErr && (
+          <div style={{ padding: "0 12px 8px" }}>
+            <div className="alert alert-danger py-2 small mb-0" role="alert" style={{ margin: 0, fontSize: 12 }}>
+              {quotationLinkErr}
             </div>
           </div>
         )}

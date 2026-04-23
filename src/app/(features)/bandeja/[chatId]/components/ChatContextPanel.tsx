@@ -138,7 +138,55 @@ function fmtCurrency(amount: number | null, currency: string | null): string {
 /** Delay antes de fetches de paneles secundarios: deja pasar los fetches críticos (mensajes + contexto) */
 const SECONDARY_FETCH_DELAY_MS = 300;
 
-function MlOrderSection({ chatId, panelTitle }: { chatId: string; panelTitle?: string | null }) {
+/** Sub-bloque dentro de «Mercado Libre» (franja única). */
+function MlEmbeddedWrap({
+  label,
+  first,
+  children,
+}: {
+  label: string;
+  /** Sin borde superior (primer bloque del acordeón ML). */
+  first?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        paddingTop: first ? 2 : 12,
+        marginTop: first ? 0 : 4,
+        borderTop: first ? "none" : "1px solid var(--mu-border, rgba(255,255,255,0.08))",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 8,
+          fontWeight: 800,
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+          color: "var(--mu-ink-mute, #8b949e)",
+          marginBottom: 8,
+        }}
+      >
+        {label}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function MlOrderSection({
+  chatId,
+  panelTitle,
+  embedded,
+  embeddedFirst,
+}: {
+  chatId: string;
+  panelTitle?: string | null;
+  /** Contenido solo, dentro del acordeón «Mercado Libre». */
+  embedded?: boolean;
+  /** Primer sub-bloque del padre (sin separador superior). */
+  embeddedFirst?: boolean;
+}) {
   const [loading, setLoading] = useState(true);
   const [data, setData]       = useState<MlOrderData | null>(null);
   const [error, setError]     = useState<string | null>(null);
@@ -168,61 +216,83 @@ function MlOrderSection({ chatId, panelTitle }: { chatId: string; panelTitle?: s
 
   const titleBar = panelTitle != null && String(panelTitle).trim() !== "" ? String(panelTitle).trim() : "Orden ML";
 
-  if (loading) return (
-    <OperativeFranjaSection
-      accent="orange"
-      iconClass="ti ti-shopping-cart"
-      title={titleBar}
-      subtitle="Cargando detalle · click para abrir"
-      defaultOpen
-      resetKey={chatId}
-    >
-      <Skeleton rows={4} />
-    </OperativeFranjaSection>
-  );
-  if (error) return (
-    <OperativeFranjaSection
-      accent="orange"
-      iconClass="ti ti-shopping-cart"
-      title={titleBar}
-      subtitle="Error al cargar · click para abrir"
-      defaultOpen
-      resetKey={chatId}
-    >
-      <p style={{ fontSize: 11, color: "var(--mu-bad)", margin: 0 }}>{error}</p>
-    </OperativeFranjaSection>
-  );
+  if (loading) {
+    const inner = <Skeleton rows={4} />;
+    if (embedded) {
+      return (
+        <MlEmbeddedWrap label={titleBar} first={embeddedFirst}>
+          {inner}
+        </MlEmbeddedWrap>
+      );
+    }
+    return (
+      <OperativeFranjaSection
+        accent="orange"
+        iconClass="ti ti-shopping-cart"
+        title={titleBar}
+        subtitle="Cargando detalle · click para abrir"
+        subtitleHighlight={false}
+        defaultOpen
+        resetKey={chatId}
+      >
+        {inner}
+      </OperativeFranjaSection>
+    );
+  }
+  if (error) {
+    const inner = <p style={{ fontSize: 11, color: "var(--mu-bad)", margin: 0 }}>{error}</p>;
+    if (embedded) {
+      return (
+        <MlEmbeddedWrap label={titleBar} first={embeddedFirst}>
+          {inner}
+        </MlEmbeddedWrap>
+      );
+    }
+    return (
+      <OperativeFranjaSection
+        accent="orange"
+        iconClass="ti ti-shopping-cart"
+        title={titleBar}
+        subtitle="Error al cargar · click para abrir"
+        subtitleHighlight={false}
+        defaultOpen
+        resetKey={chatId}
+      >
+        {inner}
+      </OperativeFranjaSection>
+    );
+  }
   if (!data) return null;
-  if (data.not_synced) return (
-    <OperativeFranjaSection
-      accent="orange"
-      iconClass="ti ti-shopping-cart"
-      title={`${titleBar} · #${data.ml_order_id}`}
-      subtitle="Orden no sincronizada · click para abrir"
-      defaultOpen
-      resetKey={chatId}
-    >
+  if (data.not_synced) {
+    const inner = (
       <p style={{ fontSize: 11, color: "var(--mu-ink-mute)", margin: 0 }}>Orden no sincronizada aún.</p>
-    </OperativeFranjaSection>
-  );
+    );
+    if (embedded) {
+      return (
+        <MlEmbeddedWrap label={`${titleBar} · #${data.ml_order_id}`} first={embeddedFirst}>
+          {inner}
+        </MlEmbeddedWrap>
+      );
+    }
+    return (
+      <OperativeFranjaSection
+        accent="orange"
+        iconClass="ti ti-shopping-cart"
+        title={`${titleBar} · #${data.ml_order_id}`}
+        subtitle="Orden no sincronizada · click para abrir"
+        subtitleHighlight
+        defaultOpen
+        resetKey={chatId}
+      >
+        {inner}
+      </OperativeFranjaSection>
+    );
+  }
 
   const orderUrl = `https://www.mercadolibre.com.ve/ventas/${data.ml_order_id}/detalle`;
 
-  return (
-    <OperativeFranjaSection
-      accent="orange"
-      iconClass="ti ti-shopping-cart"
-      title={titleBar}
-      subtitle={`#${String(data.ml_order_id)} · ítems y totales · click para abrir`}
-      defaultOpen
-      resetKey={chatId}
-      titleAside={(
-        <a href={orderUrl} target="_blank" rel="noopener noreferrer" className="mu-ficha-link">
-          ML →
-        </a>
-      )}
-    >
-
+  const orderBody = (
+    <>
       {/* Estado y total */}
       <div style={{
         display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
@@ -355,6 +425,38 @@ function MlOrderSection({ chatId, panelTitle }: { chatId: string; panelTitle?: s
           </div>
         ))}
       </div>
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <MlEmbeddedWrap label={titleBar} first={embeddedFirst}>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+          <a href={orderUrl} target="_blank" rel="noopener noreferrer" className="mu-ficha-link">
+            Ver orden en ML →
+          </a>
+        </div>
+        {orderBody}
+      </MlEmbeddedWrap>
+    );
+  }
+
+  return (
+    <OperativeFranjaSection
+      accent="orange"
+      iconClass="ti ti-shopping-cart"
+      title={titleBar}
+      subtitle={`#${String(data.ml_order_id)} · ítems y totales · click para abrir`}
+      subtitleHighlight
+      defaultOpen
+      resetKey={chatId}
+      titleAside={(
+        <a href={orderUrl} target="_blank" rel="noopener noreferrer" className="mu-ficha-link">
+          ML →
+        </a>
+      )}
+    >
+      {orderBody}
     </OperativeFranjaSection>
   );
 }
@@ -457,11 +559,17 @@ function MlQuestionContextSection({
   chatId,
   chat,
   hideBuyerQuestion = false,
+  embedded,
+  embeddedFirst,
 }: {
   chatId: string;
   chat: InboxChat | null;
   /** En hilos de pregunta ML la pregunta ya está en el chat; no duplicar en la franja operativa. */
   hideBuyerQuestion?: boolean;
+  /** Dentro del acordeón «Mercado Libre». */
+  embedded?: boolean;
+  /** Primer sub-bloque del padre (sin borde superior en el anuncio). */
+  embeddedFirst?: boolean;
 }) {
   const [loadingQ, setLoadingQ] = useState(true);
   const [qError, setQError]     = useState<string | null>(null);
@@ -504,23 +612,13 @@ function MlQuestionContextSection({
         ? "Anuncio y precio · click para abrir"
         : "Sin datos de anuncio · click para abrir";
 
-  return (
-    <>
-      <OperativeFranjaSection
-        accent="orange"
-        iconClass="ti ti-shopping-bag"
-        title="Publicación"
-        subtitle={pubSubtitle}
-        defaultOpen
-        resetKey={chatId}
-        titleAside={mlUrl ? (
-          <MlExternalLink href={mlUrl} className="mu-ficha-link">
-            ML →
-          </MlExternalLink>
-        ) : undefined}
-      >
+  const publicationSubtitleHighlight =
+    !loadingQ &&
+    (Boolean(qError) ||
+      listing != null ||
+      (qData?.item_id != null && String(qData.item_id).trim() !== ""));
 
-        {loadingQ ? (
+  const publicationMain = loadingQ ? (
           <Skeleton rows={4} />
         ) : qError ? (
           <p style={{ color: "var(--mu-bad)", fontSize: 11, margin: 0 }}>{qError}</p>
@@ -631,7 +729,79 @@ function MlQuestionContextSection({
               </MlExternalLink>
             )}
           </div>
+        );
+
+  const questionMain = (
+    <>
+      {loadingQ ? (
+        <Skeleton rows={2} />
+      ) : qData?.question_text ? (
+        <blockquote style={{
+          fontSize: 12, margin: 0, padding: "8px 10px",
+          borderLeft: "3px solid var(--mu-accent)", background: "var(--mu-panel-2)",
+          borderRadius: "0 6px 6px 0", color: "var(--mu-ink-dim)", lineHeight: 1.5,
+        }}>
+          {qData.question_text}
+        </blockquote>
+      ) : (
+        <p style={{ fontSize: 11, color: "var(--mu-ink-mute)", margin: 0 }}>Sin texto de pregunta</p>
+      )}
+      {qData?.ia_already_answered && (
+        <div style={{
+          marginTop: 6, fontSize: 10, display: "flex", alignItems: "center", gap: 4,
+          color: "#16a34a",
+        }}>
+          <i className="ti ti-robot" style={{ fontSize: 12 }} />
+          Respondida automáticamente por IA
+        </div>
+      )}
+      {chat?.ml_question_id != null && (
+        <div style={{ marginTop: 4, fontSize: 9, color: "var(--mu-ink-mute)", fontFamily: "monospace" }}>
+          #{String(chat.ml_question_id)}
+        </div>
+      )}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <>
+        <MlEmbeddedWrap label="Anuncio · publicación" first={Boolean(embeddedFirst)}>
+          {mlUrl ? (
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+              <MlExternalLink href={mlUrl} className="mu-ficha-link">
+                Abrir anuncio en ML →
+              </MlExternalLink>
+            </div>
+          ) : null}
+          {publicationMain}
+        </MlEmbeddedWrap>
+        {!hideBuyerQuestion && (
+          <MlEmbeddedWrap label="Pregunta del comprador" first={false}>
+            {questionMain}
+          </MlEmbeddedWrap>
         )}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <OperativeFranjaSection
+        accent="orange"
+        iconClass="ti ti-shopping-bag"
+        title="Publicación"
+        subtitle={pubSubtitle}
+        subtitleHighlight={publicationSubtitleHighlight}
+        defaultOpen
+        resetKey={chatId}
+        titleAside={mlUrl ? (
+          <MlExternalLink href={mlUrl} className="mu-ficha-link">
+            ML →
+          </MlExternalLink>
+        ) : undefined}
+      >
+        {publicationMain}
       </OperativeFranjaSection>
 
       {/* ── Pregunta del comprador (omitida en hilo pregunta ML: mismo texto en el chat) ── */}
@@ -641,39 +811,168 @@ function MlQuestionContextSection({
         iconClass="ti ti-message-question"
         title="Pregunta del comprador"
         subtitle={loadingQ ? "Cargando… · click para abrir" : "Texto del comprador · click para abrir"}
+        subtitleHighlight={!loadingQ && Boolean(qData?.question_text)}
         defaultOpen
         resetKey={chatId}
       >
-        {loadingQ ? (
-          <Skeleton rows={2} />
-        ) : qData?.question_text ? (
-          <blockquote style={{
-            fontSize: 12, margin: 0, padding: "8px 10px",
-            borderLeft: "3px solid var(--mu-accent)", background: "var(--mu-panel-2)",
-            borderRadius: "0 6px 6px 0", color: "var(--mu-ink-dim)", lineHeight: 1.5,
-          }}>
-            {qData.question_text}
-          </blockquote>
-        ) : (
-          <p style={{ fontSize: 11, color: "var(--mu-ink-mute)", margin: 0 }}>Sin texto de pregunta</p>
-        )}
-        {qData?.ia_already_answered && (
-          <div style={{
-            marginTop: 6, fontSize: 10, display: "flex", alignItems: "center", gap: 4,
-            color: "#16a34a",
-          }}>
-            <i className="ti ti-robot" style={{ fontSize: 12 }} />
-            Respondida automáticamente por IA
-          </div>
-        )}
-        {chat?.ml_question_id != null && (
-          <div style={{ marginTop: 4, fontSize: 9, color: "var(--mu-ink-mute)", fontFamily: "monospace" }}>
-            #{String(chat.ml_question_id)}
-          </div>
-        )}
+        {questionMain}
       </OperativeFranjaSection>
       )}
     </>
+  );
+}
+
+/** Una sola franja operativa: publicación/pregunta, órdenes de contexto, aviso WA y vínculo. */
+function MercadoLibreOperativeSection({
+  chatId,
+  chat,
+  hasCustomer,
+  showFullFranja,
+  isMlQuestionOrigin,
+  isMlMessageOrigin,
+  showPublicationMlQuestionOrItem,
+  showPublicationMlOrderOnly,
+  showPublicationWaMlOrder,
+  canLinkMlOrder,
+  onOpenLinkOrder,
+}: {
+  chatId: string;
+  chat: InboxChat;
+  hasCustomer: boolean;
+  showFullFranja: boolean;
+  isMlQuestionOrigin: boolean;
+  isMlMessageOrigin: boolean;
+  showPublicationMlQuestionOrItem: boolean;
+  showPublicationMlOrderOnly: boolean;
+  showPublicationWaMlOrder: boolean;
+  canLinkMlOrder: boolean;
+  onOpenLinkOrder: () => void;
+}) {
+  const showOuter =
+    (!hasCustomer && isMlQuestionOrigin) ||
+    (showFullFranja &&
+      (showPublicationMlQuestionOrItem ||
+        showPublicationMlOrderOnly ||
+        showPublicationWaMlOrder ||
+        canLinkMlOrder)) ||
+    /** WhatsApp (u otro origen con `canLinkMlOrder`) sin cliente: mostrar franja solo para vincular orden ML. */
+    (!showFullFranja && canLinkMlOrder);
+
+  if (!showOuter) return null;
+
+  const showPublication = showPublicationMlQuestionOrItem;
+  const showOrderMlQuestion = isMlQuestionOrigin && chat.order != null;
+  const showWaSinOrden =
+    !isMlQuestionOrigin &&
+    !isMlMessageOrigin &&
+    !showPublicationWaMlOrder &&
+    canLinkMlOrder;
+  /** Si la sección está abierta y el chat puede vincular orden ML, el botón debe verse aunque aún no haya cliente CRM. */
+  const showLinkCta = canLinkMlOrder;
+
+  const mlSubtitleHighlight =
+    showPublication ||
+    showPublicationMlOrderOnly ||
+    showPublicationWaMlOrder ||
+    showOrderMlQuestion ||
+    showWaSinOrden;
+
+  return (
+    <OperativeFranjaSection
+      accent="orange"
+      iconClass="ti ti-shopping-bag"
+      title="Mercado Libre"
+      subtitle="Publicación, orden del contexto y vínculos · click para abrir"
+      subtitleHighlight={mlSubtitleHighlight}
+      defaultOpen
+      resetKey={`${chatId}-ml-operative`}
+    >
+      {(() => {
+        let first = true;
+        const nextFirst = (): boolean => {
+          const v = first;
+          first = false;
+          return v;
+        };
+        return (
+          <>
+            {showPublication && (
+              <MlQuestionContextSection
+                chatId={chatId}
+                chat={chat}
+                hideBuyerQuestion={isMlQuestionOrigin}
+                embedded
+                embeddedFirst={nextFirst()}
+              />
+            )}
+            {showPublicationMlOrderOnly && (
+              <MlOrderSection
+                chatId={chatId}
+                panelTitle="Publicación e ítems de la orden"
+                embedded
+                embeddedFirst={nextFirst()}
+              />
+            )}
+            {showPublicationWaMlOrder && (
+              <MlOrderSection
+                chatId={chatId}
+                panelTitle="Publicación"
+                embedded
+                embeddedFirst={nextFirst()}
+              />
+            )}
+            {showWaSinOrden && (
+              <MlEmbeddedWrap label="Sin orden ML vinculada" first={nextFirst()}>
+                <p style={{ fontSize: 11, color: "var(--mu-ink-mute)", margin: 0, lineHeight: 1.45 }}>
+                  Sin orden de Mercado Libre vinculada a este chat. En la siguiente sección puede vincular la orden para ver publicación e ítems.
+                </p>
+              </MlEmbeddedWrap>
+            )}
+            {showOrderMlQuestion && (
+              <MlOrderSection
+                chatId={chatId}
+                panelTitle="Orden de MercadoLibre"
+                embedded
+                embeddedFirst={nextFirst()}
+              />
+            )}
+            {showLinkCta && (
+              <MlEmbeddedWrap label="Canal · vincular orden" first={nextFirst()}>
+                <div
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    background: "rgba(255,116,0,0.06)",
+                    border: "1px solid rgba(255,116,0,0.2)",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={onOpenLinkOrder}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "5px 12px",
+                      borderRadius: 6,
+                      background: "#ff7400",
+                      color: "#fff",
+                      fontWeight: 700,
+                      fontSize: 11,
+                      border: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <i className="ti ti-link" style={{ fontSize: 13 }} />
+                    Vincular Orden ML
+                  </button>
+                </div>
+              </MlEmbeddedWrap>
+            )}
+          </>
+        );
+      })()}
+    </OperativeFranjaSection>
   );
 }
 
@@ -693,6 +992,7 @@ function FichaOrdenSection({ chat }: { chat: InboxChat }) {
       iconClass="ti ti-clipboard-data"
       title="Estado"
       subtitle={`Orden #${o.id} · pago y entrega · click para abrir`}
+      subtitleHighlight
       defaultOpen
       resetKey={o.id}
       titleAside={<Link href="/ventas/pedidos" className="mu-ficha-link">HISTORIAL →</Link>}
@@ -807,18 +1107,6 @@ export default function ChatContextPanel({
   // Estado local sincronizado con la prop del chat
   const isOperational = opState !== null ? opState : Boolean(chat?.is_operational);
 
-  // Mostrar zona ML cuando el chat es WA sin orden ML asociada (aunque aún no haya cliente CRM).
-  // Así el operador puede vincular la orden ML y fusionar datos / teléfono antes o después de identificar.
-  const canLinkMlOrder =
-    chat?.source_type === "wa_inbound" &&
-    chat?.ml_order_id == null;
-
-  const canLinkCustomerManual =
-    !hasCustomer &&
-    (chat?.source_type === "ml_question" ||
-      chat?.source_type === "ml_message" ||
-      isMlQuestionThreadChat(chat ?? undefined));
-
   const handleToggleOperational = async () => {
     if (!chat || opToggling) return;
     setOpToggling(true);
@@ -883,10 +1171,27 @@ export default function ChatContextPanel({
   const pipelineMiniStage = stageForPanel;
 
   /** Orígenes con reglas de franja operativa (pregunta ML, mensajería ML, WhatsApp). */
-  const isMlMessageOrigin = chat?.source_type === "ml_message";
+  const inboxSourceType = String(chat?.source_type ?? "").trim();
+  const isMlMessageOrigin = inboxSourceType === "ml_message";
   const isMlQuestionOrigin = isMlQuestionThreadChat(chat ?? undefined);
+  /**
+   * WhatsApp (Wasender): wa_inbound / wa_ml_linked.
+   * `page.tsx` convierte `source_type` null de BD en string vacío — tratarlo como WA
+   * salvo hilos ML explícitos (evita ocultar «Vincular orden ML» en chats legacy).
+   */
   const isWhatsAppOrigin =
-    chat?.source_type === "wa_inbound" || chat?.source_type === "wa_ml_linked";
+    inboxSourceType === "wa_inbound" ||
+    inboxSourceType === "wa_ml_linked" ||
+    (inboxSourceType === "" && !isMlMessageOrigin && !isMlQuestionOrigin);
+
+  /** Sin cliente CRM: ML o WhatsApp pueden abrir modal (vincular existente o crear con teléfono del chat). */
+  const canLinkCustomerManual =
+    !hasCustomer &&
+    (isMlQuestionOrigin || isMlMessageOrigin || isWhatsAppOrigin);
+
+  const noMlOrderOnChat =
+    chat?.ml_order_id == null || String(chat.ml_order_id).trim() === "";
+  const canLinkMlOrder = isWhatsAppOrigin && noMlOrderOnChat;
 
   /**
    * Con cliente CRM: módulos de venta / ML en orden.
@@ -916,37 +1221,68 @@ export default function ChatContextPanel({
     chat?.ml_order_id != null &&
     String(chat.ml_order_id).trim() !== "";
 
-  /** Primera línea bajo «Cliente»: datos reales (mismo criterio que el cuerpo de la ficha). */
-  const clienteOperativeSubtitle = useMemo(() => {
-    const tail = " · click para abrir";
+  /**
+   * Resumen colapsado (2 líneas): (1) nombre y teléfonos phone / phone_2;
+   * (2) ID MERCADOLIBRE: primary_ml_buyer_id.
+   */
+  const clienteOperativeSubtitle = useMemo((): ReactNode => {
     const chatName =
       chat?.customer_name != null && String(chat.customer_name).trim() !== ""
         ? String(chat.customer_name).trim()
         : null;
 
+    const trimStr = (v: string | null | undefined) =>
+      v != null && String(v).trim() !== "" ? String(v).trim() : "";
+
+    const formatPhonesLine = (p1: string, p2: string) => {
+      if (p1 && p2) return `${p1} / ${p2}`;
+      if (p1) return p1;
+      if (p2) return p2;
+      return "";
+    };
+
+    const lineBlock = (line1: string, line2: string) => (
+      <>
+        <div>{line1}</div>
+        <div style={{ marginTop: 3 }}>{line2}</div>
+      </>
+    );
+
+    const mlLine = (id: number | null | undefined) => {
+      if (id != null && String(id).trim() !== "" && Number(id) > 0) {
+        return `ID MERCADOLIBRE: ${String(id).trim()}`;
+      }
+      return "ID MERCADOLIBRE: —";
+    };
+
     if (!hasCustomer) {
-      return chatName != null
-        ? `${chatName} · identificación pendiente${tail}`
-        : `Identificación pendiente${tail}`;
+      const l1 =
+        chatName != null
+          ? `${chatName} · identificación pendiente`
+          : "Identificación pendiente";
+      return lineBlock(l1, mlLine(null));
     }
 
     if (loadingCustomer) {
-      const label =
+      const nameLoading =
         chatName ||
         (customer?.full_name != null && String(customer.full_name).trim() !== ""
           ? String(customer.full_name).trim()
           : null) ||
         "Cargando datos…";
-      return `${label}${tail}`;
+      const p1 = customer?.phone != null ? trimStr(customer.phone) : "";
+      const p1b = !p1 ? trimStr(displayPhone ?? undefined) : "";
+      const p2 = customer?.phone_2 != null ? trimStr(customer.phone_2) : "";
+      const p2b =
+        !p2 && customer?.alternative_phone != null ? trimStr(customer.alternative_phone) : "";
+      const phones = formatPhonesLine(p1 || p1b, p2 || p2b);
+      const l1 = phones ? `${nameLoading} ${phones}` : nameLoading;
+      return lineBlock(l1, mlLine(customer?.primary_ml_buyer_id ?? null));
     }
 
     if (!customer) {
-      const parts = [
-        chatName || "Cliente",
-        displayPhone ?? undefined,
-        customerId != null ? `ID ${String(customerId)}` : undefined,
-      ].filter(Boolean) as string[];
-      return `${parts.join(" · ")}${tail}`;
+      const l1Parts = [chatName || "Cliente", trimStr(displayPhone ?? undefined)].filter(Boolean);
+      return lineBlock(l1Parts.join(" "), mlLine(null));
     }
 
     const name =
@@ -956,42 +1292,20 @@ export default function ChatContextPanel({
       chatName ||
       "—";
 
-    const parts: string[] = [name];
+    const phone1 =
+      trimStr(customer.phone) || trimStr(displayPhone ?? undefined);
+    const phone2 =
+      trimStr(customer.phone_2) || trimStr(customer.alternative_phone);
+    const phones = formatPhonesLine(phone1, phone2);
+    const line1 = phones ? `${name} ${phones}` : name;
 
-    const phoneRaw =
-      customer.phone != null && String(customer.phone).trim() !== ""
-        ? String(customer.phone).trim()
-        : displayPhone ?? "";
-    if (phoneRaw) parts.push(phoneRaw);
-
-    if (customer.city != null && String(customer.city).trim() !== "") {
-      parts.push(String(customer.city).trim());
-    }
-    if (customer.client_segment != null && String(customer.client_segment).trim() !== "") {
-      parts.push(String(customer.client_segment).trim());
-    }
-    if (customerId != null) {
-      parts.push(`ID ${String(customerId)}`);
+    let line1Out = line1;
+    const maxLen = 200;
+    if (line1Out.length > maxLen) {
+      line1Out = `${line1Out.slice(0, maxLen - 1)}…`;
     }
 
-    const idType = customer.id_type != null ? String(customer.id_type).trim() : "";
-    const idNum = customer.id_number != null ? String(customer.id_number).trim() : "";
-    if (idNum) {
-      parts.push(idType ? `${idType} ${idNum}` : idNum);
-    }
-
-    if (customer.email != null && String(customer.email).trim() !== "") {
-      parts.push(String(customer.email).trim());
-    }
-
-    let line = `${parts.join(" · ")}${tail}`;
-    const maxLen = 168;
-    if (line.length > maxLen) {
-      const head = parts.join(" · ");
-      const budget = maxLen - tail.length - 1;
-      line = `${head.length > budget ? `${head.slice(0, Math.max(0, budget - 1))}…` : head}${tail}`;
-    }
-    return line;
+    return lineBlock(line1Out, mlLine(customer.primary_ml_buyer_id));
   }, [
     hasCustomer,
     loadingCustomer,
@@ -1231,6 +1545,7 @@ export default function ChatContextPanel({
           iconClass="ti ti-building"
           title="No cliente · personal de empresa"
           subtitle="Contacto interno · sin flujo de venta al público"
+          subtitleHighlight
           collapsible={false}
           resetKey={chatId}
           titleAside={(
@@ -1266,6 +1581,7 @@ export default function ChatContextPanel({
         iconClass="ti ti-user"
         title="Cliente"
         subtitle={clienteOperativeSubtitle}
+        subtitleHighlight={!loadingCustomer}
         defaultOpen
         resetKey={chatId}
         titleAside={hasCustomer && customerId ? (
@@ -1319,8 +1635,8 @@ export default function ChatContextPanel({
                     cursor: "pointer",
                   }}
                 >
-                  <i className="ti ti-link" style={{ fontSize: 13 }} />
-                  Vincular Cliente
+                  <i className="ti ti-user-plus" style={{ fontSize: 13 }} />
+                  Cliente: vincular o crear
                 </button>
               </div>
             )}
@@ -1423,20 +1739,20 @@ export default function ChatContextPanel({
         )}
       </OperativeFranjaSection>
 
-      {/* Pregunta ML sin cliente identificado: publicación + orden del contexto (no duplicar en showFullFranja). */}
-      {!hasCustomer && isMlQuestionOrigin && chat && (
-        <>
-          {showPublicationMlQuestionOrItem && (
-            <MlQuestionContextSection
-              chatId={chatId}
-              chat={chat}
-              hideBuyerQuestion={isMlQuestionOrigin}
-            />
-          )}
-          {chat.order != null && (
-            <MlOrderSection chatId={chatId} panelTitle="Orden de MercadoLibre" />
-          )}
-        </>
+      {chat && (
+        <MercadoLibreOperativeSection
+          chatId={chatId}
+          chat={chat}
+          hasCustomer={hasCustomer}
+          showFullFranja={showFullFranja}
+          isMlQuestionOrigin={isMlQuestionOrigin}
+          isMlMessageOrigin={isMlMessageOrigin}
+          showPublicationMlQuestionOrItem={showPublicationMlQuestionOrItem}
+          showPublicationMlOrderOnly={showPublicationMlOrderOnly}
+          showPublicationWaMlOrder={showPublicationWaMlOrder}
+          canLinkMlOrder={canLinkMlOrder}
+          onOpenLinkOrder={() => setLinkOrderOpen(true)}
+        />
       )}
 
       {showFullFranja && (
@@ -1448,6 +1764,7 @@ export default function ChatContextPanel({
               iconClass="ti ti-car"
               title="Vehículos registrados"
               subtitle={`${customer.vehicles.length} registro(s) · click para abrir`}
+              subtitleHighlight
               defaultOpen
               resetKey={chatId}
             >
@@ -1462,102 +1779,12 @@ export default function ChatContextPanel({
             </OperativeFranjaSection>
           )}
 
-          {/* ── 2. ORDEN DE MERCADOLIBRE ──────────────────────────────────────────
-              Publicación + detalle de la orden ML en todos los orígenes que la tienen.
-              Orden en pipeline: Cliente → Orden ML → Cotización → Comprobante → Despacho.
-          ── */}
-
-          {/* Pregunta ML / mensaje con item → publicación (omitir si ya se mostró arriba sin cliente). */}
-          {showPublicationMlQuestionOrItem && chat && (!isMlQuestionOrigin || hasCustomer) && (
-            <MlQuestionContextSection
-              chatId={chatId}
-              chat={chat}
-              hideBuyerQuestion={isMlQuestionOrigin}
-            />
-          )}
-
-          {/* Mensaje ML sin pregunta → solo ítems de la orden */}
-          {showPublicationMlOrderOnly && (
-            <MlOrderSection chatId={chatId} panelTitle="Publicación e ítems de la orden" />
-          )}
-
-          {/* WA con orden ML vinculada → detalle de publicación */}
-          {showPublicationWaMlOrder && (
-            <MlOrderSection chatId={chatId} panelTitle="Publicación" />
-          )}
-
-          {/* WA sin orden ML todavía → aviso */}
-          {chat?.source_type === "wa_inbound" &&
-            !isMlQuestionOrigin &&
-            !isMlMessageOrigin &&
-            !showPublicationWaMlOrder &&
-            canLinkMlOrder && (
-              <OperativeFranjaSection
-                accent="orange"
-                iconClass="ti ti-photo-off"
-                title="Publicación"
-                subtitle="Sin orden ML vinculada · click para abrir"
-                defaultOpen
-                resetKey={chatId}
-              >
-                <p style={{ fontSize: 11, color: "var(--mu-ink-mute)", margin: 0, lineHeight: 1.45 }}>
-                  Sin orden de Mercado Libre vinculada a este chat. En la siguiente sección podés vincular la orden para ver publicación e ítems.
-                </p>
-              </OperativeFranjaSection>
-            )}
-
-          {/* Pregunta ML con orden ERP activa (solo con cliente; sin cliente va en bloque previo). */}
-          {isMlQuestionOrigin && chat?.order != null && hasCustomer && (
-            <MlOrderSection chatId={chatId} panelTitle="Orden de MercadoLibre" />
-          )}
-
-          {/* Vincular orden ML (WA sin ml_order_id; cliente ya identificado) */}
-          {canLinkMlOrder && (
-            <OperativeFranjaSection
-              accent="orange"
-              iconClass="ti ti-link"
-              title="Canal · MercadoLibre"
-              subtitle="Vincular orden del anuncio · click para abrir"
-              defaultOpen
-              resetKey={chatId}
-            >
-              <div
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  background: "rgba(255,116,0,0.06)",
-                  border: "1px solid rgba(255,116,0,0.2)",
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => setLinkOrderOpen(true)}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "5px 12px",
-                    borderRadius: 6,
-                    background: "#ff7400",
-                    color: "#fff",
-                    fontWeight: 700,
-                    fontSize: 11,
-                    border: "none",
-                    cursor: "pointer",
-                  }}
-                >
-                  <i className="ti ti-link" style={{ fontSize: 13 }} />
-                  Vincular Orden ML
-                </button>
-              </div>
-            </OperativeFranjaSection>
-          )}
+          {/* ── 2. Mercado Libre (publicación, orden, vínculos) — bloque unificado arriba de Cotización ── */}
 
           {/* ── 3. COTIZACIÓN ─────────────────────────────────────────────────── */}
           <QuotePanel
             chatId={chatId}
             customerId={customerId ?? null}
-            customerName={customer?.full_name ?? chat?.customer_name ?? null}
             forceOpen={quoteForceOpen}
             onForceOpenConsumed={() => setQuoteForceOpen(false)}
             onSentQuoteChange={setActiveSentQuote}
@@ -1580,6 +1807,7 @@ export default function ChatContextPanel({
             iconClass="ti ti-truck"
             title="Despacho y cierre"
             subtitle="Pedidos pagados y logística · click para abrir"
+            subtitleHighlight={false}
             defaultOpen
             resetKey={chatId}
           >
@@ -1630,6 +1858,7 @@ export default function ChatContextPanel({
                     ? "Sin órdenes activas · click para abrir"
                     : `${recentOrders.length} pedido(s) · click para abrir`
               }
+              subtitleHighlight={!loadingOrders && recentOrders.length > 0}
               defaultOpen
               resetKey={chatId}
             >
@@ -1696,6 +1925,11 @@ export default function ChatContextPanel({
     <LinkCustomerModal
       open={linkCustomerOpen}
       chatId={chatId}
+      initialChatPhone={
+        chat?.phone != null && String(chat.phone).trim() !== ""
+          ? String(chat.phone).trim()
+          : null
+      }
       onClose={() => setLinkCustomerOpen(false)}
       onSuccess={() => {
         setLinkCustomerOpen(false);

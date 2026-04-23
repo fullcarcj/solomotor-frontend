@@ -120,6 +120,18 @@ export const OP_FRANJA_SUBTITLE: CSSProperties = {
   marginTop: 1,
 };
 
+/** Resumen con datos ya cargados (franja operativa): más legible que `OP_FRANJA_SUBTITLE`. */
+export const OP_FRANJA_SUBTITLE_PROMINENT: CSSProperties = {
+  fontFamily: "'JetBrains Mono', monospace",
+  fontSize: 10,
+  fontWeight: 600,
+  color: "var(--mu-text, #d8e0ea)",
+  letterSpacing: "0.04em",
+  marginTop: 4,
+  lineHeight: 1.42,
+  wordBreak: "break-word",
+};
+
 /** Cuerpo con scroll (lista de comprobantes en PaymentLinkPanel). */
 export const OP_FRANJA_BODY_SCROLL: CSSProperties = {
   padding: "12px 14px",
