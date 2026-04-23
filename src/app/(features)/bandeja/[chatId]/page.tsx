@@ -1,13 +1,19 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, startTransition } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import type { InboxChat } from "@/types/inbox";
-import { normalizeChatStage } from "@/types/inbox";
+import {
+  bandejaMlQuestionPipelineStage,
+  normalizeChatStage,
+  isMlQuestionThreadChat,
+} from "@/types/inbox";
 import { useChatMessages } from "@/hooks/useChatMessages";
-import { useChatContext } from "@/hooks/useChatContext";
+import { useChatContext, primeChatContextFromCrmContext, type UseChatContextOptions } from "@/hooks/useChatContext";
+import type { CustomerDetail } from "@/types/customers";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { bumpInboxRefetch, clearMyPending } from "@/store/realtimeSlice";
+import { useBandejaInbox } from "@/app/(features)/bandeja/BandejaInboxContext";
 import ChatHeader from "../components/ChatHeader";
 import ChatWindow from "../components/ChatWindow";
 import PipelineMini from "../components/PipelineMini";
@@ -58,6 +64,10 @@ function parseReleaseFailure(res: Response, data: Record<string, unknown>): stri
  *
  * Columna INBOX vive en BandejaShell (layout /bandeja) y no se remonta al navegar.
  * Esta página aporta: [CONVO + FICHA] y overlays.
+ *
+ * Transición entre chats: cabecera optimista desde `useBandejaInbox` + GET /context
+ * en segundo plano (`startTransition`); mensajes sin skeleton de pantalla completa
+ * al cambiar de hilo (ver `useChatMessages` + `ChatWindow`).
  */
 export default function ChatDetailPage() {
   const dispatch = useAppDispatch();
@@ -66,6 +76,9 @@ export default function ChatDetailPage() {
   const chatId = params.chatId as string;
   const myUserId = useAppSelector((s) => s.auth.userId);
   const slaFromRealtime = useAppSelector((s) => s.realtime.slaDeadlineByChat[chatId] ?? null);
+  const { chats: inboxChats } = useBandejaInbox();
+  const inboxChatsRef = useRef(inboxChats);
+  inboxChatsRef.current = inboxChats;
 
   const [chat, setChat]                     = useState<InboxChat | null>(null);
   const [chatLoading, setChatLoading]       = useState(true);
@@ -76,18 +89,60 @@ export default function ChatDetailPage() {
   const [releasePending, setReleasePending] = useState(false);
   const [releaseError, setReleaseError] = useState<string | null>(null);
   const releaseInFlight = useRef(false);
+  /** Tras GET /context: mismo cliente que `customers` — primar caché y forzar releída de `useChatContext`. */
+  const [chatContextRevision, setChatContextRevision] = useState(0);
+  /** Fila `customers` del contexto CRM (única fuente en ficha; sin GET directorio redundante). */
+  const [bandejaContextCustomer, setBandejaContextCustomer] = useState<CustomerDetail | null>(null);
+  /** Primer GET /context del chat resuelto (para no adelantar directorio). */
+  const [bandejaContextHydrated, setBandejaContextHydrated] = useState(false);
+
+  /** Antes del pintado: fila del inbox para el chatId (evita frame con chat previo o skeleton). */
+  useLayoutEffect(() => {
+    if (!chatId) return;
+    const row = inboxChatsRef.current.find(c => String(c.id) === String(chatId));
+    if (row) {
+      setChat(row);
+      setChatLoading(false);
+    } else {
+      setChat(null);
+      setChatLoading(true);
+    }
+  }, [chatId]);
+
+  useEffect(() => {
+    setBandejaContextCustomer(null);
+    setBandejaContextHydrated(false);
+  }, [chatId]);
+
+  /** Lista del shell llega después del primer paint: hidratar cabecera sin esperar solo al GET /context. */
+  useEffect(() => {
+    if (!chatId) return;
+    const row = inboxChats.find(c => String(c.id) === String(chatId));
+    if (!row) return;
+    setChat(prev => {
+      if (prev && String(prev.id) === String(chatId)) return prev;
+      return row;
+    });
+    setChatLoading(false);
+  }, [chatId, inboxChats]);
 
   /* Mensajes y envío */
   const {
-    messages, loading: msgLoading, loadingMore, error: msgError,
-    loadMore, sendMessage, refetch,
+    messages,
+    loading: msgLoading,
+    loadingMore,
+    messagesBootstrapping,
+    error: msgError,
+    loadMore,
+    sendMessage,
+    refetch,
   } = useChatMessages(chatId);
 
   const sendMessageForChat = useCallback(
     async (text: string, sentBy: string): Promise<{ success: boolean; errorMessage?: string }> => {
       const src = chat?.source_type ?? "";
 
-      if (src === "ml_question") {
+      if (chat && isMlQuestionThreadChat(chat)) {
         try {
           const res = await fetch(`/api/inbox/${chatId}/ml-question/answer`, {
             method: "POST", credentials: "include",
@@ -137,20 +192,44 @@ export default function ChatDetailPage() {
       const ok = await sendMessage(text, sentBy);
       return { success: ok, errorMessage: ok ? undefined : "No se pudo enviar el mensaje. Intenta de nuevo." };
     },
-    [chat?.source_type, chatId, sendMessage, refetch]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchChat se declara debajo; tras POST ML se llama en runtime.
+    [chat, chatId, myUserId, sendMessage, refetch]
   );
 
   /* Contexto del cliente */
   const customerId    = chat?.customer_id ?? null;
   const customerName  = chat?.customer_name ?? null;
-  const { customer, recentOrders, loadingCustomer, loadingOrders } = useChatContext(customerId);
+
+  const getBandejaContextCustomer = useCallback(() => bandejaContextCustomer, [bandejaContextCustomer]);
+
+  const chatContextOpts = useMemo<UseChatContextOptions>(
+    () => ({
+      getBandejaContextCustomer,
+      contextHydrated: bandejaContextHydrated,
+    }),
+    [getBandejaContextCustomer, bandejaContextHydrated]
+  );
+
+  const { customer, recentOrders, loadingCustomer, loadingOrders } = useChatContext(
+    customerId,
+    chatContextRevision,
+    chatContextOpts
+  );
+
+  /** Misma lógica que la ficha / header: pregunta ML solo “Con orden+” con cliente + orden activa. */
+  const pipelineMiniStage = useMemo(() => {
+    if (!chat) return undefined;
+    return bandejaMlQuestionPipelineStage(
+      chat.chat_stage == null ? undefined : String(chat.chat_stage),
+      chat
+    );
+  }, [chat]);
 
   const lastImageUrl = getLastImageUrl(messages);
 
-  /* Fetch del chat activo por ID directo */
+  /* Contexto CRM: cabecera optimista desde la lista del inbox (misma fila que ya cargó el shell). */
   const fetchChat = useCallback(async () => {
     if (!chatId) return;
-    setChatLoading(true);
     setChatError(null);
     try {
       const r = await fetch(`/api/crm/chats/${encodeURIComponent(chatId)}/context`, {
@@ -159,7 +238,10 @@ export default function ChatDetailPage() {
       if (!r.ok) return;
       const d = (await r.json().catch(() => ({}))) as Record<string, unknown>;
       const raw = d.chat as Record<string, unknown> | null;
-      if (!raw) return;
+      if (!raw) {
+        setBandejaContextCustomer(null);
+        return;
+      }
       const customerRaw = d.customer as Record<string, unknown> | null;
       const orderRaw = d.order as Record<string, unknown> | null | undefined;
       const order =
@@ -194,11 +276,40 @@ export default function ChatDetailPage() {
           typeof d.chat_stage === "string" ? d.chat_stage : undefined
         ),
       };
-      setChat(mapped);
+
+      const vehiclesRaw = d.vehicles;
+      const primeCustomerId =
+        customerRaw && customerRaw.id != null
+          ? Number(customerRaw.id)
+          : mapped.customer_id != null && Number.isFinite(mapped.customer_id)
+            ? mapped.customer_id
+            : null;
+      if (
+        primeCustomerId != null &&
+        customerRaw != null &&
+        typeof customerRaw === "object" &&
+        !Array.isArray(customerRaw)
+      ) {
+        const detail = {
+          ...customerRaw,
+          vehicles: Array.isArray(vehiclesRaw) ? vehiclesRaw : [],
+        } as CustomerDetail;
+        setBandejaContextCustomer(detail);
+        primeChatContextFromCrmContext(primeCustomerId, detail);
+        setChatContextRevision(n => n + 1);
+      } else {
+        setBandejaContextCustomer(null);
+      }
+
+      startTransition(() => {
+        setChat(mapped);
+      });
     } catch (e: unknown) {
       setChatError(errMsg(e));
+      setBandejaContextCustomer(null);
     } finally {
       setChatLoading(false);
+      setBandejaContextHydrated(true);
     }
   }, [chatId]);
 
@@ -253,6 +364,17 @@ export default function ChatDetailPage() {
         setReleaseError(parseReleaseFailure(res, data));
         return;
       }
+      // Atendido = leído: si hubo saliente, bajar unread antes de refrescar campana/lista.
+      if (chat?.last_outbound_at != null) {
+        try {
+          await fetch(
+            `/api/bandeja/${encodeURIComponent(chatId)}/messages?limit=1&mark_read=1`,
+            { credentials: "include", cache: "no-store" }
+          );
+        } catch {
+          /* red */
+        }
+      }
       dispatch(bumpInboxRefetch());
       dispatch(clearMyPending());
       await refetch();
@@ -264,7 +386,7 @@ export default function ChatDetailPage() {
       releaseInFlight.current = false;
       setReleasePending(false);
     }
-  }, [chatId, router, dispatch, refetch, fetchChat]);
+  }, [chatId, chat, router, dispatch, refetch, fetchChat]);
 
   const slaDeadline = slaFromRealtime ?? chat?.sla_deadline_at ?? null;
   const showRelease =
@@ -347,7 +469,7 @@ export default function ChatDetailPage() {
             ) : null}
 
             {/* Pipeline mini — entre header y mensajes */}
-            {chat && <PipelineMini stage={chat.chat_stage} />}
+            {chat && <PipelineMini stage={pipelineMiniStage} />}
 
             {/* Banner de acción activa */}
             {actionLabel && (
@@ -368,6 +490,8 @@ export default function ChatDetailPage() {
               messages={messages}
               loading={msgLoading}
               loadingMore={loadingMore}
+              bootstrapping={messagesBootstrapping}
+              chatKey={chatId}
               error={msgError}
               onLoadMore={loadMore}
             />
@@ -375,7 +499,9 @@ export default function ChatDetailPage() {
             {/* Input de mensaje */}
             <MessageInput
               chatId={chatId}
-              sourceType={chat?.source_type ?? ""}
+              sourceType={
+                chat && isMlQuestionThreadChat(chat) ? "ml_question" : (chat?.source_type ?? "")
+              }
               onSend={sendMessageForChat}
             />
 

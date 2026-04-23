@@ -1,9 +1,9 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import type { InboxChat, ChatStage } from "@/types/inbox";
-import { normalizeChatStage } from "@/types/inbox";
+import { bandejaMlQuestionPipelineStage, normalizeChatStage } from "@/types/inbox";
 import ExceptionBadge from "@/components/bandeja/ExceptionBadge";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
@@ -14,6 +14,7 @@ import {
   markAutoReleased,
   setMyPending,
 } from "@/store/realtimeSlice";
+import MlOrderMessagingModal from "@/app/(features)/ventas/pedidos/components/MlOrderMessagingModal";
 
 // ─── Origin helpers ────────────────────────────────────────────────────────────
 
@@ -225,6 +226,12 @@ interface Props {
 export default function ChatListItem({ chat, active }: Props) {
   const router   = useRouter();
   const dispatch = useAppDispatch();
+  const [mlPackSale, setMlPackSale] = useState<{
+    saleId: string;
+    externalHint: string | null;
+  } | null>(null);
+  const [mlPackBusy, setMlPackBusy] = useState(false);
+  const [mlPackErr, setMlPackErr]   = useState<string | null>(null);
   const myUserId            = useAppSelector((s) => s.auth.userId);
   const presence            = useAppSelector((s) => s.realtime.presenceByChat[String(chat.id)]);
   const urgentRedux         = useAppSelector((s) => s.realtime.urgentChats[String(chat.id)]);
@@ -247,9 +254,11 @@ export default function ChatListItem({ chat, active }: Props) {
 
   const href = `/bandeja/${String(chat.id)}`;
 
-  const stageNorm = normalizeChatStage(
-    chat.chat_stage == null ? undefined : String(chat.chat_stage)
-  );
+  const stageNorm =
+    bandejaMlQuestionPipelineStage(
+      chat.chat_stage == null ? undefined : String(chat.chat_stage),
+      chat
+    ) ?? "contact";
 
   const isOperational = Boolean(chat.is_operational);
   const origCls  = originClass(chat.source_type);
@@ -257,6 +266,60 @@ export default function ChatListItem({ chat, active }: Props) {
   const bucket   = elapsedBucket(chat.last_message_at, chat.sla_deadline_at ?? null, stageNorm);
   const elapsed  = fmtElapsed(chat.last_message_at);
   const showViewingChip = presence && myUserId != null && presence.userId !== myUserId;
+
+  const mlOid =
+    chat.source_type === "ml_message" && chat.ml_order_id != null && String(chat.ml_order_id).trim() !== ""
+      ? String(chat.ml_order_id).trim()
+      : null;
+  const linkedSalePk =
+    chat.order != null && Number.isFinite(Number(chat.order.id)) && Number(chat.order.id) > 0
+      ? Number(chat.order.id)
+      : null;
+
+  const openMlPackModal = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setMlPackErr(null);
+      if (!mlOid) return;
+      if (linkedSalePk != null && Number.isFinite(linkedSalePk) && linkedSalePk > 0) {
+        setMlPackSale({ saleId: `so-${linkedSalePk}`, externalHint: mlOid });
+        return;
+      }
+      setMlPackBusy(true);
+      try {
+        const res = await fetch(
+          `/api/ventas/pedidos/resolve-ml-order?ml_order_id=${encodeURIComponent(mlOid)}`,
+          { credentials: "include", cache: "no-store" }
+        );
+        const j = (await res.json().catch(() => ({}))) as {
+          data?: { id?: string; external_order_id?: string | null };
+          error?: string;
+          message?: string;
+        };
+        if (!res.ok || !j.data?.id) {
+          const msg =
+            (typeof j.error === "string" && j.error.trim()) ||
+            (typeof j.message === "string" && j.message.trim()) ||
+            "No hay venta importada en ERP para esta orden ML.";
+          setMlPackErr(msg);
+          return;
+        }
+        setMlPackSale({
+          saleId: String(j.data.id).trim(),
+          externalHint:
+            j.data.external_order_id != null && String(j.data.external_order_id).trim() !== ""
+              ? String(j.data.external_order_id).trim()
+              : mlOid,
+        });
+      } catch {
+        setMlPackErr("Error de red al resolver la orden.");
+      } finally {
+        setMlPackBusy(false);
+      }
+    },
+    [mlOid, linkedSalePk]
+  );
 
   const navigateAfterRules = useCallback(async () => {
     const id = String(chat.id);
@@ -277,6 +340,18 @@ export default function ChatListItem({ chat, active }: Props) {
             headers: { "Content-Type": "application/json" },
           });
           if (rel.ok) {
+            // Atendido = leído: si ya hubo mensaje saliente, bajar unread en servidor
+            // (campana + círculo) antes de refrescar lista; si abandonó, no marcar leído.
+            if (prevHasResponded) {
+              try {
+                await fetch(
+                  `/api/bandeja/${encodeURIComponent(prevId)}/messages?limit=1&mark_read=1`,
+                  { credentials: "include", cache: "no-store" }
+                );
+              } catch {
+                /* red: la lista igual reflejará estado tras bump */
+              }
+            }
             dispatch(clearMyPending());
             dispatch(bumpInboxRefetch());
             // Agente cambió de chat sin responder → alerta silenciosa de supervisión
@@ -399,6 +474,19 @@ export default function ChatListItem({ chat, active }: Props) {
                 stageNorm && <StageChip stage={stageNorm} />
               )}
 
+              {mlOid != null && (
+                <button
+                  type="button"
+                  className="bd-ir-venta-btn"
+                  disabled={mlPackBusy}
+                  title={mlPackErr ?? "Mensajería pack ML de la orden (ventana emergente)"}
+                  aria-label="Abrir mensajería ML de la orden"
+                  onClick={openMlPackModal}
+                >
+                  {mlPackBusy ? "…" : "Mensaje ML"}
+                </button>
+              )}
+
               {/* Bloque 2 — excepción activa */}
               {(chat.has_active_exception ?? false) && (
                 <ExceptionBadge
@@ -436,6 +524,19 @@ export default function ChatListItem({ chat, active }: Props) {
           )}
         </div>
       </Link>
+      {mlPackSale != null && (
+        <MlOrderMessagingModal
+          saleId={mlPackSale.saleId}
+          externalHint={mlPackSale.externalHint ?? undefined}
+          onAfterReply={() => {
+            dispatch(bumpInboxRefetch());
+          }}
+          onClose={() => {
+            setMlPackSale(null);
+            setMlPackErr(null);
+          }}
+        />
+      )}
     </>
   );
 }

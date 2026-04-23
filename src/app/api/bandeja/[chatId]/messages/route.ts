@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { isBandejaBffVerbose } from "@/lib/bandejaReceiverProxy";
 
 export const runtime = "nodejs";
 
@@ -19,8 +20,6 @@ function hdr(req: NextRequest) {
   };
 }
 
-const dev = process.env.NODE_ENV === "development";
-
 type RouteCtx = { params: Promise<{ chatId: string }> };
 
 export async function GET(req: NextRequest, ctx: RouteCtx) {
@@ -28,12 +27,16 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
   const p = new URLSearchParams();
   const beforeId = req.nextUrl.searchParams.get("before_id");
   const limit = req.nextUrl.searchParams.get("limit");
+  const markRead = req.nextUrl.searchParams.get("mark_read");
   if (beforeId) p.set("before_id", beforeId);
   if (limit) p.set("limit", limit);
   else p.set("limit", "50");
+  if (markRead != null && String(markRead).trim() !== "") {
+    p.set("mark_read", String(markRead).trim());
+  }
 
   const targetUrl = `${base()}/api/crm/chats/${encodeURIComponent(chatId)}/messages?${p}`;
-  if (dev) console.log("[BFF messages GET] URL:", targetUrl);
+  if (isBandejaBffVerbose()) console.log("[BFF messages GET] URL:", targetUrl);
 
   try {
     const up = await fetch(targetUrl, { headers: hdr(req), cache: "no-store" });
@@ -44,7 +47,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
     } catch {
       data = { raw: text.slice(0, 500) };
     }
-    if (dev) {
+    if (isBandejaBffVerbose()) {
       console.log("[BFF messages GET] receiver status:", up.status);
       console.log("[BFF messages GET] receiver response:", data);
     }
@@ -60,7 +63,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
   const body: unknown = await req.json().catch(() => ({}));
   const targetUrl = `${base()}/api/crm/chats/${encodeURIComponent(chatId)}/messages`;
 
-  if (dev) {
+  if (isBandejaBffVerbose()) {
     console.log("[BFF messages POST] URL:", targetUrl);
     console.log("[BFF messages POST] body:", body);
   }
@@ -79,7 +82,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
     } catch {
       data = { raw: text.slice(0, 500) };
     }
-    if (dev) {
+    if (isBandejaBffVerbose()) {
       console.log("[BFF messages POST] receiver status:", up.status);
       console.log("[BFF messages POST] receiver response:", data);
     }

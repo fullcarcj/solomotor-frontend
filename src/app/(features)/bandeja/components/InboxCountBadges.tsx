@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import type { InboxCounts } from "@/types/inbox";
+import { useAppSelector } from "@/store/hooks";
 
 interface Props {
   activeFilter: string;
@@ -20,6 +21,7 @@ type BadgeKey = typeof BADGES[number]["key"];
 export default function InboxCountBadges({ activeFilter, onFilter }: Props) {
   const [counts, setCounts] = useState<InboxCounts | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const inboxRefetchNonce = useAppSelector((s) => s.realtime.inboxRefetchNonce);
 
   async function fetchCounts() {
     try {
@@ -35,6 +37,12 @@ export default function InboxCountBadges({ activeFilter, onFilter }: Props) {
     intervalRef.current = setInterval(() => void fetchCounts(), 30_000);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, []);
+
+  /** Tras take/release/refetch de lista, alinear campana sin esperar al intervalo de 30s. */
+  useEffect(() => {
+    if (inboxRefetchNonce <= 0) return;
+    void fetchCounts();
+  }, [inboxRefetchNonce]);
 
   function getCount(key: BadgeKey): number | null {
     if (!counts) return null;
