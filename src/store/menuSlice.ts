@@ -7,6 +7,8 @@ export interface MenuItemLeaf {
   id: string;
   label: string;
   path: string;
+  /** Icono Tabler sin prefijo `ti ti-` (opcional; si falta, se infiere por `path`). */
+  icon?: string | null;
   minRole: string;
   pendingMigration: boolean;
   future: boolean;
@@ -93,6 +95,14 @@ function augmentMenuWithSupervisor(menu: MenuSection[] | null): MenuSection[] | 
         pendingMigration: false,
         future:           false,
       },
+      {
+        id:               "ai_responder_logs",
+        label:            "Logs IA",
+        path:             "/ai-responder/logs",
+        minRole:          "admin",
+        pendingMigration: false,
+        future:           false,
+      },
     ],
   };
 
@@ -124,6 +134,38 @@ function augmentMenuWithSupervisor(menu: MenuSection[] | null): MenuSection[] | 
 }
 
 /**
+ * Si el backend expone una sección "Dashboard" sin enlace a `/dashboard`, lo añadimos
+ * como primer ítem (submenú lateral) con etiqueta "Dashboard".
+ */
+function ensureDashboardHomeLeaf(menu: MenuSection[] | null): MenuSection[] | null {
+  if (!Array.isArray(menu) || menu.length === 0) return menu;
+
+  return menu.map((section) => {
+    const mk = (section.moduleKey ?? "").toLowerCase();
+    const lb = (section.label ?? "").toLowerCase();
+    const isDashboardSection = mk === "dashboard" || lb === "dashboard";
+    if (!isDashboardSection) return section;
+    if (section.items.some((i) => i.path === "/dashboard")) return section;
+
+    const minRole =
+      section.items.find((i) => !i.future)?.minRole ??
+      section.items[0]?.minRole ??
+      "vendedor";
+
+    const leaf: MenuItemLeaf = {
+      id: "fe_menu_dashboard_home",
+      label: "Dashboard",
+      path: "/dashboard",
+      icon: "layout-dashboard",
+      minRole,
+      pendingMigration: false,
+      future: false,
+    };
+    return { ...section, items: [leaf, ...section.items] };
+  });
+}
+
+/**
  * Parche de presentación · renombres y ocultamientos acordados en FE (Apr 2026).
  * Opera sobre rutas y etiquetas del backend; no requiere cambios en BD.
  *
@@ -134,9 +176,8 @@ function applyFrontendPatches(menu: MenuSection[] | null): MenuSection[] | null 
 
   // Paths de items a eliminar del menú
   const REMOVE_PATHS = new Set([
-    "/channels-monitor",  // Monitor de Canales — ruta 404
-    "/dashboard",         // Panel Global — duplicado de inicio (erpDashboard)
-    "/ventas/tablero",    // Tablero — ocultar de sección Ventas
+    "/channels-monitor", // Monitor de Canales — ruta 404
+    "/ventas/tablero", // Tablero — ocultar de sección Ventas
   ]);
 
   // Etiquetas a eliminar (fallback si el path difiere entre entornos)
@@ -167,7 +208,7 @@ function applyFrontendPatches(menu: MenuSection[] | null): MenuSection[] | null 
   return menu.map((section) => {
     const newSectionLabel = RENAME_SECTION[section.label] ?? section.label;
 
-    const newItems = section.items
+    const mapped = section.items
       .filter((item) => {
         if (REMOVE_PATHS.has(item.path)) return false;
         // Solo aplica REMOVE_LABELS dentro de secciones no-Bandeja para evitar
@@ -177,12 +218,31 @@ function applyFrontendPatches(menu: MenuSection[] | null): MenuSection[] | null 
         return true;
       })
       .map((item) => {
+        let path = item.path;
+        let label = item.label;
+        if (path === "/admin-dashboard") {
+          path = "/dashboard";
+          label = "Dashboard";
+        }
         const renamedLabel =
+          RENAME_BY_PATH[path] ??
           RENAME_BY_PATH[item.path] ??
+          RENAME_BY_LABEL[label] ??
           RENAME_BY_LABEL[item.label] ??
-          item.label;
-        return renamedLabel !== item.label ? { ...item, label: renamedLabel } : item;
+          label;
+        if (renamedLabel === label && path === item.path) return item;
+        return { ...item, path, label: renamedLabel };
       });
+
+    const seen = new Set<string>();
+    const newItems: MenuItemLeaf[] = [];
+    for (const it of mapped) {
+      if (it.path) {
+        if (seen.has(it.path)) continue;
+        seen.add(it.path);
+      }
+      newItems.push(it);
+    }
 
     if (
       newSectionLabel === section.label &&
@@ -215,7 +275,7 @@ export const fetchMenu = createAsyncThunk(
       }
       const body = (await res.json()) as MenuApiResponse | MenuSection[];
       const patch = (m: MenuSection[] | null) =>
-        applyFrontendPatches(augmentMenuWithSupervisor(m));
+        ensureDashboardHomeLeaf(applyFrontendPatches(augmentMenuWithSupervisor(m)));
       if (Array.isArray(body)) {
         return {
           menu: patch(body),

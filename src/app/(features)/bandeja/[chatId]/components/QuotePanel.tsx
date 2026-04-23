@@ -10,7 +10,7 @@
  *  - Siempre visible en la pestaña Ficha 360° del ChatContextPanel.
  *  - Colapsado por defecto cuando no hay ítems.
  *  - Expandido automáticamente cuando hay ítems o cuando el prop forceOpen=true.
- *  - El header muestra: ícono + "Cotización" + badge(n ítems) + total USD + chevron.
+ *  - Cabecera colapsable: mismo layout que comprobantes (`operativeFranjaShared`).
  *  - Pre-llena el cliente desde el chat (no hay paso de búsqueda de cliente).
  *  - Búsqueda de productos con toggle SKU / Nombre y dropdown inline.
  *  - Moneda VES/USD: control segmentado con degradado; SKU/Nombre usa el mismo patrón visual.
@@ -20,6 +20,14 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Product } from "@/hooks/useProducts";
+import {
+  OP_FRANJA_SECTION,
+  opFranjaHeader,
+  opFranjaIconBox,
+  OP_FRANJA_TITLE,
+  OP_FRANJA_SUBTITLE,
+  OpFranjaChevron,
+} from "@/app/(features)/bandeja/components/operativeFranjaShared";
 import { useTodayRate } from "@/hooks/useTodayRate";
 
 // ── Tipos locales ────────────────────────────────────────────────────────────
@@ -29,6 +37,13 @@ interface QuoteLine {
   product: Product;
   cantidad: number;
   precio_unitario: number;
+}
+
+/** Fila de `GET /api/delivery/zones` (webhook-receiver). */
+interface DeliveryZoneRow {
+  id: number;
+  zone_name: string;
+  client_price_bs?: number | string;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -165,47 +180,6 @@ const ThumbBox = ({ idx, size = 38 }: { idx: number; size?: number }) => (
 // ── Estilos inline (tokens del sistema de diseño oscuro del ERP) ─────────────
 
 const S = {
-  // Sección colapsable
-  section: {
-    borderRadius: 10,
-    border: "1px solid var(--mu-border, rgba(255,255,255,0.08))",
-    /* Solo el header redondeado arriba; el cuerpo scrollea sin recortar el footer */
-    overflow: "visible",
-    marginBottom: 6,
-    background: "var(--mu-panel-2, #1c222b)",
-  } as React.CSSProperties,
-
-  // Header toggle
-  header: (open: boolean) => ({
-    display: "flex",
-    alignItems: "flex-start",
-    gap: 8,
-    padding: "10px 14px",
-    cursor: "pointer",
-    userSelect: "none" as const,
-    background: open
-      ? "linear-gradient(180deg, var(--mu-panel-3, #232a35), var(--mu-panel-2, #1c222b))"
-      : "transparent",
-    /* Misma altura de borde abierto/cerrado: evita salto vertical de 1px al expandir */
-    borderBottom: open
-      ? "1px solid var(--mu-border, rgba(255,255,255,0.08))"
-      : "1px solid transparent",
-    transition: "background 0.15s",
-  }),
-
-  icon: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    background: "rgba(197,242,74,0.1)",
-    border: "1px solid rgba(197,242,74,0.25)",
-    color: "#c5f24a",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  } as React.CSSProperties,
-
   /**
    * Columna del panel expandido: altura máxima; el scroll va solo en scrollBody
    * para que el footer (Enviar / Borrador) quede siempre visible.
@@ -485,18 +459,6 @@ function segmentedBtnOff(): CSSProperties {
 
 // ── SVG helpers ──────────────────────────────────────────────────────────────
 
-const SvgChevron = ({ open }: { open: boolean }) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={2.5}
-    style={{ width: 13, height: 13, transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
-  >
-    <path d="m6 9 6 6 6-6" />
-  </svg>
-);
-
 const SvgSearch = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 13, height: 13 }}>
     <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
@@ -640,6 +602,11 @@ export default function QuotePanel({
   const [approving, setApproving]       = useState(false);
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [orderCreatedId, setOrderCreatedId] = useState<number | null>(null);
+  /** Carrera / delivery al crear orden CH-2 desde cotización (opcional). */
+  const [deliveryZones, setDeliveryZones] = useState<DeliveryZoneRow[]>([]);
+  const [deliveryZonesLoading, setDeliveryZonesLoading] = useState(false);
+  const [deliveryZoneId, setDeliveryZoneId] = useState<string>("");
+  const [deliveryCostBs, setDeliveryCostBs] = useState<string>("");
   /** Piernas de pago de la cotización activa */
   const [allocations, setAllocations]   = useState<PaymentAllocation[]>([]);
   /** Formulario de imputación de pago */
@@ -1092,13 +1059,22 @@ export default function QuotePanel({
     setCreatingOrder(true);
     setError(null);
     try {
+      const body: Record<string, unknown> = chatId ? { chat_id: Number(chatId) } : {};
+      const zid = deliveryZoneId.trim() !== "" ? Number(deliveryZoneId) : NaN;
+      if (Number.isFinite(zid) && zid > 0) {
+        body.zone_id = zid;
+        const cost = parseFloat(String(deliveryCostBs).replace(",", "."));
+        if (Number.isFinite(cost) && cost > 0) {
+          body.delivery_client_price_bs = cost;
+        }
+      }
       const res = await fetch(
         `/api/inbox/quotations/${encodeURIComponent(String(sentQuote.id))}/create-sales-order`,
         {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(chatId ? { chat_id: Number(chatId) } : {}),
+          body: JSON.stringify(body),
           cache: "no-store",
         }
       );
@@ -1131,13 +1107,38 @@ export default function QuotePanel({
     Boolean(sentQuote!.paymentFullySettled) &&
     !sentQuote!.linkedSalesOrderId;
 
+  useEffect(() => {
+    if (!showCreateOrderCta) return;
+    let alive = true;
+    setDeliveryZonesLoading(true);
+    void (async () => {
+      try {
+        const r = await fetch("/api/delivery/zones", {
+          credentials: "include",
+          cache: "no-store",
+        });
+        const j = (await r.json().catch(() => ({}))) as { data?: unknown };
+        const raw = j.data;
+        const rows = Array.isArray(raw) ? (raw as DeliveryZoneRow[]) : [];
+        if (alive) setDeliveryZones(rows);
+      } catch {
+        if (alive) setDeliveryZones([]);
+      } finally {
+        if (alive) setDeliveryZonesLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [showCreateOrderCta]);
+
   return (
-    <div ref={panelRef} style={S.section}>
+    <div ref={panelRef} style={OP_FRANJA_SECTION}>
 
       {orderCreatedId != null && (
         <div
           style={{
-            margin: "8px 10px 0",
+            margin: "10px 12px 0",
             padding: "9px 12px",
             borderRadius: 8,
             background: "rgba(52,211,153,0.1)",
@@ -1166,19 +1167,19 @@ export default function QuotePanel({
         </div>
       )}
 
-      {/* ── Header toggle ───────────────────────────────────────────── */}
+      {/* ── Header toggle (mismo layout que PaymentLinkPanel / comprobantes) ─ */}
       <div
-        style={S.header(isOpen)}
+        style={opFranjaHeader(isOpen)}
         onClick={() => setIsOpen((v) => !v)}
         role="button"
         aria-expanded={isOpen}
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setIsOpen((v) => !v); }}
       >
-        <div style={{ ...S.icon, marginTop: 2 }}><SvgDoc /></div>
+        <div style={opFranjaIconBox("lime")}><SvgDoc /></div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--mu-text, #e6edf3)" }}>
+            <span style={OP_FRANJA_TITLE}>
               Cotización
             </span>
             {lines.length > 0 && (
@@ -1275,11 +1276,7 @@ export default function QuotePanel({
             <div
               aria-hidden={isOpen}
               style={{
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 9,
-                color: "var(--mu-ink-mute, #6e7681)",
-                letterSpacing: "0.06em",
-                marginTop: 1,
+                ...OP_FRANJA_SUBTITLE,
                 minHeight: "1.35em",
                 lineHeight: 1.35,
                 visibility: isOpen ? "hidden" : "visible",
@@ -1289,8 +1286,8 @@ export default function QuotePanel({
             </div>
           )}
         </div>
-        <div style={{ color: "var(--mu-ink-mute, #6e7681)", marginTop: 2 }}>
-          <SvgChevron open={isOpen} />
+        <div style={{ color: "var(--mu-ink-mute, #6e7681)" }}>
+          <OpFranjaChevron open={isOpen} />
         </div>
       </div>
 
@@ -1717,6 +1714,89 @@ export default function QuotePanel({
                   Pago totalmente cerrado. Puede generarse la{" "}
                   <strong>orden de compra</strong> (CH-2); el pedido continúa hacia <strong>despacho</strong> según el flujo de ventas.
                 </span>
+              </div>
+              <div
+                style={{
+                  marginBottom: 10,
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  background: "var(--mu-panel-2, rgba(255,255,255,0.04))",
+                  border: "1px solid var(--mu-border, rgba(255,255,255,0.08))",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: "0.08em",
+                    color: "var(--mu-ink-mute, #8b949e)",
+                    marginBottom: 6,
+                  }}
+                >
+                  CARRERA / DELIVERY (OPCIONAL)
+                </div>
+                <select
+                  className="form-select form-select-sm"
+                  value={deliveryZoneId}
+                  disabled={creatingOrder || deliveryZonesLoading}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setDeliveryZoneId(v);
+                    if (v) {
+                      const row = deliveryZones.find((z) => String(z.id) === v);
+                      const p = row?.client_price_bs;
+                      if (p != null && String(p).trim() !== "") {
+                        const n = Number(String(p).replace(",", "."));
+                        if (Number.isFinite(n)) setDeliveryCostBs(String(n));
+                      }
+                    } else {
+                      setDeliveryCostBs("");
+                    }
+                  }}
+                  style={{
+                    width: "100%",
+                    fontSize: 11,
+                    marginBottom: 6,
+                    background: "var(--mu-panel-3, #232a35)",
+                    border: "1px solid var(--mu-border, rgba(255,255,255,0.1))",
+                    color: "var(--mu-text, #e6edf3)",
+                  }}
+                >
+                  <option value="">Sin carrera</option>
+                  {deliveryZones.map((z) => (
+                    <option key={z.id} value={String(z.id)}>
+                      {z.zone_name}
+                    </option>
+                  ))}
+                </select>
+                {deliveryZoneId !== "" && (
+                  <div style={{ display: "flex", flexDirection: "column" as const, gap: 4 }}>
+                    <label style={{ fontSize: 9, color: "var(--mu-ink-mute, #8b949e)" }}>
+                      Costo carrera (Bs.) — editable
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      className="form-control form-control-sm"
+                      value={deliveryCostBs}
+                      disabled={creatingOrder}
+                      onChange={(e) => setDeliveryCostBs(e.target.value)}
+                      placeholder="Ej. 25,00"
+                      style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 11,
+                        background: "var(--mu-panel-3, #232a35)",
+                        border: "1px solid var(--mu-border, rgba(255,255,255,0.12))",
+                        color: "var(--mu-text, #e6edf3)",
+                      }}
+                    />
+                  </div>
+                )}
+                {deliveryZonesLoading && (
+                  <div style={{ fontSize: 9, color: "var(--mu-ink-mute, #6e7681)", marginTop: 4 }}>
+                    Cargando zonas…
+                  </div>
+                )}
               </div>
               <button
                 type="button"
@@ -2325,3 +2405,4 @@ export default function QuotePanel({
     </div>
   );
 }
+

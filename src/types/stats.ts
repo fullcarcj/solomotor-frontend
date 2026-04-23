@@ -23,11 +23,25 @@ export interface OverviewAlert {
   severity: "high" | "medium" | "low" | string;
 }
 
+/** Piloto IA Tipo M (Groq) desde webhook-receiver `GET /api/stats/overview|realtime`. */
+export interface AiGroqSnapshot {
+  active: boolean;
+  label: string;
+  detail: string;
+  worker_running?: boolean;
+  groq_key_ok?: boolean;
+  ai_responder_enabled?: boolean;
+  ai_responder_env_enabled?: boolean;
+  ai_responder_suspended?: boolean;
+  error?: boolean;
+}
+
 export interface OverviewData {
   today: OverviewToday;
   yesterday: { orders_count: number; revenue_bs: number };
   changes: OverviewChanges;
   alerts: OverviewAlert[];
+  ai_groq?: AiGroqSnapshot;
 }
 
 export interface RealtimeData {
@@ -41,4 +55,5 @@ export interface RealtimeData {
     matched_today: number;
     manual_today: number;
   };
+  ai_groq?: AiGroqSnapshot;
 }

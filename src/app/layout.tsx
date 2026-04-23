@@ -44,6 +44,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      {/*
+        Rutas relativas tipo src="assets/img/..." deben resolverse desde la raíz del sitio.
+        Sin <base>, en /bandeja/… el navegador pide /bandeja/assets/… → 404 (estáticos viven en /assets/…).
+      */}
+      <head>
+        <base href="/" />
+      </head>
       <body>
         <>
           <AntdReact19Patch />

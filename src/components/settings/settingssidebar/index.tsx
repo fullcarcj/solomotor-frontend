@@ -7,7 +7,7 @@ import { all_routes } from "@/data/all_routes";
 import { usePathname } from "next/navigation"; // Import usePathname from next/navigation
 import Link from "next/link";
 
-const SettingsSideBar = (props: any) => {
+const SettingsSideBar = () => {
   const route = all_routes;
   const pathname = usePathname(); // Use usePathname to get the current route path
 
@@ -103,20 +103,8 @@ const SettingsSideBar = (props: any) => {
 
       <div className="sidebar-inner slimscroll">
         <PerfectScrollbar
-          style={{ marginRight: -5, height: 800 }}
-          autoHide
-          autoHeight
-          autoHeightMin={400} // Set a minimum height for the scrollbar
-          {...props}
-        // width={100}
-        // autoHideTimeout={1000}
-        // autoHideDuration={200}
-        // autoHeight
-        // autoHeightMin={0}
-        // autoHeightMax="95vh"
-        // thumbMinSize={30}
-        // universal={false}
-        // hideTracksWhenNotNeeded={true}
+          style={{ marginRight: -5, height: 800, minHeight: 400 }}
+          options={{ wheelPropagation: true, suppressScrollX: true }}
         >
           <div id="sidebar-menu5" className="sidebar-menu">
             <h4 className="fw-bold fs-18 mb-2 pb-2">Settings</h4>

@@ -261,60 +261,128 @@
 /* ══════════════════════════════════════════════════════════════
    TABS DE FILTROS (InboxCountBadges)
    ══════════════════════════════════════════════════════════════ */
-.bandeja-inbox-tabs {
-  display: flex;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  gap: 4px;
+.bandeja-inbox-toolbar {
+  gap: 8px;
   padding: 0 12px 8px;
   background: var(--mu-panel);
   border-bottom: 1px solid var(--mu-line);
   flex-shrink: 0;
 
+  &--inline {
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    border: none;
+  }
+}
+
+.bandeja-inbox-clear {
+  border: none;
+  background: transparent;
+  color: var(--mu-ink-dim);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 6px 10px;
+  border-radius: 8px;
+  line-height: 1.2;
+  white-space: nowrap;
+
+  &:hover {
+    background: var(--mu-panel-2);
+    color: var(--mu-ink);
+  }
+}
+
+.bandeja-inbox-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  overflow-x: auto;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  flex: 0 1 auto;
+  min-width: 0;
+  background: transparent;
+  border: none;
+
   &::-webkit-scrollbar { height: 3px; }
 
   .btn.bandeja-inbox-tab {
-    border: 1px solid transparent;
-    background: transparent;
-    color: var(--mu-ink-mute);
-    font-size: 0.7rem;
-    font-family: "JetBrains Mono", monospace;
-    padding: 6px 6px;
-    min-width: 2.5rem;
-    border-radius: 8px;
+    --inbox-tab-h: 32px;
+    border: 1px solid var(--mu-line);
+    background: var(--mu-panel-2);
+    color: var(--mu-ink-dim);
+    font-family: inherit;
+    font-size: 0;
+    font-weight: 600;
+    height: var(--inbox-tab-h);
+    min-width: var(--inbox-tab-h);
+    padding: 0 10px;
+    gap: 8px;
+    border-radius: 9px;
     white-space: nowrap;
     flex-shrink: 0;
+    line-height: 1;
 
     .ti {
-      font-size: 1.05rem;
+      font-size: 1rem;
+      width: 1rem;
+      height: 1rem;
       line-height: 1;
+      flex-shrink: 0;
     }
 
-    &:hover { background: var(--mu-panel-2); color: var(--mu-ink-dim); }
+    &:hover {
+      color: var(--mu-ink);
+      border-color: var(--mu-ink-mute);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    }
 
     &.active {
-      background: var(--mu-accent);
-      color: #0a0b08;
-      font-weight: 700;
+      background: rgba(212, 255, 58, 0.14);
       border-color: var(--mu-accent);
+      color: var(--mu-ink);
+      box-shadow: none;
+
+      .ti {
+        color: var(--mu-accent);
+        opacity: 1;
+      }
     }
 
     .bandeja-inbox-tab__n {
-      min-width: 1.1rem;
-      padding: 0 4px;
-      font-size: 0.6rem;
-      font-weight: 800;
-      line-height: 1.2;
-      background: var(--mu-panel-2) !important;
-      color: var(--mu-ink-mute) !important;
-      font-family: "JetBrains Mono", monospace;
+      box-sizing: border-box;
+      min-width: 1.25rem;
+      height: 1.25rem;
+      padding: 0 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.625rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      letter-spacing: 0.04em;
+      line-height: 1;
+      border-radius: 999px;
+      background: var(--mu-panel) !important;
+      color: var(--mu-ink) !important;
+      border: 1px solid var(--mu-line);
     }
 
     &.active .bandeja-inbox-tab__n {
-      background: rgba(0, 0, 0, 0.22) !important;
-      color: #0a0b08 !important;
+      background: var(--mu-accent) !important;
+      color: #0f100c !important;
+      border-color: transparent;
     }
   }
+}
+
+/* Fila completa (no inline): barra propia bajo el header Spacework */
+.bandeja-inbox-toolbar:not(.bandeja-inbox-toolbar--inline) .bandeja-inbox-tabs {
+  padding-bottom: 2px;
 }
 
 /* ══════════════════════════════════════════════════════════════

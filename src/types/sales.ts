@@ -1,6 +1,10 @@
 export interface Sale {
   id: string | number;
   source: string;
+  /** Cuenta Mercado Libre (`ml_accounts.ml_user_id`) cuando la fila es `sales_orders` ML. */
+  ml_user_id?: number | null;
+  /** Nickname en `ml_accounts` (misma fuente que `/cuentas`). */
+  ml_account_nickname?: string | null;
   external_order_id: string | null;
   customer_id: number | null;
   chat_id: number | string | null;

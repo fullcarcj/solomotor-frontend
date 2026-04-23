@@ -6,6 +6,7 @@ import { useAiResponderLog }   from '@/hooks/useAiResponderLog';
 import type { AiResponderStats }  from '@/types/ai-responder';
 import type { AiResponderLogAction, AiResponderLogProvider } from '@/types/ai-responder';
 import './ai-monitor-theme.scss';
+import AiResponderSubnav from '../AiResponderSubnav';
 
 /** Mismo patrón que /ventas/tablero y /bandeja: el tema aplica margin-left al .page-wrapper. */
 function FeatureLayout({ children }: { children: ReactNode }) {
@@ -317,7 +318,8 @@ export default function AiResponderMonitorPage() {
       <div className="ai-monitor">
         <div className="am-topbar">
           <div className="am-topbar-left">
-            <span className="am-breadcrumb am-breadcrumb-text">AI Responder · Monitor</span>
+            <span className="am-breadcrumb am-breadcrumb-text">AI Responder</span>
+            <AiResponderSubnav />
             <h1 className="am-title">Salud del bot</h1>
           </div>
           <div className="am-topbar-right">
@@ -342,7 +344,8 @@ export default function AiResponderMonitorPage() {
       <div className="ai-monitor">
         <div className="am-topbar">
           <div className="am-topbar-left">
-            <span className="am-breadcrumb am-breadcrumb-text">AI Responder · Monitor</span>
+            <span className="am-breadcrumb am-breadcrumb-text">AI Responder</span>
+            <AiResponderSubnav />
             <h1 className="am-title">Salud del bot</h1>
           </div>
         </div>
@@ -394,7 +397,8 @@ export default function AiResponderMonitorPage() {
       {/* ── Topbar ─────────────────────────────────────────────────── */}
       <div className="am-topbar">
         <div className="am-topbar-left">
-          <span className="am-breadcrumb am-breadcrumb-text">AI Responder · Monitor</span>
+          <span className="am-breadcrumb am-breadcrumb-text">AI Responder</span>
+          <AiResponderSubnav />
           <h1 className="am-title">Salud del bot</h1>
         </div>
         <div className="am-topbar-right">

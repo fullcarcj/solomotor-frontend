@@ -37,22 +37,25 @@ async function upstream(path: string, method: string, body?: unknown) {
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  return upstream(`/api/config/branches/${params.id}`, "GET");
+  const { id } = await params;
+  return upstream(`/api/config/branches/${id}`, "GET");
 }
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const body = await req.json().catch(() => ({}));
-  return upstream(`/api/config/branches/${params.id}`, "PUT", body);
+  return upstream(`/api/config/branches/${id}`, "PUT", body);
 }
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  return upstream(`/api/config/branches/${params.id}`, "DELETE");
+  const { id } = await params;
+  return upstream(`/api/config/branches/${id}`, "DELETE");
 }

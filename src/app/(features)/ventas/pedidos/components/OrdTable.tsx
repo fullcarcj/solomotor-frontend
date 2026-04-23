@@ -198,15 +198,21 @@ const UpIcon = () => (
 
 // ─── Single row ───────────────────────────────────────────────────────────────
 
+function isMercadoLibreSale(source: string): boolean {
+  return String(source || "").toLowerCase().includes("mercadolibre");
+}
+
 interface RowProps {
   sale: Sale;
   selected: boolean;
   onRowClick: (id: string | number) => void;
   onRequestDispatch?: (sale: Sale) => void;
+  onOpenMlMessaging?: (sale: Sale) => void;
 }
 
-function OrdRow({ sale, selected, onRowClick, onRequestDispatch }: RowProps) {
+function OrdRow({ sale, selected, onRowClick, onRequestDispatch, onOpenMlMessaging }: RowProps) {
   const ch = getChannel(sale.source);
+  const isMl = isMercadoLibreSale(sale.source);
   const cycle = getCycle(sale.status);
   const isClosed = ["completed", "delivered", "cancelled", "canceled"].includes(
     sale.status.toLowerCase()
@@ -275,6 +281,22 @@ function OrdRow({ sale, selected, onRowClick, onRequestDispatch }: RowProps) {
               <span className="dt" />
               {ch.label}
             </div>
+            {isMl &&
+              (sale.ml_account_nickname != null ||
+                sale.ml_user_id != null) && (
+              <div
+                className="ord-ext ord-ml-seller"
+                title={
+                  sale.ml_user_id != null
+                    ? `Cuenta ML (user_id): ${sale.ml_user_id}`
+                    : undefined
+                }
+              >
+                <span className="lb">Cuenta </span>
+                {sale.ml_account_nickname ??
+                  (sale.ml_user_id != null ? `#${sale.ml_user_id}` : "—")}
+              </div>
+            )}
           </div>
         </td>
 
@@ -445,6 +467,21 @@ function OrdRow({ sale, selected, onRowClick, onRequestDispatch }: RowProps) {
               </span>
             )}
 
+            {isMl && onOpenMlMessaging && (
+              <button
+                type="button"
+                className="act-ml-btn"
+                aria-label={`Mensajería ML orden #${sale.id}`}
+                title="Mensajería interna Mercado Libre (post-venta)"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenMlMessaging(sale);
+                }}
+              >
+                ML
+              </button>
+            )}
+
             <button
               className="act-kebab"
               aria-label={`Más opciones para orden #${sale.id}`}
@@ -482,6 +519,21 @@ function OrdRow({ sale, selected, onRowClick, onRequestDispatch }: RowProps) {
               </div>
               <span className="ord-card-id">#{sale.id}</span>
               <span className="ord-card-date">{fmtDate(sale.created_at)}</span>
+              {isMl &&
+                (sale.ml_account_nickname != null ||
+                  sale.ml_user_id != null) && (
+                <span
+                  className="ord-card-ml-seller"
+                  title={
+                    sale.ml_user_id != null
+                      ? `Cuenta ML (user_id): ${sale.ml_user_id}`
+                      : undefined
+                  }
+                >
+                  {sale.ml_account_nickname ??
+                    (sale.ml_user_id != null ? `ML #${sale.ml_user_id}` : "")}
+                </span>
+              )}
             </div>
 
             <div className="ord-card-body">
@@ -511,6 +563,19 @@ function OrdRow({ sale, selected, onRowClick, onRequestDispatch }: RowProps) {
                 <ClockIcon />
                 {elapsed}
               </span>
+              {isMl && onOpenMlMessaging && (
+                <button
+                  type="button"
+                  className="act-ml-btn"
+                  style={{ marginLeft: 6 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenMlMessaging(sale);
+                  }}
+                >
+                  ML Msg
+                </button>
+              )}
               <span className="ord-card-ves">
                 {usd > 0
                   ? `$${usd.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -579,6 +644,8 @@ interface OrdTableProps {
   onRowClick: (id: string | number) => void;
   selectedId: string | number | null;
   onRequestDispatch?: (sale: Sale) => void;
+  /** Abre modal de mensajería pack ML (solo filas Mercado Libre). */
+  onOpenMlMessaging?: (sale: Sale) => void;
   onClearFilters: () => void;
 }
 
@@ -588,6 +655,7 @@ export default function OrdTable({
   onRowClick,
   selectedId,
   onRequestDispatch,
+  onOpenMlMessaging,
   onClearFilters,
 }: OrdTableProps) {
   return (
@@ -642,6 +710,7 @@ export default function OrdTable({
               selected={selectedId === s.id}
               onRowClick={onRowClick}
               onRequestDispatch={onRequestDispatch}
+              onOpenMlMessaging={onOpenMlMessaging}
             />
           ))
         )}

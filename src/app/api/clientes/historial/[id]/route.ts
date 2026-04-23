@@ -19,10 +19,11 @@ const FORWARD_KEYS = ["source", "from", "to", "limit", "offset"] as const;
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const base = backendBase();
-  const id = encodeURIComponent(params.id);
+  const { id: idRaw } = await params;
+  const id = encodeURIComponent(idRaw);
   const incoming = req.nextUrl.searchParams;
   const qs = new URLSearchParams();
 

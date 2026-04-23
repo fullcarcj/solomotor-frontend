@@ -1,8 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useBandejaInbox } from "../BandejaInboxContext";
+import { BandejaTriajeUiContext } from "../BandejaTriajeUiContext";
 import {
   DEFAULT_TRIAJE_SELECTION,
   triajeSelectionToInboxFilters,
@@ -12,24 +13,6 @@ import {
   type ChannelIconVariant,
 } from "@/components/inbox/ChannelIcon";
 import "../bandeja-definitiva-theme.scss";
-
-const MOCK_SLA = { hot: 3, warn: 5, cold: 8 } as const;
-
-function FilterFunnelIcon() {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      aria-hidden="true"
-    >
-      <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
-    </svg>
-  );
-}
 
 function BroomIcon() {
   return (
@@ -60,7 +43,7 @@ interface Props {
 }
 
 /**
- * Chrome visual “bandeja definitiva”: pestañas, resumen SLA, filtros colapsables.
+ * Chrome visual “bandeja definitiva”: pestañas y filtros colapsables (disparador en lista).
  * La lista de chats vive en `children` para mantener la misma UI que el detalle.
  */
 export default function BandejaTriajeMock({ children }: Props) {
@@ -103,8 +86,18 @@ export default function BandejaTriajeMock({ children }: Props) {
     applySelection(new Set());
   }, [applySelection]);
 
+  const triajeUiValue = useMemo(
+    () => ({
+      filtersOpen,
+      setFiltersOpen,
+      activeTriajeFilterCount: activeFilterCount,
+    }),
+    [filtersOpen, activeFilterCount]
+  );
+
   return (
-    <div className="bd-triaje">
+    <BandejaTriajeUiContext.Provider value={triajeUiValue}>
+      <div className="bd-triaje">
       <div className="bd-tabs-wrap">
         <div className="bd-tabs" role="tablist" aria-label="Vistas de bandeja">
           <button
@@ -185,65 +178,20 @@ export default function BandejaTriajeMock({ children }: Props) {
         </div>
       </div>
 
-      <div className="bd-sla-chips" aria-label="Resumen SLA">
-        <div className="bd-sla-chip hot">
-          <span className="dot" />
-          Vencidos<span className="n">{MOCK_SLA.hot}</span>
-        </div>
-        <div className="bd-sla-chip warn">
-          <span className="dot" />
-          Por vencer<span className="n">{MOCK_SLA.warn}</span>
-        </div>
-        <div className="bd-sla-chip cold">
-          <span className="dot" />
-          A tiempo<span className="n">{MOCK_SLA.cold}</span>
-        </div>
-      </div>
-
-      <div className="bd-filters-block">
-        <button
-          type="button"
-          className={`bd-filters-head${filtersOpen ? " expanded" : ""}`}
-          onClick={() => setFiltersOpen((o) => !o)}
-          aria-expanded={filtersOpen}
-        >
-          <span className="lbl">
-            <FilterFunnelIcon />
-            Filtros
-            {activeFilterCount > 0 && (
-              <span className="counter-active">
-                {activeFilterCount} activos
-              </span>
-            )}
-          </span>
-          <span className="actions">
-            <span
-              className="bd-broom-btn"
-              title="Limpiar filtros"
-              role="button"
-              tabIndex={0}
-              onClick={(e) => {
-                e.stopPropagation();
-                clearFilters();
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  clearFilters();
-                }
-              }}
-            >
-              <BroomIcon />
-            </span>
-            <span className="bd-chevron" aria-hidden="true">
-              <i className="ti ti-chevron-down" />
-            </span>
-          </span>
-        </button>
-
-        {filtersOpen && (
+      {filtersOpen && (
+        <div className="bd-filters-block" id="bd-triaje-filters-panel">
           <div className="bd-filters-body">
+            <div className="bd-filters-toolbar-row">
+              <button
+                type="button"
+                className="bd-filters-clear-all"
+                title="Limpiar filtros de triaje"
+                onClick={() => clearFilters()}
+              >
+                <BroomIcon />
+                <span>Limpiar</span>
+              </button>
+            </div>
             <div className="bd-fg">
               <div className="bd-fg-title">Origen de venta</div>
               <div className="bd-f-opts">
@@ -407,12 +355,13 @@ export default function BandejaTriajeMock({ children }: Props) {
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="bd-triaje-list-slot flex-grow-1 min-h-0 d-flex flex-column overflow-hidden">
         {children}
       </div>
-    </div>
+      </div>
+    </BandejaTriajeUiContext.Provider>
   );
 }

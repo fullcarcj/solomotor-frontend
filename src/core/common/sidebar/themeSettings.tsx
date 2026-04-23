@@ -228,6 +228,12 @@ const ThemeSettings = () => {
     if (typeof window !== "undefined") {
       const userMenuElement = document.querySelector<HTMLElement>(".nav.user-menu");
       if (userMenuElement) {
+        /* Shell oscuro (dashboard / bandeja): el inline blanco tapaba toda la franja derecha. */
+        if (document.body.classList.contains("sm-dashboard-ref")) {
+          userMenuElement.style.removeProperty("background-color");
+          userMenuElement.style.removeProperty("background");
+          return;
+        }
         userMenuElement.style.backgroundColor = colorRgb
           ? typeof colorRgb === "string"
             ? colorRgb
@@ -242,6 +248,11 @@ const ThemeSettings = () => {
     if (typeof window !== "undefined") {
       const sidebarElement = document.querySelector<HTMLElement>(".sidebar");
       if (sidebarElement) {
+        if (document.body.classList.contains("sm-dashboard-ref")) {
+          sidebarElement.style.removeProperty("background-color");
+          sidebarElement.style.removeProperty("background");
+          return;
+        }
         sidebarElement.style.backgroundColor = colorRgb2
           ? typeof colorRgb2 === "string"
             ? colorRgb2

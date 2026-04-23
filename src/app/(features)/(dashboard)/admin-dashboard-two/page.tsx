@@ -1,9 +1,6 @@
-import Admindashboard from "@/components/dashboards/dashboard";
+import { redirect } from "next/navigation";
 
-export default function Dashboard(){
-    return (
-        <>
-        <Admindashboard />
-        </>
-    )
+/** Legacy: unificado en `/dashboard`. */
+export default function AdminDashboardTwoDeprecatedPage() {
+  redirect("/dashboard");
 }

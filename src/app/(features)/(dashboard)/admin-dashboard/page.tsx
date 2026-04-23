@@ -1,10 +1,6 @@
+import { redirect } from "next/navigation";
 
-import NewDashboard from "@/components/dashboards/newdashboard";
-
-export default function Dashboard(){
-    return (
-        <>
-        <NewDashboard />
-        </>
-    )
+/** Legacy: la app canónica vive en `/dashboard`. */
+export default function AdminDashboardDeprecatedPage() {
+  redirect("/dashboard");
 }

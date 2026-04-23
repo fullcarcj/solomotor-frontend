@@ -17,10 +17,11 @@ function backendBase(): string {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const base = backendBase();
-  const id = encodeURIComponent(params.id);
+  const { id: idRaw } = await params;
+  const id = encodeURIComponent(idRaw);
 
   try {
     const upstream = await fetch(`${base}/api/customers/${id}`, {

@@ -6,6 +6,11 @@ export interface RealtimeState {
   slaDeadlineByChat: Record<string, string | null>;
   /** Incrementa para que la lista de inbox vuelva a cargar (SSE / invalidación). */
   inboxRefetchNonce: number;
+  /**
+   * Ajuste temporal al contador "Sin atender" (p. ej. -1 tras marcar atendido con éxito).
+   * Se resetea a 0 cuando llegan conteos frescos desde el servidor.
+   */
+  inboxUnreadOptimisticDelta: number;
 }
 
 const initialState: RealtimeState = {
@@ -13,6 +18,7 @@ const initialState: RealtimeState = {
   urgentChats: {},
   slaDeadlineByChat: {},
   inboxRefetchNonce: 0,
+  inboxUnreadOptimisticDelta: 0,
 };
 
 const realtimeSlice = createSlice({
@@ -53,6 +59,16 @@ const realtimeSlice = createSlice({
     bumpInboxRefetch(state) {
       state.inboxRefetchNonce += 1;
     },
+    adjustInboxUnreadOptimisticDelta(state, action: PayloadAction<number>) {
+      const n = Number(action.payload);
+      if (!Number.isFinite(n) || n === 0) return;
+      state.inboxUnreadOptimisticDelta += n;
+      if (state.inboxUnreadOptimisticDelta > 0) state.inboxUnreadOptimisticDelta = 0;
+      if (state.inboxUnreadOptimisticDelta < -500) state.inboxUnreadOptimisticDelta = -500;
+    },
+    resetInboxUnreadOptimisticDelta(state) {
+      state.inboxUnreadOptimisticDelta = 0;
+    },
   },
 });
 
@@ -64,6 +80,8 @@ export const {
   setSlaDeadline,
   clearSlaDeadline,
   bumpInboxRefetch,
+  adjustInboxUnreadOptimisticDelta,
+  resetInboxUnreadOptimisticDelta,
 } = realtimeSlice.actions;
 
 export default realtimeSlice.reducer;

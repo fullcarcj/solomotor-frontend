@@ -73,7 +73,10 @@ export function useInbox(initialFilters?: Partial<InboxFilters>) {
       if (f.result) p.set("result", f.result);
       if (cursor)   p.set("cursor", cursor);
       p.set("limit", String(f.limit));
-      const res = await fetch(`/api/bandeja?${p}`, { credentials: "include" });
+      const res = await fetch(`/api/bandeja?${p}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
       if (!res.ok) {
         const d = await res.json().catch(() => ({})) as Record<string, unknown>;
         throw new Error((d.error as string) ?? `HTTP ${res.status}`);
@@ -141,5 +144,26 @@ export function useInbox(initialFilters?: Partial<InboxFilters>) {
 
   const refetch = useCallback(() => { void load(filters, undefined, true); }, [load, filters]);
 
-  return { chats, nextCursor, hasMore, total, loading, loadingMore, error, filters, setFilters, loadMore, refetch };
+  /** Actualiza un chat en la lista sin esperar al GET (p. ej. marcar atendido con PATCH OK). */
+  const patchChat = useCallback((chatId: string | number, partial: Partial<InboxChat>) => {
+    const id = String(chatId);
+    setChats((prev) =>
+      prev.map((c) => (String(c.id) === id ? { ...c, ...partial } : c))
+    );
+  }, []);
+
+  return {
+    chats,
+    nextCursor,
+    hasMore,
+    total,
+    loading,
+    loadingMore,
+    error,
+    filters,
+    setFilters,
+    loadMore,
+    refetch,
+    patchChat,
+  };
 }

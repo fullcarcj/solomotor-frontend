@@ -35,8 +35,13 @@ const nextConfig = {
       /** Raíz: solo App Router `(auth)/signin` — no usar rewrites a /pages (evita mezcla con manifiestos). */
       { source: "/", destination: "/signin", permanent: false },
       {
+        source: "/admin-dashboard",
+        destination: "/dashboard",
+        permanent: false,
+      },
+      {
         source: "/admin-dashboard-two",
-        destination: "/admin-dashboard",
+        destination: "/dashboard",
         permanent: false,
       },
       /** Legacy DreamPOS: rutas eliminadas; pedidos omnicanal en ERP */

@@ -190,7 +190,7 @@ const CollapsedSidebar = () => {
                 </Link>
                 <ul style={{ display: isActive ? "block" : "none" }}>
                   <li>
-                    <Link href="/admin-dashboard">Admin Dashboard</Link>
+                    <Link href="/dashboard">Dashboard</Link>
                   </li>
                   <li>
                     <Link href="sales-dashboard">Sales Dashboard</Link>

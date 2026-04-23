@@ -123,3 +123,52 @@ export interface AiResponderLogResponse {
   ok:   boolean;
   rows: AiResponderLogRow[];
 }
+
+// ── Ops logs (/api/ai-responder/ops-logs) ─────────────────────────────────
+
+export interface AiUsageLogRow {
+  id:             number;
+  provider_id:    string;
+  function_called: string;
+  tokens_input:   number | null;
+  tokens_output:  number | null;
+  latency_ms:     number | null;
+  success:        boolean;
+  error_message:  string | null;
+  created_at:     string;
+}
+
+export interface AiReceiptAttemptRow {
+  id:                   number;
+  chat_id:              number | null;
+  customer_id:          number | null;
+  firebase_url:         string | null;
+  is_receipt:           boolean | null;
+  prefiler_score:       string | number | null;
+  prefiler_reason:      string | null;
+  extracted_reference:  string | null;
+  extracted_amount_bs:  string | number | null;
+  extracted_date:       string | null;
+  extraction_confidence: string | number | null;
+  /** Resultado del extractor Gemini: ok, parsed_empty, vision_error, json_parse, … */
+  extraction_status: string | null;
+  /** Mensaje de error o explicación cuando la extracción no fue útil. */
+  extraction_error: string | null;
+  /** Recorte de la respuesta del modelo si falló el parseo JSON (diagnóstico). */
+  extraction_raw_snippet: string | null;
+  reconciliation_status: string | null;
+  reconciled_order_id:  number | null;
+  created_at:           string;
+  /** Derivado en backend según estado de extracción y conciliación. */
+  pipeline_error_type:  string;
+}
+
+export interface AiResponderOpsLogsResponse {
+  ok:                   boolean;
+  days?:                number;
+  name_analysis_logs:   AiUsageLogRow[];
+  receipt_vision_logs:  AiUsageLogRow[];
+  receipt_attempts:     AiReceiptAttemptRow[];
+  receipt_schema_note?: string | null;
+  error?:               string;
+}

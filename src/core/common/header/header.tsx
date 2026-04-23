@@ -186,19 +186,6 @@ export default function Header() {
             </li>
             {/* /Search */}
 
-            {/* Theme customizer (offcanvas) — mismo disparador que antes en sidebar-contact, ahora en barra para no tapar contenido */}
-            <li className="nav-item nav-item-box">
-              <Link
-                href="#"
-                data-bs-toggle="offcanvas"
-                data-bs-target="#theme-setting"
-                onClick={(e) => e.preventDefault()}
-                aria-label="Personalización de tema"
-              >
-                <i className="fa fa-cog fa-w-16 fa-spin" />
-              </Link>
-            </li>
-
             {/* Select Store */}
             <li className="nav-item dropdown has-arrow main-drop select-store-dropdown">
               <Link
@@ -548,6 +535,18 @@ export default function Header() {
               </div>
             </li>
             {/* /Notifications */}
+            {/* Theme customizer (offcanvas) — a la derecha, como en el template DreamPOS */}
+            <li className="nav-item nav-item-box">
+              <Link
+                href="#"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#theme-setting"
+                onClick={(e) => e.preventDefault()}
+                aria-label="Personalización de tema"
+              >
+                <i className="fa fa-cog fa-w-16 fa-spin" />
+              </Link>
+            </li>
             <li className="nav-item nav-item-box">
               <Link href="/general-settings">
                 {/* <i data-feather="settings" /> */}

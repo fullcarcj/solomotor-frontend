@@ -141,94 +141,6 @@
     }
   }
 
-  /* SLA chips */
-  .bd-sla-chips {
-    display: flex;
-    gap: 6px;
-    padding: 0 16px 12px;
-    flex-wrap: wrap;
-    flex-shrink: 0;
-  }
-  .bd-sla-chip {
-    flex: 1;
-    min-width: 0;
-    padding: 8px 10px;
-    border-radius: 10px;
-    cursor: default;
-    background: var(--bd-panel-2);
-    border: 1px solid var(--bd-border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    font-size: 10.5px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    font-family: "JetBrains Mono", monospace;
-  }
-  .bd-sla-chip .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-  .bd-sla-chip .n {
-    font-size: 13px;
-    font-weight: 800;
-    letter-spacing: 0;
-    padding: 1px 6px;
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.05);
-  }
-  .bd-sla-chip.hot {
-    color: #fca5a5;
-    border-color: rgba(239, 68, 68, 0.3);
-    background: rgba(239, 68, 68, 0.08);
-  }
-  .bd-sla-chip.hot .dot {
-    background: #ef4444;
-    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
-    animation: bd-pulse 2s infinite;
-  }
-  .bd-sla-chip.hot .n {
-    background: rgba(239, 68, 68, 0.15);
-    color: #ef4444;
-  }
-  .bd-sla-chip.warn {
-    color: #fcd34d;
-    border-color: rgba(245, 158, 11, 0.25);
-    background: rgba(245, 158, 11, 0.05);
-  }
-  .bd-sla-chip.warn .dot {
-    background: #f59e0b;
-  }
-  .bd-sla-chip.warn .n {
-    background: rgba(245, 158, 11, 0.15);
-    color: #fcd34d;
-  }
-  .bd-sla-chip.cold {
-    color: #93c5fd;
-    border-color: rgba(59, 130, 246, 0.25);
-    background: rgba(59, 130, 246, 0.04);
-  }
-  .bd-sla-chip.cold .dot {
-    background: #3b82f6;
-  }
-  .bd-sla-chip.cold .n {
-    background: rgba(59, 130, 246, 0.15);
-    color: #93c5fd;
-  }
-  @keyframes bd-pulse {
-    0%,
-    100% {
-      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
-    }
-    50% {
-      box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.05);
-    }
-  }
-
   /* ── Header compacto (embedded: búsqueda + count + badge bot) ── */
   .bd-compact-header {
     display:        flex;
@@ -280,6 +192,113 @@
     border-radius:  5px;
     padding:        1px 5px;
     white-space:    nowrap;
+  }
+
+  /* Pestañas de conteo alineadas al buscador (mismos tokens --bd-*) */
+  .bd-compact-header .bandeja-inbox-toolbar--inline {
+    .bandeja-inbox-clear {
+      color: var(--bd-text-dim);
+      &:hover {
+        background: var(--bd-panel-2);
+        color: var(--bd-text);
+      }
+    }
+    .btn.bandeja-inbox-tab {
+      border-color: var(--bd-border);
+      background: var(--bd-panel-2);
+      color: var(--bd-text-dim);
+      &:hover {
+        background: var(--bd-panel-3);
+        color: var(--bd-text);
+        border-color: var(--bd-text-faint);
+      }
+      &.active {
+        background: rgba(197, 242, 74, 0.12);
+        border-color: var(--bd-accent);
+        color: var(--bd-text);
+        .ti {
+          color: var(--bd-accent);
+        }
+      }
+      .bandeja-inbox-tab__n {
+        background: var(--bd-panel) !important;
+        color: var(--bd-text) !important;
+        border-color: var(--bd-border);
+      }
+      &.active .bandeja-inbox-tab__n {
+        background: var(--bd-accent) !important;
+        color: #141810 !important;
+        border-color: transparent;
+      }
+    }
+  }
+
+  .bd-triaje-filters-trigger {
+    position:        relative;
+    display:         inline-flex;
+    align-items:     center;
+    justify-content: center;
+    gap:             1px;
+    flex-shrink:     0;
+    height:          30px;
+    min-width:       34px;
+    padding:         0 5px;
+    border:          1px solid var(--bd-border);
+    border-radius:   8px;
+    background:      var(--bd-panel-2);
+    color:           var(--bd-text-dim);
+    cursor:          pointer;
+    &:hover {
+      background:   var(--bd-panel-3);
+      color:        var(--bd-text);
+      border-color: var(--bd-text-faint);
+    }
+    .ti-chevron-down {
+      font-size:  13px;
+      opacity:    0.9;
+      transition: transform 0.15s ease;
+    }
+    &.is-open .ti-chevron-down {
+      transform: rotate(180deg);
+    }
+  }
+  .bd-triaje-filters-trigger__dot {
+    position:      absolute;
+    top:           4px;
+    right:         3px;
+    width:         6px;
+    height:        6px;
+    border-radius: 50%;
+    background:    var(--bd-accent);
+  }
+
+  .bd-filters-toolbar-row {
+    display:         flex;
+    justify-content: flex-end;
+    margin-bottom:   10px;
+    padding-bottom:  8px;
+    border-bottom:   1px solid var(--bd-border);
+  }
+  .bd-filters-clear-all {
+    display:         inline-flex;
+    align-items:     center;
+    gap:             6px;
+    padding:         4px 10px;
+    font-size:       11px;
+    font-weight:     600;
+    color:           var(--bd-text-dim);
+    background:      var(--bd-panel-3);
+    border:          1px solid var(--bd-border);
+    border-radius:   7px;
+    cursor:          pointer;
+    &:hover {
+      color:      var(--bd-text);
+      background: rgba(255, 255, 255, 0.04);
+    }
+    svg {
+      width:  14px;
+      height: 14px;
+    }
   }
 
   /* search (heredado del mockup — mantenido por si se usa fuera del embedded) */
@@ -756,6 +775,34 @@
     opacity: 0.7;
     letter-spacing: 0;
   }
+
+  /** Bandeja lista: enlace a Ventas → Pedidos (mensajes pack ML). */
+  .bd-ir-venta-btn {
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(99, 102, 241, 0.45);
+    background: rgba(99, 102, 241, 0.12);
+    color: #a5b4fc;
+    cursor: pointer;
+    line-height: 1.2;
+    flex-shrink: 0;
+    font-family: "JetBrains Mono", monospace;
+  }
+  .bd-ir-venta-btn:hover {
+    background: rgba(99, 102, 241, 0.22);
+    color: #c7d2fe;
+    border-color: rgba(129, 140, 248, 0.55);
+  }
+  .bd-ir-venta-btn:disabled {
+    opacity: 0.55;
+    cursor: wait;
+    pointer-events: none;
+  }
+
   .bd-status.st-01 {
     background: rgba(197, 242, 74, 0.14);
     color: var(--s01);

@@ -1,10 +1,11 @@
 
 export const all_routes = {
-  newdashboard: "/admin-dashboard",
-  /** Home tras login / logos: mismo que Admin Dashboard (evitar admin-dashboard-two). */
-  dashboard: "/admin-dashboard",
-  /** Dashboard ERP — KPIs, alertas, tiempo real */
+  /** Home canónico (post-login, logos, enlaces “Dashboard”). */
+  newdashboard: "/dashboard",
+  dashboard: "/dashboard",
+  /** Alias explícito del mismo destino (ERP + bloques DreamPOS). */
   erpDashboard: "/dashboard",
+  /** Ruta legacy; usar `redirect` / next.config → `/dashboard`. */
   admindashboardtwo: "/admin-dashboard-two",
   productlist: "/product-list",
   addproduct: "/add-product",

@@ -3,6 +3,7 @@ import {
   useCallback, useEffect, useRef, useState,
   type CSSProperties, type FormEvent,
 } from "react";
+import { invalidateChatContextClientCache } from "@/hooks/useChatContext";
 
 const ID_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: "", label: "Sin definir" },
@@ -212,6 +213,8 @@ export default function EditCustomerModal({
               : `Error ${res.status}`;
         throw new Error(msg);
       }
+      // Invalidar caché de módulo para que el panel muestre datos frescos tras editar.
+      if (customerId != null) invalidateChatContextClientCache(customerId);
       onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al guardar");

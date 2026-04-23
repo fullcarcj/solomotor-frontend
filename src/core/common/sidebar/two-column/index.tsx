@@ -205,7 +205,7 @@ const TwoColumnSidebar = () => {
                                         </li>
                                         <li>
                                             <Link href={route.newdashboard} className="active">
-                                                Admin Dashboard
+                                                Dashboard
                                             </Link>
                                         </li>
                                         <li>

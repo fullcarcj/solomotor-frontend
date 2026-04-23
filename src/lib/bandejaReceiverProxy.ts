@@ -3,6 +3,15 @@ import type { NextRequest } from "next/server";
 const BACKEND_URL =
   process.env.BACKEND_URL ?? process.env.WEBHOOK_RECEIVER_BASE_URL ?? "http://localhost:3001";
 
+/**
+ * Logs del BFF (URL, status, cuerpos JSON) en la terminal del servidor Next.
+ * Por defecto apagado: `DEBUG_BFF=1` o `DEBUG_BFF=true` en `.env.local` para depurar.
+ */
+export function isBandejaBffVerbose(): boolean {
+  const v = (process.env.DEBUG_BFF ?? "").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
 /** Base del webhook-receiver (mismo criterio que `api/bandeja/.../messages`). */
 export function receiverBase(): string {
   const r = BACKEND_URL.trim().replace(/\/+$/, "");

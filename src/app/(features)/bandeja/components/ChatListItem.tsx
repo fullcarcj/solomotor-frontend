@@ -7,10 +7,12 @@ import { bandejaMlQuestionPipelineStage, normalizeChatStage } from "@/types/inbo
 import ExceptionBadge from "@/components/bandeja/ExceptionBadge";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
+  adjustInboxUnreadOptimisticDelta,
   bumpInboxRefetch,
   clearUrgent,
 } from "@/store/realtimeSlice";
 import MlOrderMessagingModal from "@/app/(features)/ventas/pedidos/components/MlOrderMessagingModal";
+import { useBandejaInbox } from "../BandejaInboxContext";
 
 // ─── Origin helpers ────────────────────────────────────────────────────────────
 
@@ -222,19 +224,21 @@ interface Props {
 export default function ChatListItem({ chat, active }: Props) {
   const router   = useRouter();
   const dispatch = useAppDispatch();
+  const { patchChat } = useBandejaInbox();
   const [mlPackSale, setMlPackSale] = useState<{
     saleId: string;
     externalHint: string | null;
   } | null>(null);
   const [mlPackBusy, setMlPackBusy] = useState(false);
   const [mlPackErr, setMlPackErr]   = useState<string | null>(null);
+  const [markAttendedBusy, setMarkAttendedBusy] = useState(false);
   const myUserId            = useAppSelector((s) => s.auth.userId);
   const presence            = useAppSelector((s) => s.realtime.presenceByChat[String(chat.id)]);
   const urgentRedux         = useAppSelector((s) => s.realtime.urgentChats[String(chat.id)]);
 
   const isUrgent = Boolean(urgentRedux || chat.is_urgent);
-  /** P1: pendiente de respuesta = último mensaje inbound (misma regla que campana “Sin atender”). */
-  const waitingReply = Boolean(chat.customer_waiting_reply);
+  /** P1: pendiente de respuesta (solo `true` explícito; evita strings truthy del JSON). */
+  const waitingReply = chat.customer_waiting_reply === true;
 
   const displayName = chat.customer_name ?? chat.phone;
   const preview = chat.last_message_text
@@ -322,6 +326,29 @@ export default function ChatListItem({ chat, active }: Props) {
       router.push(href);
     },
     [chat.id, dispatch, href, router]
+  );
+
+  const onMarkAttendedClick = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!waitingReply || markAttendedBusy) return;
+      setMarkAttendedBusy(true);
+      try {
+        const res = await fetch(
+          `/api/bandeja/${encodeURIComponent(String(chat.id))}/mark-attended`,
+          { method: "PATCH", credentials: "include", cache: "no-store" }
+        );
+        if (res.ok) {
+          patchChat(chat.id, { customer_waiting_reply: false });
+          dispatch(adjustInboxUnreadOptimisticDelta(-1));
+          dispatch(bumpInboxRefetch());
+        }
+      } finally {
+        setMarkAttendedBusy(false);
+      }
+    },
+    [waitingReply, markAttendedBusy, chat.id, dispatch, patchChat]
   );
 
   return (
@@ -431,15 +458,27 @@ export default function ChatListItem({ chat, active }: Props) {
             </div>
           </div>
 
-          {/* Pendiente atención (P1): último mensaje del cliente sin respuesta */}
+          {/* Pendiente atención (P1): clic marca atendido si respondieron fuera del hilo */}
           {waitingReply && (
-            <div
+            <button
+              type="button"
               className="bd-unread-count"
-              aria-label="Pendiente de respuesta"
-              title="El último mensaje es del cliente — pendiente de respuesta"
+              aria-label="Marcar como atendido"
+              title="Último mensaje del cliente. Clic si ya respondieron por fuera (ML, teléfono, etc.); el aviso vuelve si llega un mensaje nuevo del cliente."
+              disabled={markAttendedBusy}
+              onClick={(e) => void onMarkAttendedClick(e)}
+              style={{
+                border: "none",
+                cursor: markAttendedBusy ? "wait" : "pointer",
+                font: "inherit",
+                padding: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              1
-            </div>
+              {markAttendedBusy ? "…" : "1"}
+            </button>
           )}
         </div>
       </Link>

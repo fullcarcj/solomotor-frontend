@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSales } from "@/hooks/useSales";
 import type { Sale } from "@/types/sales";
 import SaleDetailModal from "./components/SaleDetailModal";
@@ -11,13 +12,23 @@ import PedidosFiltersBar from "./components/PedidosFiltersBar";
 import type { ActiveFilter } from "./components/PedidosFiltersBar";
 import PedidosKpiRibbon from "./components/PedidosKpiRibbon";
 import OrdTable from "./components/OrdTable";
+import MlOrderMessagingModal from "./components/MlOrderMessagingModal";
 import "./pedidos-theme.scss";
 
-export default function VentasPedidosPage() {
+/** Destino del modal de mensajes pack ML (tabla o deep-link desde bandeja). */
+type MlPackModalTarget = {
+  saleId: string | number;
+  externalHint?: string | null;
+};
+
+function VentasPedidosPageInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { sales, meta, loading, error, setFilters, refetch } = useSales();
 
   const [selectedId, setSelectedId] = useState<string | number | null>(null);
   const [dispatchSale, setDispatchSale] = useState<Sale | null>(null);
+  const [mlPackModal, setMlPackModal] = useState<MlPackModalTarget | null>(null);
   const [dispatchToast, setDispatchToast] = useState(false);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
@@ -30,6 +41,64 @@ export default function VentasPedidosPage() {
 
   const isInitialLoad = loading && !hasData;
   const isRefetching = loading && hasData;
+
+  /** Query opcional (?open_ml_pack= / ?open_ml_order_id=) p. ej. enlaces guardados. */
+  useEffect(() => {
+    const stripKeys = (keys: string[]) => {
+      const next = new URLSearchParams(searchParams.toString());
+      for (const k of keys) next.delete(k);
+      const q = next.toString();
+      router.replace(q ? `/ventas/pedidos?${q}` : "/ventas/pedidos", { scroll: false });
+    };
+
+    const rawPack = searchParams.get("open_ml_pack");
+    if (rawPack != null && String(rawPack).trim() !== "") {
+      const saleId = String(rawPack).trim();
+      const ext = searchParams.get("ml_ext");
+      setMlPackModal({
+        saleId,
+        externalHint: ext != null && String(ext).trim() !== "" ? String(ext).trim() : null,
+      });
+      stripKeys(["open_ml_pack", "ml_ext", "open_ml_order_id"]);
+      return;
+    }
+
+    const rawMlOid = searchParams.get("open_ml_order_id");
+    if (rawMlOid == null || String(rawMlOid).trim() === "") return;
+
+    let cancelled = false;
+    const oid = String(rawMlOid).trim();
+
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/ventas/pedidos/resolve-ml-order?ml_order_id=${encodeURIComponent(oid)}`,
+          { credentials: "include", cache: "no-store" }
+        );
+        const j = (await res.json().catch(() => ({}))) as {
+          data?: { id?: string; external_order_id?: string | null };
+          error?: string;
+          message?: string;
+        };
+        if (cancelled) return;
+        if (res.ok && j.data?.id) {
+          setMlPackModal({
+            saleId: String(j.data.id).trim(),
+            externalHint:
+              j.data.external_order_id != null && String(j.data.external_order_id).trim() !== ""
+                ? String(j.data.external_order_id).trim()
+                : null,
+          });
+        }
+      } finally {
+        if (!cancelled) stripKeys(["open_ml_order_id"]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, router]);
 
   // Map filter pill → useSales filter params
   const handleFilterChange = useCallback(
@@ -184,6 +253,9 @@ export default function VentasPedidosPage() {
               onRowClick={setSelectedId}
               selectedId={selectedId}
               onRequestDispatch={setDispatchSale}
+              onOpenMlMessaging={(s) =>
+                setMlPackModal({ saleId: s.id, externalHint: s.external_order_id })
+              }
               onClearFilters={() => handleFilterChange("all")}
             />
           </div>
@@ -195,6 +267,14 @@ export default function VentasPedidosPage() {
         saleId={selectedId}
         onClose={() => setSelectedId(null)}
       />
+
+      {mlPackModal != null && (
+        <MlOrderMessagingModal
+          saleId={mlPackModal.saleId}
+          externalHint={mlPackModal.externalHint ?? undefined}
+          onClose={() => setMlPackModal(null)}
+        />
+      )}
 
       <RequestDispatchModal
         saleId={dispatchSale?.id ?? null}
@@ -234,5 +314,21 @@ export default function VentasPedidosPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function VentasPedidosPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="page-wrapper">
+          <div className="content p-0">
+            <div className="pedidos-page p-4 text-muted small">Cargando pedidos…</div>
+          </div>
+        </div>
+      }
+    >
+      <VentasPedidosPageInner />
+    </Suspense>
   );
 }

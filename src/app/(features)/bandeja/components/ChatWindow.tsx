@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import type { ChatMessage } from "@/types/inbox";
 import MessageBubble from "./MessageBubble";
 
@@ -37,13 +37,42 @@ interface Props {
   messages:    ChatMessage[];
   loading:     boolean;
   loadingMore: boolean;
+  /** Cambio de chat: carga silenciosa sin skeleton de pantalla completa. */
+  bootstrapping?: boolean;
+  /** Id de chat activo: scroll al final al cambiar (misma UX que /workspace). */
+  chatKey?:    string | number | null;
   error:       string | null;
   onLoadMore:  () => void;
 }
 
-export default function ChatWindow({ messages, loading, loadingMore, error, onLoadMore }: Props) {
+export default function ChatWindow({
+  messages,
+  loading,
+  loadingMore,
+  bootstrapping = false,
+  chatKey = null,
+  error,
+  onLoadMore,
+}: Props) {
+  const rootRef   = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevLen   = useRef(0);
+  const lastChatKeyRef = useRef<string | number | null>(null);
+
+  useLayoutEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const switched =
+      chatKey != null &&
+      String(lastChatKeyRef.current ?? "") !== String(chatKey);
+    if (switched) {
+      lastChatKeyRef.current = chatKey;
+      prevLen.current = messages.length;
+      el.scrollTop = el.scrollHeight;
+    }
+    // Mensajes nuevos: scroll suave en useEffect(messages.length), no aquí.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatKey]);
 
   useEffect(() => {
     if (messages.length > prevLen.current) {
@@ -52,7 +81,7 @@ export default function ChatWindow({ messages, loading, loadingMore, error, onLo
     prevLen.current = messages.length;
   }, [messages.length]);
 
-  if (loading) {
+  if (loading && messages.length === 0) {
     return (
       <div className="bandeja-chat-window flex-grow-1" style={{ padding: "16px 12px", display: "flex", flexDirection: "column", gap: 12 }}>
         {/* Skeletons con forma de burbujas para que el usuario sienta que hay conversación */}
@@ -82,6 +111,24 @@ export default function ChatWindow({ messages, loading, loadingMore, error, onLo
     );
   }
 
+  if (bootstrapping && messages.length === 0 && !loading) {
+    return (
+      <div
+        ref={rootRef}
+        className="bandeja-chat-window flex-grow-1 d-flex align-items-center justify-content-center"
+        style={{ padding: "24px 12px", minHeight: 120 }}
+        aria-busy="true"
+        aria-label="Cargando mensajes"
+      >
+        <div
+          className="spinner-border text-secondary"
+          style={{ width: "1.75rem", height: "1.75rem", opacity: 0.85 }}
+          role="status"
+        />
+      </div>
+    );
+  }
+
   if (error) {
     return (
       <div className="bandeja-chat-window flex-grow-1 d-flex align-items-center justify-content-center p-3">
@@ -93,7 +140,7 @@ export default function ChatWindow({ messages, loading, loadingMore, error, onLo
   const groups = buildGroups(messages);
 
   return (
-    <div className="bandeja-chat-window flex-grow-1">
+    <div ref={rootRef} className="bandeja-chat-window flex-grow-1">
       {messages.length >= 50 && (
         <div className="text-center py-2">
           <button

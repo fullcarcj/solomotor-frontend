@@ -1,7 +1,10 @@
 "use client";
 
 /**
- * PaymentLinkPanel — Sección "Comprobantes y conciliación" (misma cabecera colapsable que Cotización).
+ * PaymentLinkPanel — Sección "Comprobantes y conciliación".
+ *
+ * **Layout canónico** de la franja colapsable: tokens en
+ * `bandeja/components/operativeFranjaShared.tsx` (extraídos de este panel).
  *
  * Muestra todos los comprobantes de pago recibidos por WhatsApp para el chat/cliente
  * que aún no tienen match con una orden o cotización (reconciliation_status ≠ matched).
@@ -11,6 +14,13 @@
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useTodayRate } from "@/hooks/useTodayRate";
+import {
+  OP_FRANJA_SECTION,
+  opFranjaHeader,
+  opFranjaIconBox,
+  OP_FRANJA_BODY_SCROLL,
+  OpFranjaChevron,
+} from "@/app/(features)/bandeja/components/operativeFranjaShared";
 import PendingStatementCreditsModal, {
   type PendingStatementItem,
 } from "./PendingStatementCreditsModal";
@@ -46,6 +56,17 @@ export interface PaymentLinkPanelProps {
   activeQuotationTotalUsd?: number | null;
 }
 
+/** Respuesta mínima de `GET /api/inbox/:chatId/ml-order` para referencia en Bs. sin cotización ERP. */
+interface MlOrderRefPayload {
+  ml_order_id: number | string;
+  total_amount: number | null;
+  currency_id: string | null;
+  not_synced?: boolean;
+  /** Si `ml_orders` aún no tiene la fila: total en Bs. desde `sales_orders` del mismo chat. */
+  reference_fallback_bs?: number | null;
+  reference_fallback_source?: string | null;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmtBs(raw: string | null): string {
@@ -59,6 +80,10 @@ function fmtBs(raw: string | null): string {
 const TOL_BANK_STATEMENT_BS = 0.05;
 function tolQuotationVsAttemptBs(quotationBs: number): number {
   return Math.max(1, Math.abs(quotationBs) * 0.005);
+}
+/** Orden ML (backend `link-bank-statement`): ±2,5 % mín. 5 Bs — envío ML / pagos fuera de plataforma (p. ej. motorizado). */
+function tolMlOrderVsBs(referenceBs: number): number {
+  return Math.max(5, Math.abs(referenceBs) * 0.025);
 }
 
 function parseAmountBs(raw: string | null | undefined): number | null {
@@ -86,53 +111,6 @@ function statusLabel(s: string): { text: string; color: string } {
 // ── Estilos ───────────────────────────────────────────────────────────────────
 
 const S = {
-  section: {
-    borderRadius: 10,
-    border: "1px solid var(--mu-border, rgba(255,255,255,0.08))",
-    overflow: "visible",
-    marginBottom: 6,
-    background: "var(--mu-panel-2, #1c222b)",
-  } as CSSProperties,
-
-  header: (open: boolean) => ({
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    padding: "10px 14px",
-    cursor: "pointer",
-    userSelect: "none" as const,
-    background: open
-      ? "linear-gradient(180deg, var(--mu-panel-3, #232a35), var(--mu-panel-2, #1c222b))"
-      : "transparent",
-    borderBottom: open ? "1px solid var(--mu-border, rgba(255,255,255,0.08))" : "none",
-    transition: "background 0.15s",
-    borderRadius: open ? "10px 10px 0 0" : 10,
-  }),
-
-  icon: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    background: "rgba(147,197,253,0.1)",
-    border: "1px solid rgba(147,197,253,0.25)",
-    color: "#93c5fd",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  } as CSSProperties,
-
-  body: {
-    padding: "12px 14px",
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: 10,
-    maxHeight: "min(55vh, 480px)",
-    overflowY: "auto" as const,
-    borderBottomLeftRadius: 10,
-    borderBottomRightRadius: 10,
-  },
-
   card: {
     borderRadius: 8,
     border: "1px solid var(--mu-border, rgba(255,255,255,0.08))",
@@ -238,13 +216,6 @@ const SvgPayment = () => (
   </svg>
 );
 
-const SvgChevron = ({ open }: { open: boolean }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}
-       style={{ width: 13, height: 13, transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "rotate(0deg)" }}>
-    <path d="m6 9 6 6 6-6" />
-  </svg>
-);
-
 const SvgImage = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}
        style={{ width: 20, height: 20 }}>
@@ -308,6 +279,8 @@ export default function PaymentLinkPanel({
       ? activeQuotationTotalUsd * vesPerUsd
       : null;
 
+  const [mlOrderRef, setMlOrderRef] = useState<MlOrderRefPayload | null>(null);
+
   const [isOpen, setIsOpen]       = useState(false);
   const [attempts, setAttempts]   = useState<PaymentAttempt[]>([]);
   const [loading, setLoading]     = useState(false);
@@ -345,8 +318,66 @@ export default function PaymentLinkPanel({
     setDraftAttemptId(null);
     setStmtLinkError(null);
     setStmtLinkOkMsg(null);
+    setMlOrderRef(null);
     void load();
   }, [chatId, customerId, load]);
+
+  /** Total orden ML en Bs. (misma lógica que `inboxApiHandler` al vincular extracto). */
+  useEffect(() => {
+    if (!chatId) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/inbox/${encodeURIComponent(chatId)}/ml-order`, {
+          credentials: "include",
+          cache: "no-store",
+        });
+        const j = (await res.json().catch(() => null)) as MlOrderRefPayload | null | unknown;
+        if (!alive || !j || typeof j !== "object" || !("ml_order_id" in j)) return;
+        const row = j as MlOrderRefPayload;
+        if (row.not_synced) {
+          const fb = row.reference_fallback_bs != null ? Number(row.reference_fallback_bs) : NaN;
+          if (Number.isFinite(fb) && fb > 0) setMlOrderRef(row);
+          return;
+        }
+        if (row.total_amount == null) return;
+        setMlOrderRef(row);
+      } catch {
+        if (alive) setMlOrderRef(null);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [chatId]);
+
+  const mlOrderBs = useMemo(() => {
+    if (!mlOrderRef) return null;
+    if (mlOrderRef.not_synced && mlOrderRef.reference_fallback_bs != null) {
+      const fb = Number(mlOrderRef.reference_fallback_bs);
+      return Number.isFinite(fb) && fb > 0 ? fb : null;
+    }
+    if (mlOrderRef.total_amount == null) return null;
+    const ta = Number(mlOrderRef.total_amount);
+    if (!Number.isFinite(ta)) return null;
+    const cur = String(mlOrderRef.currency_id || "").toUpperCase();
+    if (cur === "VES" || cur === "VEF") return ta;
+    if ((cur === "USD" || cur === "US$") && vesPerUsd != null && Number.isFinite(vesPerUsd) && vesPerUsd > 0) {
+      return ta * vesPerUsd;
+    }
+    return null;
+  }, [mlOrderRef, vesPerUsd]);
+
+  /** Prioridad: cotización ERP; si no hay, total orden ML vinculada (comparación en conciliación). */
+  const referenceBs = quotationBs ?? mlOrderBs;
+  const referenceSource: "quotation" | "ml_order" | null =
+    quotationBs != null ? "quotation" : mlOrderBs != null ? "ml_order" : null;
+
+  const tolReferenceBs = useCallback(
+    (bs: number) =>
+      referenceSource === "ml_order" ? tolMlOrderVsBs(bs) : tolQuotationVsAttemptBs(bs),
+    [referenceSource]
+  );
 
   // Refresco al expandir
   useEffect(() => {
@@ -401,18 +432,30 @@ export default function PaymentLinkPanel({
         `El monto del comprobante (${fmtBs(String(attBs))}) no coincide con el del extracto (${fmtBs(String(stmtBs))}) — diferencia Bs. ${Math.abs(attBs - stmtBs).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`
       );
     }
-    if (quotationBs != null && attBs != null && Math.abs(attBs - quotationBs) > tolQuotationVsAttemptBs(quotationBs)) {
-      lines.push(
-        `El monto del comprobante (${fmtBs(String(attBs))}) no coincide con el total de la cotización en bolívares (${fmtBs(String(quotationBs))}, tasa del día) — revisá antes de confirmar.`
-      );
+    if (referenceBs != null && attBs != null && Math.abs(attBs - referenceBs) > tolReferenceBs(referenceBs)) {
+      if (referenceSource === "ml_order" && mlOrderRef) {
+        lines.push(
+          `El monto del comprobante (${fmtBs(String(attBs))}) se aleja del total de la orden Mercado Libre en bolívares (${fmtBs(String(referenceBs))}, orden #${String(mlOrderRef.ml_order_id)}) — tolerancia amplia (±2,5 %) por envío en ML o cobros fuera de la plataforma (p. ej. carrera de motorizado). Revisá antes de confirmar.`
+        );
+      } else {
+        lines.push(
+          `El monto del comprobante (${fmtBs(String(attBs))}) no coincide con el total de la cotización en bolívares (${fmtBs(String(referenceBs))}, tasa del día) — revisá antes de confirmar.`
+        );
+      }
     }
-    if (quotationBs != null && stmtBs != null && Math.abs(stmtBs - quotationBs) > tolQuotationVsAttemptBs(quotationBs)) {
-      lines.push(
-        `El monto del extracto (${fmtBs(String(stmtBs))}) no coincide con el total de la cotización en bolívares (${fmtBs(String(quotationBs))}).`
-      );
+    if (referenceBs != null && stmtBs != null && Math.abs(stmtBs - referenceBs) > tolReferenceBs(referenceBs)) {
+      if (referenceSource === "ml_order" && mlOrderRef) {
+        lines.push(
+          `El monto del extracto (${fmtBs(String(stmtBs))}) se aleja del total de la orden Mercado Libre en bolívares (${fmtBs(String(referenceBs))}, orden #${String(mlOrderRef.ml_order_id)}) — ver nota de tolerancia (envío ML / motorizado u otros fuera de ML).`
+        );
+      } else {
+        lines.push(
+          `El monto del extracto (${fmtBs(String(stmtBs))}) no coincide con el total de la cotización en bolívares (${fmtBs(String(referenceBs))}).`
+        );
+      }
     }
     return lines;
-  }, [draftStatement, draftAttempt, quotationBs]);
+  }, [draftStatement, draftAttempt, referenceBs, referenceSource, mlOrderRef, tolReferenceBs]);
 
   const clearStatementDraft = () => {
     setDraftStatement(null);
@@ -507,10 +550,10 @@ export default function PaymentLinkPanel({
 
   return (
     <>
-      <div style={S.section}>
-        {/* Cabecera: mismo patrón que QuotePanel («Cotización») */}
+      <div style={OP_FRANJA_SECTION}>
+        {/* Cabecera: patrón canónico (este archivo es la referencia de layout). */}
         <div
-          style={S.header(isOpen)}
+          style={opFranjaHeader(isOpen)}
           onClick={() => setIsOpen((v) => !v)}
           role="button"
           aria-expanded={isOpen}
@@ -519,7 +562,7 @@ export default function PaymentLinkPanel({
             if (e.key === "Enter" || e.key === " ") setIsOpen((v) => !v);
           }}
         >
-          <div style={S.icon}>
+          <div style={opFranjaIconBox("blue")}>
             <SvgPayment />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -577,7 +620,7 @@ export default function PaymentLinkPanel({
             )}
           </div>
           <div style={{ color: "var(--mu-ink-mute, #6e7681)" }}>
-            <SvgChevron open={isOpen} />
+            <OpFranjaChevron open={isOpen} />
           </div>
         </div>
 
@@ -697,9 +740,22 @@ export default function PaymentLinkPanel({
                 </select>
               </div>
 
-              {activeQuotationId == null && (
-                <div style={{ fontSize: 11, color: "var(--mu-ink-mute, #8b949e)", marginTop: 8 }}>
-                  Sin cotización activa en panel: no se compara el total en Bs.
+              {referenceBs == null && (
+                <div style={{ fontSize: 11, color: "var(--mu-ink-mute, #8b949e)", marginTop: 8, lineHeight: 1.45 }}>
+                  No hay monto de referencia en Bs.: hace falta una cotización ERP enviada, o una orden Mercado Libre vinculada
+                  a esta conversación (desde la bandeja o un pedido en ventas ligado al chat). Si la venta es por ML y aún no
+                  aparece total, sincronizá órdenes contra la base o importá el pedido a ventas para que exista el equivalente en bolívares.
+                </div>
+              )}
+              {referenceBs != null && referenceSource === "ml_order" && mlOrderRef && (
+                <div style={{ fontSize: 11, color: "#93c5fd", marginTop: 8, lineHeight: 1.45 }}>
+                  Referencia en Bs.: orden Mercado Libre{" "}
+                  <strong>#{String(mlOrderRef.ml_order_id)}</strong> ({fmtBs(String(referenceBs))}, tolerancia ±2,5 %).
+                  {mlOrderRef.not_synced ? (
+                    <> Total tomado del pedido en ventas (CRM) mientras la orden no está en la tabla local de ML.</>
+                  ) : (
+                    <> Incluye lo facturado en Mercado Libre; carrera de motorizado u otros cobros por fuera pueden explicar diferencias mayores.</>
+                  )}
                 </div>
               )}
               {activeQuotationId != null && quotationBs == null && (
@@ -776,7 +832,7 @@ export default function PaymentLinkPanel({
         )}
 
         {isOpen && (
-          <div style={S.body}>
+          <div style={OP_FRANJA_BODY_SCROLL}>
 
             {loading && (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -903,7 +959,7 @@ export default function PaymentLinkPanel({
                         )}
                         {!activeQuotationId && (
                           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: "var(--mu-ink-mute, #6e7681)" }}>
-                            Sin cotización activa
+                            {mlOrderBs != null ? "Sin cotización ERP (referencia: orden ML)" : "Sin cotización activa"}
                           </span>
                         )}
                       </div>

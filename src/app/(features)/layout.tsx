@@ -4,6 +4,8 @@ import HorizontalSidebar from "@/core/common/sidebar/horizontalSidebar";
 import Sidebar from "@/core/common/sidebar/sidebar";
 import ThemeSettings from "@/core/common/sidebar/themeSettings";
 import TwoColumnSidebar from "@/core/common/sidebar/two-column";
+import FeaturesShell from "./FeaturesShell";
+import "./dashboard/sm-dashboard-shell.scss";
 
 export default function PageLayout({
   children,
@@ -12,14 +14,16 @@ export default function PageLayout({
 }) {
   return (
     <FeaturesAuthGate>
-      <div className="main-wrapper">
-        <Header />
-        <Sidebar />
-        <HorizontalSidebar />
-        <TwoColumnSidebar />
-        <ThemeSettings />
-        {children}
-      </div>
+      <FeaturesShell>
+        <div className="main-wrapper">
+          <Header />
+          <Sidebar />
+          <HorizontalSidebar />
+          <TwoColumnSidebar />
+          <ThemeSettings />
+          {children}
+        </div>
+      </FeaturesShell>
     </FeaturesAuthGate>
   );
 }

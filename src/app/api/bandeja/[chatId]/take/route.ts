@@ -1,18 +1,16 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { receiverBase, receiverJsonHeaders } from "@/lib/bandejaReceiverProxy";
+import { isBandejaBffVerbose, receiverBase, receiverJsonHeaders } from "@/lib/bandejaReceiverProxy";
 
 export const runtime = "nodejs";
 
 type RouteCtx = { params: Promise<{ chatId: string }> };
 
-const dev = process.env.NODE_ENV === "development";
-
 export async function POST(req: NextRequest, ctx: RouteCtx) {
   const { chatId } = await ctx.params;
   const targetUrl = `${receiverBase()}/api/inbox/chats/${encodeURIComponent(chatId)}/take`;
 
-  if (dev) console.log("[BFF take POST]", targetUrl);
+  if (isBandejaBffVerbose()) console.log("[BFF take POST]", targetUrl);
 
   try {
     const headers = { ...receiverJsonHeaders(req) };

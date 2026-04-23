@@ -80,12 +80,23 @@ export function useChatMessages(chatId: string | number | null) {
   const [loading, setLoading]   = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError]       = useState<string | null>(null);
+  /** Cambio de chat (no primera carga): sin pantalla completa de skeleton; spinner compacto. */
+  const [messagesBootstrapping, setMessagesBootstrapping] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const latestIdRef = useRef<string | number | null>(null);
+  const prevChatIdRef = useRef<string | number | null>(null);
 
   const load = useCallback(
-    async (id: string | number, beforeId?: string | number, options?: { silent?: boolean }) => {
+    async (
+      id: string | number,
+      beforeId?: string | number,
+      options?: { silent?: boolean; forChatSwitch?: boolean; suppressError?: boolean }
+    ) => {
       const silent = Boolean(options?.silent);
+      /** Tras POST mensaje: silent + suppressError. Cambio de chat: silent sin suprimir errores. */
+      const suppressError =
+        Boolean(options?.suppressError) ||
+        (silent && options?.forChatSwitch !== true);
       const isMore = beforeId !== undefined;
       if (isMore) setLoadingMore(true);
       else if (!silent) {
@@ -111,7 +122,7 @@ export function useChatMessages(chatId: string | number | null) {
         }
         setMeta(m);
       } catch (e) {
-        if (!isMore && !silent) setError(errMsg(e));
+        if (!isMore && !suppressError) setError(errMsg(e));
       } finally {
         if (isMore) setLoadingMore(false);
         else if (!silent) setLoading(false);
@@ -142,10 +153,39 @@ export function useChatMessages(chatId: string | number | null) {
   }, []);
 
   useEffect(() => {
-    if (chatId === null) { setMessages([]); setMeta({}); setError(null); return; }
-    void load(chatId);
+    if (chatId === null) {
+      prevChatIdRef.current = null;
+      setMessages([]);
+      setMeta({});
+      setError(null);
+      setMessagesBootstrapping(false);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    const prev = prevChatIdRef.current;
+    const switched = prev !== null && String(prev) !== String(chatId);
+    prevChatIdRef.current = chatId;
+    setMessages([]);
+    latestIdRef.current = null;
+    setError(null);
+    if (switched) setMessagesBootstrapping(true);
+    void load(chatId, undefined, switched ? { silent: true, forChatSwitch: true } : undefined).finally(() => {
+      setMessagesBootstrapping(false);
+    });
     intervalRef.current = setInterval(() => void poll(chatId), 15_000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
   }, [chatId, load, poll]);
 
   const loadMore = useCallback(() => {
@@ -160,7 +200,6 @@ export function useChatMessages(chatId: string | number | null) {
     const payload = { text, sent_by: sentBy ?? "agent" };
     try {
       if (process.env.NODE_ENV === "development") {
-        // eslint-disable-next-line no-console
         console.log("[useChatMessages] POST", { url, body: payload });
       }
       const res = await fetch(url, {
@@ -172,17 +211,15 @@ export function useChatMessages(chatId: string | number | null) {
       if (!res.ok) {
         const d = await res.json().catch(() => ({})) as Record<string, unknown>;
         if (process.env.NODE_ENV === "development") {
-          // eslint-disable-next-line no-console
           console.error("[useChatMessages] POST failed", res.status, d);
         }
         throw new Error((d.error as string) ?? `HTTP ${res.status}`);
       }
       /* Sincronizar con BD: el optimista local + el mensaje real compartían texto y duplicaban el hilo. */
-      await load(chatId, undefined, { silent: true });
+      await load(chatId, undefined, { silent: true, suppressError: true });
       return true;
     } catch (e) {
       if (process.env.NODE_ENV === "development") {
-        // eslint-disable-next-line no-console
         console.error("[useChatMessages] sendMessage error:", e);
       }
       return false;
@@ -191,5 +228,15 @@ export function useChatMessages(chatId: string | number | null) {
 
   const refetch = useCallback(() => { if (chatId) void load(chatId); }, [chatId, load]);
 
-  return { messages, meta, loading, loadingMore, error, loadMore, sendMessage, refetch };
+  return {
+    messages,
+    meta,
+    loading,
+    loadingMore,
+    messagesBootstrapping,
+    error,
+    loadMore,
+    sendMessage,
+    refetch,
+  };
 }

@@ -36,9 +36,19 @@ function normalizeSale(raw: Record<string, unknown>): Sale {
       : typeof rawId === "number"
         ? rawId
         : String(rawId ?? "");
+  const mlUid = raw.ml_user_id;
+  const mlNick = raw.ml_account_nickname;
   return {
     id,
     source: String(raw.source ?? ""),
+    ml_user_id:
+      mlUid != null && Number.isFinite(Number(mlUid)) && Number(mlUid) > 0
+        ? Number(mlUid)
+        : null,
+    ml_account_nickname:
+      mlNick != null && String(mlNick).trim() !== ""
+        ? String(mlNick).trim()
+        : null,
     external_order_id:
       raw.external_order_id == null ? null : String(raw.external_order_id),
     customer_id: raw.customer_id == null ? null : Number(raw.customer_id),

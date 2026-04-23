@@ -1,0 +1,612 @@
+/* ===================================================================
+   Shell oscuro Solomotor3k — con body.sm-dashboard-ref
+   (/dashboard ERP y rutas del grupo (dashboard), p. ej. /admin-dashboard).
+=================================================================== */
+
+@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+
+body.sm-dashboard-ref {
+  --sm-bg: #0a0b0d;
+  --sm-surface-1: #0f1114;
+  --sm-surface-2: #14171b;
+  --sm-surface-3: #1a1e23;
+  --sm-border: #1d2127;
+  --sm-border-2: #262b32;
+  --sm-border-3: #353b44;
+  --sm-text-1: #ecedef;
+  --sm-text-2: #a1a7b0;
+  --sm-text-3: #6b727c;
+  --sm-text-4: #4a5059;
+  --sm-accent: #f59e0b;
+  --sm-accent-soft: #f59e0b1a;
+  --sm-font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --sm-font-body: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --sm-font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Overrides del menú dinámico (sidebar-overrides.scss) */
+  --sb-primary: #f59e0b;
+  --sb-primary-light: rgba(245, 158, 11, 0.12);
+  --sb-primary-mid: rgba(245, 158, 11, 0.22);
+  --sb-text: #ecedef;
+  --sb-text-muted: #a1a7b0;
+  --sb-text-faint: #6b727c;
+  --sb-icon-bg: #1a1e23;
+  --sb-border: #262b32;
+  --sb-hover-bg: #14171b;
+
+  font-family: var(--sm-font-body) !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  background: var(--sm-bg) !important;
+  color: var(--sm-text-1) !important;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "ss01", "cv11";
+
+  &::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(800px 400px at 12% -10%, rgba(245, 158, 11, 0.05), transparent 60%),
+      radial-gradient(900px 500px at 90% 110%, rgba(96, 165, 250, 0.04), transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .main-wrapper {
+    position: relative;
+    z-index: 1;
+    background: transparent !important;
+  }
+
+  /* Menús legacy duplicados: ocultar en esta vista (el HTML solo tiene sidebar vertical) */
+  #horizontal-menu.sidebar-horizontal,
+  .two-col-sidebar#two-col-sidebar {
+    display: none !important;
+  }
+
+  /* ——— Header: una sola franja oscura (sin logos Dream POS) ——— */
+  .header {
+    background: var(--sm-bg) !important;
+    border-bottom: 1px solid var(--sm-border) !important;
+    height: 56px !important;
+    min-height: 56px !important;
+    max-height: 56px !important;
+    backdrop-filter: blur(8px);
+    box-shadow: none !important;
+  }
+
+  .header .main-header {
+    display: flex !important;
+    align-items: center !important;
+    flex-wrap: nowrap;
+    height: 56px !important;
+    min-height: 56px !important;
+    width: 100% !important;
+    background: var(--sm-bg) !important;
+    border: 0 !important;
+  }
+
+  /* Solo ancho del botón colapsar: sin franja vacía a la izquierda del buscador */
+  .header .header-left {
+    float: none !important;
+    flex-shrink: 0;
+    height: 56px !important;
+    min-height: 56px !important;
+    width: 44px !important;
+    max-width: 44px !important;
+    min-width: 44px !important;
+    background: var(--sm-bg) !important;
+    border-right: 1px solid var(--sm-border) !important;
+    border-bottom: none !important;
+    padding: 0 6px !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0;
+  }
+
+  /* Ocultar logos POS/Dream en top bar; solo botón colapsar */
+  .header .header-left a.logo,
+  .header .header-left a.logo-white,
+  .header .header-left a.logo-small,
+  .header .header-left a.logo-small-white {
+    display: none !important;
+  }
+
+  .header .header-left #toggle_btn {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    color: var(--sm-text-1) !important;
+    margin: 0 !important;
+    opacity: 1 !important;
+    position: relative !important;
+    right: auto !important;
+    left: auto !important;
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 7px !important;
+    background: var(--sm-surface-2) !important;
+    border: 1px solid var(--sm-border-2) !important;
+  }
+
+  .header .header-left #toggle_btn:hover {
+    color: var(--sm-accent) !important;
+    background: var(--sm-surface-3) !important;
+    border-color: var(--sm-border-3) !important;
+  }
+
+  .header .header-left #toggle_btn svg,
+  .header .header-left #toggle_btn .feather,
+  .header .header-left #toggle_btn .feather-16 {
+    color: var(--sm-text-1) !important;
+    stroke: currentColor !important;
+  }
+
+  .header .user-menu.nav > li > a,
+  .header .user-menu.nav > li .nav-link {
+    background: transparent !important;
+  }
+
+  .header .nav-item.dropdown {
+    background: transparent !important;
+  }
+
+  .header .user-menu.nav {
+    float: none !important;
+    margin-left: auto !important;
+    padding-left: 16px !important;
+    padding-right: 22px !important;
+    gap: 4px;
+    align-items: center;
+    flex: 1;
+    justify-content: flex-end;
+  }
+
+  .header .mobile_btn {
+    color: var(--sm-text-2) !important;
+  }
+
+  /* Tema: .nav-item-box > a usa fondo claro ($light-500) — forzar oscuro */
+  .header .user-menu .nav-item-box > a,
+  .header .user-menu .nav-item-box .nav-link,
+  .header .nav-item-box > a,
+  .header .nav-item-box .nav-link {
+    color: var(--sm-text-1) !important;
+    background: var(--sm-surface-2) !important;
+    border: 1px solid var(--sm-border-2) !important;
+    border-radius: 7px !important;
+    width: 32px;
+    height: 32px;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .header .user-menu .nav-item-box > a:hover,
+  .header .nav-item-box > a:hover,
+  .header .flag-nav .nav-link:hover {
+    background: var(--sm-surface-3) !important;
+    color: var(--sm-text-1) !important;
+    border-color: var(--sm-border-3) !important;
+  }
+
+  .header .user-menu.nav > li svg,
+  .header .user-menu.nav > li .feather,
+  .header .user-menu.nav > li .feather-16 {
+    color: var(--sm-text-1) !important;
+    stroke: currentColor !important;
+  }
+
+  .header .user-menu.nav > li i.ti {
+    color: var(--sm-text-1) !important;
+  }
+
+  .header .flag-nav > a,
+  .header .flag-nav .nav-link {
+    background: var(--sm-surface-2) !important;
+    border: 1px solid var(--sm-border-2) !important;
+  }
+
+  /* Campo Search en franja clara (contrasta con header oscuro) */
+  .header .searchinputs kbd img {
+    filter: none !important;
+    opacity: 0.55 !important;
+  }
+
+  .header .nav-searchinputs {
+    margin-left: 10px !important;
+    margin-right: auto !important;
+    background: transparent !important;
+  }
+
+  .header .top-nav-search {
+    background: transparent !important;
+  }
+
+  .header .nav-item.nav-searchinputs,
+  .header .nav-item.dropdown {
+    background: transparent !important;
+  }
+
+  .header .top-nav-search .searchinputs,
+  .header .searchinputs.input-group {
+    height: 32px !important;
+    min-height: 32px !important;
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 7px !important;
+    overflow: hidden;
+    align-items: center !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06) !important;
+  }
+
+  .header .searchinputs input {
+    background: transparent !important;
+    border: none !important;
+    color: #0f172a !important;
+    font-size: 12px !important;
+    box-shadow: none !important;
+  }
+
+  .header .searchinputs input::placeholder {
+    color: #64748b !important;
+  }
+
+  .header .search-addon span,
+  .header .searchinputs .ti {
+    color: #64748b !important;
+  }
+
+  .header .searchinputs .input-group-text {
+    background: transparent !important;
+    border: none !important;
+    color: #94a3b8 !important;
+  }
+
+  .header .searchinputs kbd {
+    font-family: var(--sm-font-mono) !important;
+    font-size: 10px !important;
+    color: #64748b !important;
+    border: 1px solid #e2e8f0 !important;
+    background: #f8fafc !important;
+    border-radius: 4px !important;
+  }
+
+  .header .select-store .user-detail .user-name {
+    color: var(--sm-text-1) !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+  }
+
+  .header .select-store {
+    background: var(--sm-surface-2) !important;
+    border: 1px solid var(--sm-border-2) !important;
+    border-radius: 7px !important;
+    padding: 4px 10px !important;
+    height: auto !important;
+  }
+
+  .header .btn-primary {
+    background: var(--sm-accent) !important;
+    border-color: transparent !important;
+    color: #1a0f00 !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    height: 32px !important;
+    padding: 0 12px !important;
+    border-radius: 7px !important;
+    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.5), 0 4px 10px rgba(245, 158, 11, 0.15) !important;
+  }
+
+  .header .btn-primary:hover {
+    background: #fbbf24 !important;
+    color: #1a0f00 !important;
+  }
+
+  .header .btn-dark {
+    background: var(--sm-surface-2) !important;
+    border: 1px solid var(--sm-border-2) !important;
+    color: var(--sm-text-1) !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    height: 32px !important;
+    padding: 0 12px !important;
+    border-radius: 7px !important;
+  }
+
+  .header .btn-dark:hover {
+    background: var(--sm-surface-3) !important;
+    color: var(--sm-text-1) !important;
+  }
+
+  .header .dropdown-menu {
+    background: var(--sm-surface-2) !important;
+    border: 1px solid var(--sm-border-2) !important;
+    color: var(--sm-text-1) !important;
+  }
+
+  .header .dropdown-item {
+    color: var(--sm-text-2) !important;
+  }
+
+  .header .dropdown-item:hover {
+    background: var(--sm-surface-3) !important;
+    color: var(--sm-text-1) !important;
+  }
+
+  .header .nav-item-box .badge {
+    background: #f87171 !important;
+  }
+
+  .header .dropdown-xl {
+    background: var(--sm-surface-1) !important;
+    border: 1px solid var(--sm-border) !important;
+  }
+
+  .header .dropdown-xl .link-item {
+    color: var(--sm-text-2) !important;
+  }
+
+  .header .dropdown-xl .link-item:hover {
+    background: var(--sm-surface-2) !important;
+  }
+
+  .header .dropdown-xl .link-item p {
+    color: var(--sm-text-1) !important;
+  }
+
+  .header .notifications {
+    background: var(--sm-surface-1) !important;
+    border: 1px solid var(--sm-border) !important;
+  }
+
+  .header .notifications .topnav-dropdown-header,
+  .header .notifications .noti-content {
+    background: var(--sm-surface-1) !important;
+    border-color: var(--sm-border) !important;
+    color: var(--sm-text-1) !important;
+  }
+
+  .header .notifications .notification-list a {
+    color: var(--sm-text-2) !important;
+  }
+
+  /* ——— Sidebar vertical (#sidebar) ——— */
+  #sidebar.sidebar:not(.sidebar-horizontal) {
+    width: 248px !important;
+    background: var(--sm-surface-1) !important;
+    border-right: 1px solid var(--sm-border) !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* Desktop: header empieza a la derecha del sidebar → sidebar top: 0 (sin hueco) */
+  @media (min-width: 992px) {
+    #sidebar.sidebar:not(.sidebar-horizontal) {
+      top: 0 !important;
+    }
+  }
+
+  /* Móvil: header a ancho completo → sidebar bajo la barra */
+  @media (max-width: 991px) {
+    #sidebar.sidebar:not(.sidebar-horizontal) {
+      top: 56px !important;
+    }
+  }
+
+  #sidebar.sidebar::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  #sidebar.sidebar::-webkit-scrollbar-thumb {
+    background: var(--sm-border-2);
+    border-radius: 3px;
+  }
+
+  /* Sin hueco de 65px del logo: solo fila compacta con el toggle */
+  #sidebar .sidebar-logo {
+    background: var(--sm-surface-1) !important;
+    border-bottom: 1px solid var(--sm-border) !important;
+    padding: 6px 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    position: relative !important;
+  }
+
+  /* Ocultar logos POS/Dream en sidebar; solo colapsar (icono prevalece en menú) */
+  #sidebar .sidebar-logo a.logo,
+  #sidebar .sidebar-logo a.logo-white,
+  #sidebar .sidebar-logo a.logo-small,
+  #sidebar .sidebar-logo a.logo-small-white {
+    display: none !important;
+  }
+
+  #sidebar .sidebar-logo #toggle_btn {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto !important;
+    position: relative !important;
+    right: auto !important;
+    left: auto !important;
+    top: auto !important;
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    border-radius: 7px !important;
+    background: var(--sm-surface-2) !important;
+    border: 1px solid var(--sm-border-2) !important;
+    color: var(--sm-text-1) !important;
+    opacity: 1 !important;
+  }
+
+  #sidebar .sidebar-logo #toggle_btn:hover {
+    background: var(--sm-surface-3) !important;
+    color: var(--sm-accent) !important;
+  }
+
+  #sidebar .sidebar-logo #toggle_btn svg,
+  #sidebar .sidebar-logo #toggle_btn .feather,
+  #sidebar .sidebar-logo #toggle_btn .feather-16 {
+    color: var(--sm-text-1) !important;
+    stroke: currentColor !important;
+  }
+
+  #sidebar .sidebar-menu {
+    padding: 12px 14px 24px !important;
+    margin-top: 0 !important;
+  }
+
+  #sidebar .sidebar-menu > ul > li:first-child .sidebar-group-sep {
+    padding-top: 6px !important;
+  }
+
+  #sidebar .sidebar-group-sep {
+    padding: 12px 10px 6px !important;
+  }
+
+  #sidebar .sidebar-group-sep__text {
+    font-size: 10px !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.1em !important;
+    color: var(--sm-text-4) !important;
+  }
+
+  #sidebar .sidebar-group-sep__text::after {
+    background: var(--sm-border) !important;
+  }
+
+  #sidebar .sidebar-section__toggle.subdrop {
+    background: var(--sm-surface-2) !important;
+  }
+
+  #sidebar .sidebar-section__toggle.subdrop .sidebar-section__label {
+    color: var(--sm-text-1) !important;
+  }
+
+  #sidebar .sidebar-section__toggle.subdrop .sidebar-section__icon {
+    background: var(--sm-surface-3) !important;
+    box-shadow: none !important;
+  }
+
+  #sidebar .sidebar-section__toggle.subdrop .sidebar-section__icon i {
+    color: var(--sm-accent) !important;
+  }
+
+  #sidebar .sidebar-leaf.active {
+    background: var(--sm-surface-2) !important;
+    color: var(--sm-text-1) !important;
+    font-weight: 500 !important;
+  }
+
+  #sidebar .sidebar-leaf.active .sidebar-leaf__icon i {
+    color: var(--sm-accent) !important;
+  }
+
+  #sidebar .sidebar-section__items {
+    border-left-color: var(--sm-border-2) !important;
+  }
+
+  /* ——— Área de contenido (tema usa margin-left en .page-wrapper) ——— */
+  .page-wrapper {
+    background: transparent !important;
+    margin: 0 0 0 248px !important;
+    padding: 56px 0 0 !important;
+  }
+
+  &.mini-sidebar .page-wrapper {
+    margin-left: 86px !important;
+  }
+
+  &.mini-sidebar #sidebar.sidebar:not(.sidebar-horizontal) {
+    width: 86px !important;
+  }
+
+  &.mini-sidebar .header .header-left {
+    width: 44px !important;
+    max-width: 44px !important;
+    min-width: 44px !important;
+    padding: 0 6px !important;
+  }
+
+  /* Alinear barra superior con el sidebar (tema usa left: 252px) */
+  @media (min-width: 992px) {
+    .header {
+      left: 248px !important;
+    }
+
+    &.mini-sidebar .header {
+      left: 86px !important;
+    }
+
+    &.mini-sidebar.expand-menu .header {
+      left: 248px !important;
+    }
+  }
+
+  .sidebar-overlay {
+    top: 56px !important;
+  }
+
+  @media (min-width: 992px) {
+    .sidebar-overlay {
+      top: 0 !important;
+    }
+  }
+
+  .header .mobile_btn .bar-icon span {
+    background: var(--sm-text-2) !important;
+  }
+
+  .header .menu-drop-user .user-img img,
+  .header .dropdown-menu .user-img img {
+    border: 1px solid var(--sm-border-2) !important;
+  }
+
+  @media (max-width: 991px) {
+    .page-wrapper {
+      margin-left: 0 !important;
+      padding: 56px 0 0 !important;
+    }
+
+    .header {
+      left: 0 !important;
+    }
+  }
+
+  /* Bandeja: alinear alto al header 56px (theme usaba 60px). */
+  .bandeja-shell {
+    height: calc(100vh - 56px) !important;
+  }
+}
+
+/*
+ * Por encima de selectores del theme (`html[data-layout][data-topbar] .header`, etc.)
+ * que aplican fondo claro según cookies del Theme Customizer.
+ */
+html body.sm-dashboard-ref .header {
+  background: var(--sm-bg) !important;
+  border-bottom: 1px solid var(--sm-border) !important;
+  box-shadow: none !important;
+}
+
+html body.sm-dashboard-ref .header .main-header {
+  background: var(--sm-bg) !important;
+}
+
+html body.sm-dashboard-ref .header .header-left {
+  background: var(--sm-bg) !important;
+}
+
+html body.sm-dashboard-ref .header .user-menu.nav {
+  background: transparent !important;
+  background-color: transparent !important;
+}

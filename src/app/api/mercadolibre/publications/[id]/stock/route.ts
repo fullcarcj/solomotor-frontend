@@ -6,10 +6,11 @@ function base() { const r = BACKEND_URL.trim().replace(/\/+$/, ""); return /^htt
 function hdr(req: NextRequest) {
   return { "Content-Type": "application/json", Accept: "application/json", cookie: req.headers.get("cookie") ?? "", ...(req.headers.get("authorization") ? { authorization: req.headers.get("authorization")! } : {}) };
 }
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const body: unknown = await req.json().catch(() => ({}));
-    const up = await fetch(`${base()}/api/ml/publications/${encodeURIComponent(params.id)}/stock`, { method: "PATCH", headers: hdr(req), body: JSON.stringify(body), cache: "no-store" });
+    const up = await fetch(`${base()}/api/ml/publications/${encodeURIComponent(id)}/stock`, { method: "PATCH", headers: hdr(req), body: JSON.stringify(body), cache: "no-store" });
     return NextResponse.json(await up.json().catch(() => ({})), { status: up.status });
   } catch (e) { console.error("[BFF ml/publications/stock]", e); return NextResponse.json({ error: "Error de red." }, { status: 502 }); }
 }
