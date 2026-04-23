@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { InboxChat } from "@/types/inbox";
 import ChannelBadge from "./ChannelBadge";
-import { CHAT_STAGE_LABELS, normalizeChatStage } from "@/types/inbox";
+import { CHAT_STAGE_LABELS, bandejaMlQuestionPipelineStage } from "@/types/inbox";
 import SlaCountdown from "@/components/bandeja/SlaCountdown";
 
 function initials(name: string | null, phone: string): string {
@@ -21,12 +21,7 @@ interface Props {
   onViewPhoto?: () => void;
   /** SLA activo (ISO); prioridad sobre `chat.sla_deadline_at` si viene del slice. */
   slaDeadline?: string | null;
-  /** Mostrar acción liberar (PENDING propio). */
-  showRelease?: boolean;
-  onRelease?: () => void;
-  /** Evita doble envío mientras la solicitud está en curso. */
-  releasePending?: boolean;
-  /** Tras marcar/quitar “No cliente”, el padre debe refrescar el chat y la bandeja. */
+  /** Tras marcar/quitar "No cliente", el padre debe refrescar el chat y la bandeja. */
   onOperationalChanged?: () => void;
 }
 
@@ -36,15 +31,15 @@ export default function ChatHeader({
   onEditCustomer,
   onViewPhoto,
   slaDeadline,
-  showRelease,
-  onRelease,
-  releasePending,
   onOperationalChanged,
 }: Props) {
   const displayName = chat.customer_name ?? chat.phone;
   const ini = initials(chat.customer_name, chat.phone);
   const hasPhone = Boolean(chat.phone);
-  const stageNorm = normalizeChatStage(chat.chat_stage == null ? undefined : String(chat.chat_stage));
+  const stageNorm = bandejaMlQuestionPipelineStage(
+    chat.chat_stage == null ? undefined : String(chat.chat_stage),
+    chat
+  );
   const [menuOpen, setMenuOpen] = useState(false);
   const [opPending, setOpPending] = useState(false);
   const [opErr, setOpErr] = useState<string | null>(null);
@@ -199,26 +194,6 @@ export default function ChatHeader({
         >
           <i className="ti ti-edit" />
         </button>
-
-        {showRelease && onRelease ? (
-          <button
-            type="button"
-            className="btn btn-sm"
-            style={{
-              borderColor: "var(--mu-line)",
-              color: "var(--mu-ink-dim)",
-              fontSize: "0.75rem",
-            }}
-            title="Liberar conversación"
-            aria-busy={releasePending ? true : undefined}
-            disabled={releasePending}
-            onClick={onRelease}
-          >
-            {releasePending ? "Liberando…" : "Liberar conversación"}
-          </button>
-        ) : null}
-
-        {/* ti-search eliminado (B.5) */}
 
         <div ref={menuWrapRef} style={{ position: "relative" }}>
           <button

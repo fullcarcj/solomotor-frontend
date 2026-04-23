@@ -8,11 +8,7 @@ import ExceptionBadge from "@/components/bandeja/ExceptionBadge";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   bumpInboxRefetch,
-  clearAutoReleased,
-  clearMyPending,
   clearUrgent,
-  markAutoReleased,
-  setMyPending,
 } from "@/store/realtimeSlice";
 import MlOrderMessagingModal from "@/app/(features)/ventas/pedidos/components/MlOrderMessagingModal";
 
@@ -235,11 +231,6 @@ export default function ChatListItem({ chat, active }: Props) {
   const myUserId            = useAppSelector((s) => s.auth.userId);
   const presence            = useAppSelector((s) => s.realtime.presenceByChat[String(chat.id)]);
   const urgentRedux         = useAppSelector((s) => s.realtime.urgentChats[String(chat.id)]);
-  const myPendingChatId     = useAppSelector((s) => s.realtime.myPendingChatId);
-  const myPendingHasResponded = useAppSelector((s) => s.realtime.myPendingHasResponded);
-  const isAutoReleased      = useAppSelector((s) =>
-    s.realtime.autoReleasedChatIds.includes(String(chat.id))
-  );
 
   const isUrgent = Boolean(urgentRedux || chat.is_urgent);
   /** P1: pendiente de respuesta = último mensaje inbound (misma regla que campana “Sin atender”). */
@@ -322,83 +313,15 @@ export default function ChatListItem({ chat, active }: Props) {
     [mlOid, linkedSalePk]
   );
 
-  const navigateAfterRules = useCallback(async () => {
-    const id = String(chat.id);
-    const st = chat.status;
-    const assigned = chat.assigned_to;
-
-    const needTake = st === "UNASSIGNED" || st === "RE_OPENED";
-    if (needTake) {
-      // Si hay un chat pendiente diferente al destino, liberarlo automáticamente
-      // antes de intentar tomar el nuevo — sin mostrar modal al agente.
-      if (myPendingChatId && myPendingChatId !== id) {
-        const prevId = myPendingChatId;
-        const prevHasResponded = myPendingHasResponded;
-        try {
-          const rel = await fetch(`/api/bandeja/${encodeURIComponent(prevId)}/release`, {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-          });
-          if (rel.ok) {
-            // Atendido = leído: si ya hubo mensaje saliente, bajar unread en servidor
-            // (campana + círculo) antes de refrescar lista; si abandonó, no marcar leído.
-            if (prevHasResponded) {
-              try {
-                await fetch(
-                  `/api/bandeja/${encodeURIComponent(prevId)}/messages?limit=1&mark_read=1`,
-                  { credentials: "include", cache: "no-store" }
-                );
-              } catch {
-                /* red: la lista igual reflejará estado tras bump */
-              }
-            }
-            dispatch(clearMyPending());
-            dispatch(bumpInboxRefetch());
-            // Agente cambió de chat sin responder → alerta silenciosa de supervisión
-            if (!prevHasResponded) {
-              dispatch(markAutoReleased(prevId));
-              // TODO deuda técnica: emitir alerta cross-sesión al supervisor cuando
-              // exista un endpoint backend para notificaciones de abandono de chat.
-            }
-          }
-        } catch {
-          // Error de red al liberar — continuar igualmente con el take
-        }
-      }
-
-      const res = await fetch(`/api/bandeja/${encodeURIComponent(id)}/take`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-      });
-      // 409 residual (raro tras auto-release): continuar silenciosamente, sin modal
-      if (!res.ok) return;
-      dispatch(setMyPending(id));
-      // Si el chat destino estaba marcado como auto-released, limpiarlo
-      dispatch(clearAutoReleased(id));
-      router.push(href);
-      return;
-    }
-    if (st === "PENDING_RESPONSE" && assigned != null && myUserId != null && assigned !== myUserId) {
-      router.push(href);
-      return;
-    }
-    router.push(href);
-  }, [
-    chat.assigned_to, chat.id, chat.status, dispatch, href,
-    myPendingChatId, myPendingHasResponded, myUserId, router,
-  ]);
-
   const onNavigate = useCallback(
-    async (e: React.MouseEvent<HTMLAnchorElement>) => {
+    (e: React.MouseEvent<HTMLAnchorElement>) => {
       if (e.defaultPrevented) return;
       if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       e.preventDefault();
       dispatch(clearUrgent(String(chat.id)));
-      await navigateAfterRules();
+      router.push(href);
     },
-    [chat.id, dispatch, navigateAfterRules]
+    [chat.id, dispatch, href, router]
   );
 
   return (
@@ -508,27 +431,14 @@ export default function ChatListItem({ chat, active }: Props) {
             </div>
           </div>
 
-          {/* Pendiente atención (P1) o abandono local; no el acumulado unread_count */}
-          {(waitingReply || isAutoReleased) && (
+          {/* Pendiente atención (P1): último mensaje del cliente sin respuesta */}
+          {waitingReply && (
             <div
               className="bd-unread-count"
-              aria-label={
-                isAutoReleased && !waitingReply
-                  ? "Sin respuesta — requiere atención"
-                  : waitingReply
-                    ? "Pendiente de respuesta"
-                    : "Requiere atención"
-              }
-              style={isAutoReleased ? { background: "#f97316" } : undefined}
-              title={
-                isAutoReleased
-                  ? "Chat abandonado sin respuesta antes de cambiar de conversación"
-                  : waitingReply
-                    ? "El último mensaje es del cliente — pendiente de respuesta"
-                    : undefined
-              }
+              aria-label="Pendiente de respuesta"
+              title="El último mensaje es del cliente — pendiente de respuesta"
             >
-              {isAutoReleased ? "!" : waitingReply ? "1" : "!"}
+              1
             </div>
           )}
         </div>

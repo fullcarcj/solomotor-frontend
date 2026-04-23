@@ -12,7 +12,7 @@ import { useChatMessages } from "@/hooks/useChatMessages";
 import { useChatContext, primeChatContextFromCrmContext, type UseChatContextOptions } from "@/hooks/useChatContext";
 import type { CustomerDetail } from "@/types/customers";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { bumpInboxRefetch, clearMyPending } from "@/store/realtimeSlice";
+import { bumpInboxRefetch } from "@/store/realtimeSlice";
 import { useBandejaInbox } from "@/app/(features)/bandeja/BandejaInboxContext";
 import ChatHeader from "../components/ChatHeader";
 import ChatWindow from "../components/ChatWindow";
@@ -48,17 +48,6 @@ const ACTION_LABELS: Record<NonNullable<ActionType>, (name: string | null) => st
 
 function errMsg(e: unknown) { return e instanceof Error ? e.message : "Error."; }
 
-function parseReleaseFailure(res: Response, data: Record<string, unknown>): string {
-  if (typeof data.message === "string" && data.message.trim()) return data.message;
-  if (typeof data.error === "string" && data.error.trim()) return data.error;
-  const err = data.error;
-  if (err && typeof err === "object" && err !== null && "message" in err) {
-    const m = (err as { message?: unknown }).message;
-    if (typeof m === "string" && m.trim()) return m;
-  }
-  return `No se pudo liberar la conversación (código ${res.status}).`;
-}
-
 /**
  * /bandeja/[chatId] — Módulo Unificado de Ventas (Sprint 6A)
  *
@@ -86,9 +75,6 @@ export default function ChatDetailPage() {
   const [activeAction, setActiveAction]     = useState<ActionType>(null);
   const [editCustomerOpen, setEditCustomerOpen] = useState(false);
   const [photoViewerUrl, setPhotoViewerUrl] = useState<string | null>(null);
-  const [releasePending, setReleasePending] = useState(false);
-  const [releaseError, setReleaseError] = useState<string | null>(null);
-  const releaseInFlight = useRef(false);
   /** Tras GET /context: mismo cliente que `customers` — primar caché y forzar releída de `useChatContext`. */
   const [chatContextRevision, setChatContextRevision] = useState(0);
   /** Fila `customers` del contexto CRM (única fuente en ficha; sin GET directorio redundante). */
@@ -341,59 +327,7 @@ export default function ChatDetailPage() {
     };
   }, [chatId]);
 
-  const handleRelease = useCallback(async () => {
-    if (releaseInFlight.current) return;
-    if (
-      !globalThis.window?.confirm(
-        "¿Liberar esta conversación? Volverá a la bandeja general para que otro agente pueda tomarla."
-      )
-    ) {
-      return;
-    }
-    releaseInFlight.current = true;
-    setReleasePending(true);
-    setReleaseError(null);
-    try {
-      const res = await fetch(`/api/bandeja/${encodeURIComponent(chatId)}/release`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-      });
-      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-      if (!res.ok) {
-        setReleaseError(parseReleaseFailure(res, data));
-        return;
-      }
-      // Atendido = leído: si hubo saliente, bajar unread antes de refrescar campana/lista.
-      if (chat?.last_outbound_at != null) {
-        try {
-          await fetch(
-            `/api/bandeja/${encodeURIComponent(chatId)}/messages?limit=1&mark_read=1`,
-            { credentials: "include", cache: "no-store" }
-          );
-        } catch {
-          /* red */
-        }
-      }
-      dispatch(bumpInboxRefetch());
-      dispatch(clearMyPending());
-      await refetch();
-      await fetchChat();
-      router.push("/bandeja");
-    } catch (e: unknown) {
-      setReleaseError(errMsg(e));
-    } finally {
-      releaseInFlight.current = false;
-      setReleasePending(false);
-    }
-  }, [chatId, chat, router, dispatch, refetch, fetchChat]);
-
   const slaDeadline = slaFromRealtime ?? chat?.sla_deadline_at ?? null;
-  const showRelease =
-    chat != null &&
-    chat.status === "PENDING_RESPONSE" &&
-    myUserId != null &&
-    chat.assigned_to === myUserId;
 
   const actionLabel = activeAction ? ACTION_LABELS[activeAction](customerName) : null;
 
@@ -430,9 +364,6 @@ export default function ChatDetailPage() {
                 onViewPhoto={lastImageUrl ? () => setPhotoViewerUrl(lastImageUrl) : undefined}
                 onEditCustomer={customerId != null ? () => setEditCustomerOpen(true) : undefined}
                 slaDeadline={slaDeadline}
-                showRelease={showRelease}
-                onRelease={showRelease ? handleRelease : undefined}
-                releasePending={showRelease ? releasePending : undefined}
                 onOperationalChanged={() => {
                   void fetchChat();
                   dispatch(bumpInboxRefetch());
@@ -446,27 +377,6 @@ export default function ChatDetailPage() {
                 <span style={{ color: "var(--mu-ink-mute)" }} className="small">Chat #{chatId}</span>
               </div>
             )}
-
-            {releaseError ? (
-              <div
-                className="d-flex align-items-center justify-content-between gap-2 px-3 py-2 small"
-                style={{
-                  background: "rgba(220, 53, 69, 0.12)",
-                  borderBottom: "1px solid var(--mu-line)",
-                  color: "var(--mu-ink)",
-                }}
-                role="alert"
-              >
-                <span>{releaseError}</span>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-link p-0 text-decoration-none"
-                  onClick={() => setReleaseError(null)}
-                >
-                  Cerrar
-                </button>
-              </div>
-            ) : null}
 
             {/* Pipeline mini — entre header y mensajes */}
             {chat && <PipelineMini stage={pipelineMiniStage} />}

@@ -1,8 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { InboxChat, InboxFilters } from "@/types/inbox";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { clearAutoReleased, setMyPending, setMyPendingResponded } from "@/store/realtimeSlice";
+import { useAppSelector } from "@/store/hooks";
 
 const DEFAULT_FILTERS: InboxFilters = {
   filter: "",
@@ -15,54 +14,43 @@ const DEFAULT_FILTERS: InboxFilters = {
 
 function errMsg(e: unknown) { return e instanceof Error ? e.message : "Error desconocido."; }
 
-function parseChats(raw: unknown): { chats: InboxChat[]; nextCursor: string | null; total: number } {
-  if (!raw || typeof raw !== "object") return { chats: [], nextCursor: null, total: 0 };
+function parseChats(raw: unknown): { chats: InboxChat[]; nextCursor: string | null; hasMore: boolean } {
+  if (!raw || typeof raw !== "object") return { chats: [], nextCursor: null, hasMore: false };
   const r = raw as Record<string, unknown>;
   const chats: InboxChat[] = Array.isArray(r.chats) ? (r.chats as InboxChat[])
     : Array.isArray(r.data) ? (r.data as InboxChat[])
     : Array.isArray(raw)   ? (raw    as InboxChat[])
     : [];
+  const nextCursor = typeof r.nextCursor === "string" ? r.nextCursor : null;
   return {
     chats,
-    nextCursor: typeof r.nextCursor === "string" ? r.nextCursor : null,
-    total:      typeof r.total      === "number" ? r.total      : chats.length,
+    nextCursor,
+    hasMore: typeof r.hasMore === "boolean" ? r.hasMore : nextCursor !== null,
   };
 }
 
 export function useInbox(initialFilters?: Partial<InboxFilters>) {
-  const dispatch = useAppDispatch();
-  const myUserId = useAppSelector((s) => s.auth.userId);
   const [filters, setFiltersState] = useState<InboxFilters>(() => ({
     ...DEFAULT_FILTERS,
     ...initialFilters,
   }));
   const [chats, setChats]           = useState<InboxChat[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore]       = useState(false);
+  /** Total visible acumulado de chats cargados (crece con loadMore). */
   const [total, setTotal]           = useState(0);
   const [loading, setLoading]       = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError]           = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * Debounce para refetches por nonce (SSE + bumpInboxRefetch post-acción).
+   * Varios bumps dentro de la misma ventana de 250 ms se colapsan en un solo fetch,
+   * evitando disparar 3–4 GETs a /api/bandeja por un único cambio de chat.
+   */
+  const nonceDebouncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inboxRefetchNonce = useAppSelector((s) => s.realtime.inboxRefetchNonce);
   const prevNonceRef = useRef<number | null>(null);
-
-  /** Sincroniza el slot pendiente y el flag "has responded" desde la lista del inbox. */
-  useEffect(() => {
-    if (myUserId == null || chats.length === 0) return;
-    const mine = chats.find(
-      (c) =>
-        c.status === "PENDING_RESPONSE" &&
-        c.assigned_to != null &&
-        Number(c.assigned_to) === myUserId
-    );
-    if (mine) {
-      dispatch(setMyPending(mine.id));
-      // Si ya hay un mensaje saliente, el agente respondió — no es "fuga"
-      dispatch(setMyPendingResponded(mine.last_outbound_at != null));
-      // Si el agente volvió a tomar este chat, limpiar el flag de auto-release
-      dispatch(clearAutoReleased(mine.id));
-    }
-  }, [chats, myUserId, dispatch]);
 
   /**
    * @param background - Si es true, no muestra spinner de carga (refetch silencioso por SSE/post-acción).
@@ -91,14 +79,19 @@ export function useInbox(initialFilters?: Partial<InboxFilters>) {
         throw new Error((d.error as string) ?? `HTTP ${res.status}`);
       }
       const data: unknown = await res.json();
-      const { chats: newChats, nextCursor: nc, total: t } = parseChats(data);
+      const { chats: newChats, nextCursor: nc, hasMore: hm } = parseChats(data);
       if (isMore) {
-        setChats(prev => [...prev, ...newChats]);
+        setChats(prev => {
+          const next = [...prev, ...newChats];
+          setTotal(next.length);
+          return next;
+        });
       } else {
         setChats(newChats);
+        setTotal(newChats.length);
       }
       setNextCursor(nc);
-      setTotal(t);
+      setHasMore(hm);
     } catch (e) {
       setError(errMsg(e));
     } finally {
@@ -131,8 +124,15 @@ export function useInbox(initialFilters?: Partial<InboxFilters>) {
     }
     if (inboxRefetchNonce === prevNonceRef.current) return;
     prevNonceRef.current = inboxRefetchNonce;
-    // background=true: no mostrar esqueletos al refrescar por SSE
-    void load(filters, undefined, true);
+
+    // Debounce: colapsar rafagas de bumpInboxRefetch (release + SSE clear_notification +
+    // new_message que llegan en <250ms) en un solo fetch al backend.
+    if (nonceDebouncRef.current) clearTimeout(nonceDebouncRef.current);
+    const capturedFilters = filters;
+    nonceDebouncRef.current = setTimeout(() => {
+      nonceDebouncRef.current = null;
+      void load(capturedFilters, undefined, true);
+    }, 250);
   }, [inboxRefetchNonce, load, filters]);
 
   const loadMore = useCallback(() => {
@@ -141,5 +141,5 @@ export function useInbox(initialFilters?: Partial<InboxFilters>) {
 
   const refetch = useCallback(() => { void load(filters, undefined, true); }, [load, filters]);
 
-  return { chats, nextCursor, total, loading, loadingMore, error, filters, setFilters, loadMore, refetch };
+  return { chats, nextCursor, hasMore, total, loading, loadingMore, error, filters, setFilters, loadMore, refetch };
 }

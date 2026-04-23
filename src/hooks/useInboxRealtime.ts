@@ -6,12 +6,10 @@ import { playNewMessageSound, playUrgentSound } from "@/lib/realtime/sounds";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   bumpInboxRefetch,
-  clearMyPending,
   clearPresence,
   clearSlaDeadline,
   clearUrgent,
   markUrgent,
-  setMyPending,
   setPresence,
   setSlaDeadline,
 } from "@/store/realtimeSlice";
@@ -73,9 +71,7 @@ export function useInboxRealtime() {
           if (chatId === null) break;
           const uid = d.user_id;
           dispatch(clearUrgent(chatId));
-          if (sameUser(uid, myUserId)) {
-            dispatch(setMyPending(chatId));
-          } else {
+          if (!sameUser(uid, myUserId)) {
             dispatch(
               setPresence({
                 chatId,
@@ -131,8 +127,6 @@ export function useInboxRealtime() {
             dispatch(clearPresence(chatId));
             dispatch(clearUrgent(chatId));
           }
-          const uid = d.user_id;
-          if (sameUser(uid, myUserId)) dispatch(clearMyPending());
           break;
         }
         case "urgent_alert": {
