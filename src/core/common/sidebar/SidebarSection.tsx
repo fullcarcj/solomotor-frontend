@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { MenuSection } from "@/store/menuSlice";
 import SidebarItem from "./SidebarItem";
+import { normalizeTablerIcon } from "./menuPathIcon";
 
 interface Props {
   section: MenuSection;
@@ -13,7 +14,7 @@ interface Props {
 export default function SidebarSection({ section, pathname }: Props) {
   const hasActiveChild = section.items.some((item) => item.path && pathname === item.path);
   const [open, setOpen] = useState(hasActiveChild);
-  const icon = section.icon?.trim() || "layout-grid";
+  const icon = normalizeTablerIcon(section.icon, "layout-grid");
   const pending = section.moduleStatus === "pending";
 
   return (

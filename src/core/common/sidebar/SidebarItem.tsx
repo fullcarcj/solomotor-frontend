@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { MenuItemLeaf } from "@/store/menuSlice";
-import { tablerIconForMenuPath } from "./menuPathIcon";
+import { normalizeTablerIcon, tablerIconForMenuPath } from "./menuPathIcon";
 
 interface Props {
   item: MenuItemLeaf;
@@ -11,7 +11,9 @@ interface Props {
 
 function leafIcon(item: MenuItemLeaf): string {
   const raw = item.icon?.trim();
-  if (raw) return raw.replace(/^ti\s+ti-/i, "").replace(/^ti-/i, "");
+  if (raw) {
+    return normalizeTablerIcon(raw, tablerIconForMenuPath(item.path || ""));
+  }
   return tablerIconForMenuPath(item.path || "");
 }
 
