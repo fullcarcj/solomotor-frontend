@@ -6,6 +6,7 @@ const SOURCES = [
   { value: "wa",          label: "WhatsApp" },
   { value: "ml_question", label: "ML Preguntas" },
   { value: "ml_message",  label: "ML Mensajes" },
+  { value: "fb_page",     label: "Facebook Messenger" },
 ];
 
 interface Props {
