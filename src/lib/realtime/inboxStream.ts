@@ -23,6 +23,7 @@ class InboxStream {
       "chat_released",
       "urgent_alert",
       "sla_started",
+      "new_sale",
     ];
     for (const name of events) {
       this.es.addEventListener(name, (ev: MessageEvent) => {

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { inboxStream } from "@/lib/realtime/inboxStream";
-import { playNewMessageSound, playUrgentSound } from "@/lib/realtime/sounds";
+import { playInboxInboundSound, playNewSaleSound, playUrgentSound } from "@/lib/realtime/sounds";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   applySseInboxQuickNotify,
@@ -147,7 +147,7 @@ export function useInboxRealtime() {
                 preview: msg.preview ?? null,
               })
             );
-            playNewMessageSound();
+            playInboxInboundSound(msg.source_type);
           }
           dispatch(bumpInboxRefetch());
           break;
@@ -161,8 +161,13 @@ export function useInboxRealtime() {
                 preview: msg.preview ?? null,
               })
             );
-            playNewMessageSound();
+            playInboxInboundSound(msg.source_type);
           }
+          dispatch(bumpInboxRefetch());
+          break;
+        }
+        case "new_sale": {
+          playNewSaleSound();
           dispatch(bumpInboxRefetch());
           break;
         }

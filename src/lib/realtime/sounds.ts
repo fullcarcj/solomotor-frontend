@@ -1,6 +1,13 @@
 /** Máximo un sonido por ventana corta (evita spam si llegan muchos SSE). */
-let lastSoundAt = 0;
-const THROTTLE_MS = 400;
+let lastInboxSoundAt = 0;
+const INBOX_THROTTLE_MS = 400;
+
+/** Cooldown aparte para venta nueva (puede coincidir en el tiempo con mensaje). */
+let lastSaleSoundAt = 0;
+const SALE_THROTTLE_MS = 800;
+
+let lastUrgentSoundAt = 0;
+const URGENT_THROTTLE_MS = 400;
 
 let audioCtx: AudioContext | null = null;
 
@@ -30,7 +37,7 @@ export function unlockBandejaAudio(): void {
 }
 
 /**
- * Pitido corto vía Web Audio (no depende de archivos .mp3 en /public).
+ * Pitido corto vía Web Audio (no depende de archivos en /public).
  */
 function playBeep(freqHz: number, durationSec: number): void {
   const c = getAudioContext();
@@ -56,30 +63,96 @@ function playBeep(freqHz: number, durationSec: number): void {
   }
 }
 
-function playThrottled(src: string | null, beepFreq: number): void {
+function playUrlOrBeep(url: string, beepHz: number): void {
   if (typeof window === "undefined") return;
-  const now = Date.now();
-  if (now - lastSoundAt < THROTTLE_MS) return;
-  lastSoundAt = now;
-
-  const tryMp3 = () => {
-    if (!src) return Promise.reject(new Error("no_src"));
-    const a = new Audio(src);
-    return a.play();
-  };
-
-  void tryMp3().catch(() => {
-    playBeep(beepFreq, 0.14);
+  const a = new Audio(url);
+  void a.play().catch(() => {
+    playBeep(beepHz, 0.14);
   });
 }
 
-/** Mensaje entrante (SSE `new_message` / `chat_reopened`). */
+function inboxSoundThrottleOk(): boolean {
+  const now = Date.now();
+  if (now - lastInboxSoundAt < INBOX_THROTTLE_MS) return false;
+  lastInboxSoundAt = now;
+  return true;
+}
+
+/**
+ * TTS corto para inbound WhatsApp (sin archivo WAV): "Mensaje en WhatsApp."
+ * Requiere gesto previo del usuario (unlockBandejaAudio / pointer) en muchos navegadores.
+ */
+function speakWhatsappInboundCue(): void {
+  if (typeof window === "undefined") return;
+  const synth = window.speechSynthesis;
+  if (!synth) {
+    playBeep(620, 0.14);
+    return;
+  }
+  try {
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance("Mensaje en WhatsApp.");
+    u.lang = "es-419";
+    u.rate = 0.95;
+    const voices = synth.getVoices();
+    const pick =
+      voices.find((v) => /^es/i.test(v.lang) && /419|latam|america|mex|argent|colom|venez|ecua|peru/i.test(`${v.lang} ${v.name}`)) ||
+      voices.find((v) => /^es/i.test(v.lang));
+    if (pick) u.voice = pick;
+    u.onerror = () => {
+      playBeep(620, 0.14);
+    };
+    synth.speak(u);
+  } catch {
+    playBeep(620, 0.14);
+  }
+}
+
+/**
+ * Mensaje entrante omnicanal (SSE `new_message` / `chat_reopened`).
+ * Sonidos por `source_type`: WA → TTS; pregunta ML → preguntas.wav; pack ML → ml-message.wav.
+ */
+export function playInboxInboundSound(sourceType: string | null | undefined): void {
+  if (!inboxSoundThrottleOk()) return;
+  unlockBandejaAudio();
+  const st = (sourceType != null ? String(sourceType) : "").trim().toLowerCase();
+
+  if (st === "wa" || st === "wa_ml_linked") {
+    speakWhatsappInboundCue();
+    return;
+  }
+  if (st === "ml_question") {
+    playUrlOrBeep("/sounds/preguntas.wav", 880);
+    return;
+  }
+  if (st === "ml_message" || st === "ml") {
+    playUrlOrBeep("/sounds/ml-message.wav", 760);
+    return;
+  }
+  playUrlOrBeep("/sounds/preguntas.wav", 880);
+}
+
+/** @deprecated Usar `playInboxInboundSound`; se mantiene para llamadas sin tipo. */
 export function playNewMessageSound(): void {
-  // Prueba: WAV desde Sonidos_fullcar (copia en `public/sounds/preguntas.wav`). Si falla → pitido.
-  playThrottled("/sounds/preguntas.wav", 880);
+  playInboxInboundSound(null);
+}
+
+/** Nueva venta importada a `sales_orders` (SSE `new_sale` desde API import ML). */
+export function playNewSaleSound(): void {
+  if (typeof window === "undefined") return;
+  const now = Date.now();
+  if (now - lastSaleSoundAt < SALE_THROTTLE_MS) return;
+  lastSaleSoundAt = now;
+  unlockBandejaAudio();
+  playUrlOrBeep("/sounds/venta.wav", 520);
 }
 
 /** SLA / urgente. */
 export function playUrgentSound(): void {
-  playThrottled("/sounds/urgent-alert.mp3", 520);
+  if (typeof window === "undefined") return;
+  const now = Date.now();
+  if (now - lastUrgentSoundAt < URGENT_THROTTLE_MS) return;
+  lastUrgentSoundAt = now;
+  unlockBandejaAudio();
+  playUrlOrBeep("/sounds/urgent-alert.mp3", 520);
 }

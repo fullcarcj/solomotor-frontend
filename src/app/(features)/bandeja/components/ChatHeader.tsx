@@ -97,7 +97,6 @@ export default function ChatHeader({
   const pendingReply = chat.customer_waiting_reply === true;
 
   return (
-    <>
     <div className="mu-convo-header bandeja-chat-header-wa">
       <Link href="/bandeja" className="btn btn-sm mu-icon-btn d-flex align-items-center gap-1" aria-label="Volver a bandeja">
         <i className="ti ti-arrow-left" />
@@ -252,12 +251,5 @@ export default function ChatHeader({
         </div>
       </div>
     </div>
-    {pendingReply && (
-      <div className="mu-convo-pending-bar" role="status" aria-live="polite">
-        <i className="ti ti-bell-ringing me-2" aria-hidden />
-        Cliente esperando respuesta. Respondé en el hilo o marcá atendido desde la lista si ya contestaste fuera de la bandeja.
-      </div>
-    )}
-    </>
   );
 }

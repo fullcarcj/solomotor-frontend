@@ -622,19 +622,6 @@
   flex-shrink: 0;
 }
 
-.mu-convo-pending-bar {
-  flex-shrink: 0;
-  width: 100%;
-  padding: 8px 16px;
-  font-size: 11px;
-  line-height: 1.4;
-  color: #fde68a;
-  background: linear-gradient(90deg, rgba(180, 83, 9, 0.35), rgba(30, 27, 15, 0.95));
-  border-bottom: 1px solid rgba(245, 158, 11, 0.35);
-  display: flex;
-  align-items: center;
-}
-
 .mu-convo-name {
   font-size: 15px;
   font-weight: 700;
