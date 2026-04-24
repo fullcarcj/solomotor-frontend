@@ -44,12 +44,17 @@ export default function BandejaSonidoDevPage() {
     playUrgentSound();
   }, []);
 
+  const playFb = useCallback(() => {
+    unlockBandejaAudio();
+    playInboxInboundSound("fb_page");
+  }, []);
+
   return (
     <div className="content container-fluid py-5" style={{ maxWidth: 640 }}>
       <h1 className="h4 mb-3">Prueba de sonido — bandeja</h1>
       <p className="text-muted small mb-4">
         El navegador exige un gesto (clic) antes de reproducir audio. WhatsApp usa voz del sistema
-        (TTS): «Mensaje en WhatsApp.»
+        (TTS): «Mensaje en WhatsApp.» Facebook usa doble pitido (700 Hz → 900 Hz).
       </p>
       <div className="d-flex flex-wrap gap-2">
         <button type="button" className="btn btn-outline-secondary btn-sm" onClick={playDefault}>
@@ -69,6 +74,14 @@ export default function BandejaSonidoDevPage() {
         </button>
         <button type="button" className="btn btn-outline-warning btn-sm" onClick={playUrgente}>
           Urgente
+        </button>
+        <button
+          type="button"
+          className="btn btn-sm"
+          style={{ background: "#0866ff", color: "#fff", border: "none" }}
+          onClick={playFb}
+        >
+          Facebook Messenger
         </button>
       </div>
     </div>

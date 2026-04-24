@@ -16,7 +16,7 @@
  *   5 = Mostrador/Directo
  */
 
-export type ChannelKey = "wa" | "ml" | "eco" | "fv" | "direct";
+export type ChannelKey = "wa" | "ml" | "eco" | "fv" | "direct" | "fb";
 
 interface ChannelDef {
   label: string;
@@ -28,11 +28,12 @@ interface ChannelDef {
 }
 
 const CHANNEL_DEFS: Record<ChannelKey, ChannelDef> = {
-  wa:     { label: "WhatsApp",       short: "W", bg: "#25d366", fg: "#0a0b08" },
-  ml:     { label: "MercadoLibre",   short: "M", bg: "#fff159", fg: "#0a0b08" },
-  eco:    { label: "E-commerce",     short: "E", bg: "#6ab6ff", fg: "#0a0b08" },
-  fv:     { label: "Fuerza de venta",short: "F", bg: "#ff6a3d", fg: "#0a0b08" },
-  direct: { label: "Mostrador",      short: "D", bg: "#8a8a8a", fg: "#0a0b08" },
+  wa:     { label: "WhatsApp",         short: "W",  bg: "#25d366", fg: "#0a0b08" },
+  ml:     { label: "MercadoLibre",     short: "M",  bg: "#fff159", fg: "#0a0b08" },
+  eco:    { label: "E-commerce",       short: "E",  bg: "#6ab6ff", fg: "#0a0b08" },
+  fv:     { label: "Fuerza de venta",  short: "F",  bg: "#ff6a3d", fg: "#0a0b08" },
+  direct: { label: "Mostrador",        short: "D",  bg: "#8a8a8a", fg: "#0a0b08" },
+  fb:     { label: "Facebook Messenger", short: "FB", bg: "#0866ff", fg: "#ffffff" },
 };
 
 /**
@@ -45,6 +46,7 @@ export function sourceTypeToChannel(sourceType: string | null | undefined): Chan
   if (!sourceType) return "direct";
   if (sourceType === "wa_inbound" || sourceType === "wa_ml_linked") return "wa";
   if (sourceType === "ml_question" || sourceType === "ml_message") return "ml";
+  if (sourceType === "fb_page") return "fb";
   if (sourceType.startsWith("eco")) return "eco";
   if (sourceType.startsWith("fv") || sourceType === "mostrador") return "fv";
   return "direct";

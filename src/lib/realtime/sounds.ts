@@ -117,7 +117,7 @@ export function playInboxInboundSound(sourceType: string | null | undefined): vo
   unlockBandejaAudio();
   const st = (sourceType != null ? String(sourceType) : "").trim().toLowerCase();
 
-  if (st === "wa" || st === "wa_ml_linked") {
+  if (st === "wa_inbound" || st === "wa" || st === "wa_ml_linked") {
     speakWhatsappInboundCue();
     return;
   }
@@ -127,6 +127,11 @@ export function playInboxInboundSound(sourceType: string | null | undefined): vo
   }
   if (st === "ml_message" || st === "ml") {
     playUrlOrBeep("/sounds/ml-message.wav", 760);
+    return;
+  }
+  if (st === "fb_page") {
+    playBeep(700, 0.12);
+    playBeep(900, 0.09);
     return;
   }
   playUrlOrBeep("/sounds/preguntas.wav", 880);
