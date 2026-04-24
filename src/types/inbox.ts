@@ -79,6 +79,14 @@ export interface InboxChat {
    * Aparece en bandeja con badge "NO CLIENTE" y sin pipeline de ventas.
    */
   is_operational?:        boolean;
+  /** Timestamp ISO del último mensaje inbound (columna crm_chats.last_inbound_at). */
+  last_inbound_at?:       string | null;
+  /**
+   * Solo para source_type='fb_page': ISO timestamp en que expira la ventana de
+   * mensajería estándar de Meta (last_inbound_at + 24 h). Null si no hay inbound.
+   * El frontend bloquea el input de respuesta cuando Date.now() supera este valor.
+   */
+  fb_window_expires_at?:  string | null;
 }
 
 export interface InboxCounts {

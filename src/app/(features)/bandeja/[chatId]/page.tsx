@@ -474,6 +474,7 @@ export default function ChatDetailPage() {
                 chat && isMlQuestionThreadChat(chat) ? "ml_question" : (chat?.source_type ?? "")
               }
               onSend={sendMessageForChat}
+              fbWindowExpiresAt={chat?.fb_window_expires_at ?? null}
             />
 
             {/* Slide-over / modales: dentro de CONVO para no añadir columnas al flex del shell */}

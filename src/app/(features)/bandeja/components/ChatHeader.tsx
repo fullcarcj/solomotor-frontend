@@ -5,6 +5,7 @@ import type { InboxChat } from "@/types/inbox";
 import ChannelBadge from "./ChannelBadge";
 import { CHAT_STAGE_LABELS, bandejaMlQuestionPipelineStage } from "@/types/inbox";
 import SlaCountdown from "@/components/bandeja/SlaCountdown";
+import { isFbWindowExpired, fbWindowRemainingMs } from "./MessageInput";
 
 function initials(name: string | null, phone: string): string {
   if (name) { const p = name.trim().split(" "); return (p[0][0] + (p[1]?.[0] ?? "")).toUpperCase(); }
@@ -96,6 +97,21 @@ export default function ChatHeader({
 
   const pendingReply = chat.customer_waiting_reply === true;
 
+  // ── Ventana FB 24 h ───────────────────────────────────────────────────────
+  const isFbChat = chat.source_type === "fb_page";
+  const [, fbTick] = useState(0);
+  useEffect(() => {
+    if (!isFbChat || !chat.fb_window_expires_at) return;
+    const interval = setInterval(() => fbTick((n) => n + 1), 60_000);
+    return () => clearInterval(interval);
+  }, [isFbChat, chat.fb_window_expires_at]);
+
+  const fbExpired = isFbChat && isFbWindowExpired(chat.fb_window_expires_at);
+  const fbRemainingMs = isFbChat ? fbWindowRemainingMs(chat.fb_window_expires_at) : 0;
+  const fbRemainingH = Math.floor(fbRemainingMs / 3_600_000);
+  const fbRemainingMin = Math.floor((fbRemainingMs % 3_600_000) / 60_000);
+  const fbWindowWarning = isFbChat && !fbExpired && fbRemainingMs < 4 * 3_600_000;
+
   return (
     <div className="mu-convo-header bandeja-chat-header-wa">
       <Link href="/bandeja" className="btn btn-sm mu-icon-btn d-flex align-items-center gap-1" aria-label="Volver a bandeja">
@@ -126,6 +142,34 @@ export default function ChatHeader({
           {pendingReply && (
             <span className="mu-convo-pending-chip" title="El último mensaje es del cliente">
               Por atender
+            </span>
+          )}
+          {fbExpired && (
+            <span
+              title="Han pasado más de 24 h desde el último mensaje del cliente. Facebook no permite responder."
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 3,
+                fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.02em",
+                background: "rgba(8,102,255,0.15)", color: "#4a90d9",
+                borderRadius: 4, padding: "1px 5px",
+              }}
+            >
+              <i className="ti ti-clock-off" style={{ fontSize: "0.75rem" }} />
+              FB 24h cerrada
+            </span>
+          )}
+          {fbWindowWarning && (
+            <span
+              title={`Ventana Facebook cierra en ${fbRemainingH}h ${fbRemainingMin}min`}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 3,
+                fontSize: "0.65rem", fontWeight: 700,
+                background: "rgba(245,158,11,0.15)", color: "#b45309",
+                borderRadius: 4, padding: "1px 5px",
+              }}
+            >
+              <i className="ti ti-clock-exclamation" style={{ fontSize: "0.75rem" }} />
+              FB {fbRemainingH}h{fbRemainingMin}m
             </span>
           )}
           <SlaCountdown deadline={slaDeadline ?? chat.sla_deadline_at ?? null} />

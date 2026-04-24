@@ -8,6 +8,23 @@ export type MessageSendResult =
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
+/**
+ * Ventana de mensajería estándar Facebook: 24 h desde el último mensaje inbound.
+ * Retorna true si ya expiró (o si `expiresAt` es null/undefined).
+ */
+export function isFbWindowExpired(expiresAt: string | null | undefined): boolean {
+  if (!expiresAt) return true;
+  return Date.now() >= new Date(expiresAt).getTime();
+}
+
+/**
+ * Retorna los ms restantes de la ventana FB, o 0 si expiró.
+ */
+export function fbWindowRemainingMs(expiresAt: string | null | undefined): number {
+  if (!expiresAt) return 0;
+  return Math.max(0, new Date(expiresAt).getTime() - Date.now());
+}
+
 function formatFileSize(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return "";
   if (bytes < 1024) return `${bytes} B`;
@@ -27,9 +44,14 @@ interface Props {
   sourceType:   string;
   /** `file` opcional: WhatsApp (`/api/bandeja/.../messages`) y mensajería ML (`ml_message`). */
   onSend:       (text: string, sentBy: string, file?: File | null) => Promise<MessageSendResult>;
+  /**
+   * Solo para `source_type='fb_page'`: ISO timestamp en que expira la ventana de 24 h de Meta.
+   * Si está en el pasado (o es null), el input se bloquea con un aviso.
+   */
+  fbWindowExpiresAt?: string | null;
 }
 
-export default function MessageInput({ chatId: _chatId, sourceType, onSend }: Props) {
+export default function MessageInput({ chatId: _chatId, sourceType, onSend, fbWindowExpiresAt }: Props) {
   const username = useAppSelector(s => s.auth.role ?? "agent");
   const [text, setText]     = useState("");
   const [sending, setSending] = useState(false);
@@ -39,6 +61,22 @@ export default function MessageInput({ chatId: _chatId, sourceType, onSend }: Pr
   const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Ventana de 24 h de Meta (solo fb_page) ───────────────────────────────
+  const isFbChat = sourceType === "fb_page";
+  // Re-evalúa cada minuto para actualizar conteo sin re-render forzado
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!isFbChat || !fbWindowExpiresAt) return;
+    const interval = setInterval(() => setTick((n) => n + 1), 60_000);
+    return () => clearInterval(interval);
+  }, [isFbChat, fbWindowExpiresAt]);
+
+  const fbBlocked = isFbChat && isFbWindowExpired(fbWindowExpiresAt);
+  const fbRemainingMs = isFbChat ? fbWindowRemainingMs(fbWindowExpiresAt) : 0;
+  const fbRemainingH = Math.floor(fbRemainingMs / 3_600_000);
+  const fbRemainingMin = Math.floor((fbRemainingMs % 3_600_000) / 60_000);
+  const fbWindowWarning = isFbChat && !fbBlocked && fbRemainingMs < 4 * 3_600_000; // <4h → aviso
 
   const allowAttachments = sourceType !== "ml_question";
 
@@ -123,10 +161,42 @@ export default function MessageInput({ chatId: _chatId, sourceType, onSend }: Pr
     setPendingFile(f);
   }
 
-  const canSend = Boolean(text.trim() || pendingFile) && !sending;
+  const canSend = Boolean(text.trim() || pendingFile) && !sending && !fbBlocked;
+
+  // Si Facebook bloquea: overlay con mensaje; no renderizamos el input normal
+  if (fbBlocked) {
+    return (
+      <div className="d-flex flex-column flex-shrink-0">
+        <div
+          className="d-flex align-items-center gap-2 px-3 py-3 small"
+          style={{ background: "rgba(8,102,255,0.08)", borderTop: "1px solid rgba(8,102,255,0.18)", color: "#4a90d9" }}
+        >
+          <i className="ti ti-clock-off fs-5 flex-shrink-0" />
+          <span>
+            <strong>Ventana de Facebook cerrada.</strong>{" "}
+            Han pasado más de 24 h desde el último mensaje del cliente.
+            Solo puedes responder cuando él vuelva a escribir.
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="d-flex flex-column flex-shrink-0">
+      {fbWindowWarning && (
+        <div
+          className="d-flex align-items-center gap-2 px-3 py-2 small"
+          style={{ background: "rgba(245,158,11,0.08)", borderTop: "1px solid rgba(245,158,11,0.2)", color: "#b45309" }}
+        >
+          <i className="ti ti-clock-exclamation flex-shrink-0" />
+          <span>
+            Ventana Facebook: cierra en{" "}
+            <strong>{fbRemainingH}h {fbRemainingMin}min</strong>.
+            Responde antes de que expire.
+          </span>
+        </div>
+      )}
       {error && (
         <div className="alert bandeja-wa-alert py-2 px-3 mb-0 small border-0 rounded-0">{error}</div>
       )}
