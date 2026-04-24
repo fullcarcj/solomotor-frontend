@@ -492,6 +492,9 @@ export interface QuotePanelProps {
   forceOpen?: boolean;
   /** Callback para que el padre sepa que ya consumió el forceOpen */
   onForceOpenConsumed?: () => void;
+  /** Carga líneas de un borrador ya persistido (p. ej. «Llevar a cotización» desde orden ML). */
+  bootstrapDraftQuotationId?: number | null;
+  onBootstrapDraftConsumed?: () => void;
   /** Callback tras crear la cotización con éxito */
   onSuccess?: () => void;
   /** Notifica al padre la cotización activa enviada (id + referencia + total USD) o null si no hay */
@@ -582,11 +585,36 @@ interface PaymentAllocation {
   created_at: string;
 }
 
+function productStubFromPresupuestoLine(r: Record<string, unknown>): Product {
+  const id = Number(r.producto_id);
+  const pu = Number(r.precio_unitario);
+  return {
+    id: Number.isFinite(id) ? id : 0,
+    sku: r.sku != null ? String(r.sku) : "",
+    name: r.name != null ? String(r.name) : "Producto",
+    description: r.description != null ? String(r.description) : null,
+    category: "",
+    brand: "",
+    unit_price_usd: Number.isFinite(pu) ? pu : null,
+    source: "presupuesto",
+    is_active: true,
+    stock_qty: r.stock_qty != null ? Number(r.stock_qty) : 0,
+    stock_min: 0,
+    stock_max: null,
+    stock_alert: false,
+    lead_time_days: 0,
+    safety_factor: 1,
+    supplier_id: null,
+  };
+}
+
 export default function QuotePanel({
   chatId,
   customerId,
   forceOpen,
   onForceOpenConsumed,
+  bootstrapDraftQuotationId,
+  onBootstrapDraftConsumed,
   onSuccess,
   onSentQuoteChange,
 }: QuotePanelProps) {
@@ -763,6 +791,61 @@ export default function QuotePanel({
       }, 80);
     }
   }, [forceOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const qid = bootstrapDraftQuotationId;
+    if (qid == null || !Number.isFinite(qid) || qid <= 0) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const r = await fetch(
+          `/api/inbox/quotations/presupuesto/${encodeURIComponent(String(qid))}`,
+          { credentials: "include", cache: "no-store" }
+        );
+        const data = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+        if (!alive) return;
+        if (!r.ok) {
+          onBootstrapDraftConsumed?.();
+          window.alert("No se pudo cargar el borrador de cotización en el panel.");
+          return;
+        }
+        const pres = data.presupuesto as Record<string, unknown> | undefined;
+        if (
+          pres?.chat_id != null &&
+          Number(pres.chat_id) > 0 &&
+          Number(pres.chat_id) !== Number(chatId)
+        ) {
+          onBootstrapDraftConsumed?.();
+          return;
+        }
+        const rawLines = (data.lines ?? []) as Record<string, unknown>[];
+        const nextLines: QuoteLine[] = rawLines
+          .map((row, idx) => ({
+            key: `boot-${qid}-${row.id ?? idx}`,
+            product: productStubFromPresupuestoLine(row),
+            cantidad: Number(row.cantidad) > 0 ? Number(row.cantidad) : 1,
+            precio_unitario: Number(row.precio_unitario) >= 0 ? Number(row.precio_unitario) : 0,
+          }))
+          .filter((L) => L.product.id > 0);
+        setSentQuote(null);
+        setReadonlyQuoteLines([]);
+        setQuoteEditing(false);
+        setLines(nextLines);
+        setIsOpen(true);
+        setError(null);
+        setTimeout(() => {
+          panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 80);
+      } catch {
+        /* ignore */
+      } finally {
+        if (alive) onBootstrapDraftConsumed?.();
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [bootstrapDraftQuotationId, chatId, onBootstrapDraftConsumed]);
 
   // Reset cuando cambia el chat
   useEffect(() => {

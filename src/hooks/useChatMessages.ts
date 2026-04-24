@@ -210,19 +210,34 @@ export function useChatMessages(chatId: string | number | null) {
     void load(chatId, oldestId);
   }, [chatId, load, messages, loadingMore, hasMore]);
 
-  const sendMessage = useCallback(async (text: string, sentBy?: string): Promise<boolean> => {
+  const sendMessage = useCallback(async (text: string, sentBy?: string, file?: File | null): Promise<boolean> => {
     if (!chatId) return false;
     const url = `/api/bandeja/${encodeURIComponent(String(chatId))}/messages`;
-    const payload = { text, sent_by: sentBy ?? "agent" };
+    const basePayload: Record<string, unknown> = { text, sent_by: sentBy ?? "agent" };
+    if (file) {
+      const max = 10 * 1024 * 1024;
+      if (file.size > max) return false;
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result || ""));
+        fr.onerror = () => reject(new Error("read_failed"));
+        fr.readAsDataURL(file);
+      });
+      const comma = dataUrl.indexOf(",");
+      const b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+      basePayload.attachment_base64 = b64;
+      basePayload.attachment_mime_type = file.type || "application/octet-stream";
+      basePayload.attachment_file_name = file.name || "adjunto";
+    }
     try {
       if (process.env.NODE_ENV === "development") {
-        console.log("[useChatMessages] POST", { url, body: payload });
+        console.log("[useChatMessages] POST", { url, hasFile: Boolean(file) });
       }
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(payload),
+        body: JSON.stringify(basePayload),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({})) as Record<string, unknown>;

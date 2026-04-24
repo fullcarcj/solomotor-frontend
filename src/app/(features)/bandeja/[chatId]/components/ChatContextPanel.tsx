@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import type { InboxChat } from "@/types/inbox";
 import { bandejaMlQuestionPipelineStage, isMlQuestionThreadChat } from "@/types/inbox";
 import PipelineMini from "@/app/(features)/bandeja/components/PipelineMini";
@@ -940,6 +940,7 @@ function MercadoLibreOperativeSection({
   showPublicationWaMlOrder,
   canLinkMlOrder,
   onOpenLinkOrder,
+  onQuoteCreatedFromMl,
 }: {
   chatId: string;
   chat: InboxChat;
@@ -952,6 +953,7 @@ function MercadoLibreOperativeSection({
   showPublicationWaMlOrder: boolean;
   canLinkMlOrder: boolean;
   onOpenLinkOrder: () => void;
+  onQuoteCreatedFromMl: (presupuestoId: number, warnings: unknown[]) => void;
 }) {
   const showOuter =
     (!hasCustomer && isMlQuestionOrigin) ||
@@ -979,6 +981,7 @@ function MercadoLibreOperativeSection({
   const [listLoading, setListLoading] = useState(false);
   const [listListing, setListListing] = useState<MlItemListing | null>(null);
   const [listErr, setListErr] = useState<string | null>(null);
+  const [quotingMl, setQuotingMl] = useState(false);
 
   useEffect(() => {
     if (!needsOrderFetch) {
@@ -1093,6 +1096,16 @@ function MercadoLibreOperativeSection({
 
   if (!showOuter) return null;
 
+  const showQuoteCta =
+    hasCustomer &&
+    needsOrderFetch &&
+    !ordLoading &&
+    !ordErr &&
+    ordData != null &&
+    !ordData.not_synced &&
+    Array.isArray(ordData.items) &&
+    ordData.items.some((it) => it.product != null);
+
   const hasMlExpandedBody =
     showPublication ||
     showPublicationMlOrderOnly ||
@@ -1110,18 +1123,94 @@ function MercadoLibreOperativeSection({
       collapsible={hasMlExpandedBody}
       resetKey={`${chatId}-ml-operative`}
       titleAside={
-        showLinkCta ? (
-          <OpFranjaActionButton
-            type="button"
-            variant="accent"
-            iconClass="ti ti-link"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenLinkOrder();
+        showQuoteCta || showLinkCta ? (
+          <span
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+              justifyContent: "flex-end",
             }}
           >
-            Vincular orden ML
-          </OpFranjaActionButton>
+            {showQuoteCta ? (
+              <OpFranjaActionButton
+                type="button"
+                variant="accent"
+                iconClass="ti ti-file-invoice"
+                loading={quotingMl}
+                loadingLabel="Llevar a cotización"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void (async () => {
+                    setQuotingMl(true);
+                    try {
+                      const res = await fetch(
+                        `/api/inbox/${encodeURIComponent(chatId)}/quotations/from-ml-order`,
+                        {
+                          method: "POST",
+                          credentials: "include",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({}),
+                          cache: "no-store",
+                        }
+                      );
+                      const j = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+                      if (!res.ok) {
+                        window.alert(
+                          String(j.message ?? j.error ?? "No se pudo crear la cotización desde la orden ML.")
+                        );
+                        return;
+                      }
+                      const pres = j.presupuesto as Record<string, unknown> | undefined;
+                      const rawId = pres?.id ?? j.id;
+                      const newId = typeof rawId === "number" ? rawId : Number(rawId);
+                      if (!Number.isFinite(newId) || newId <= 0) {
+                        window.alert("Respuesta inválida del servidor al crear la cotización.");
+                        return;
+                      }
+                      const warnings = Array.isArray(j.warnings) ? j.warnings : [];
+                      const skipped = Array.isArray(j.skipped) ? j.skipped : [];
+                      if (warnings.length || skipped.length) {
+                        const parts: string[] = [];
+                        if (warnings.length) {
+                          parts.push(
+                            "Hay avisos de precio (orden vs catálogo con tasa Binance). Revisá las líneas antes de enviar."
+                          );
+                        }
+                        if (skipped.length) {
+                          parts.push(
+                            `Se omitieron ${skipped.length} ítem(es) (sin mapeo a producto o precio inválido).`
+                          );
+                        }
+                        window.alert(["Cotización en borrador creada.", "", ...parts].join("\n"));
+                      }
+                      onQuoteCreatedFromMl(newId, warnings);
+                    } catch {
+                      window.alert("Error de red al crear la cotización.");
+                    } finally {
+                      setQuotingMl(false);
+                    }
+                  })();
+                }}
+              >
+                Llevar a cotización
+              </OpFranjaActionButton>
+            ) : null}
+            {showLinkCta ? (
+              <OpFranjaActionButton
+                type="button"
+                variant="accent"
+                iconClass="ti ti-link"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenLinkOrder();
+                }}
+              >
+                Vincular orden ML
+              </OpFranjaActionButton>
+            ) : null}
+          </span>
         ) : undefined
       }
     >
@@ -1206,6 +1295,10 @@ export default function ChatContextPanel({
   const [activeTab, setActiveTab]         = useState<FichaTab>("ficha");
   const [linkOrderOpen, setLinkOrderOpen] = useState(false);
   const [linkCustomerOpen, setLinkCustomerOpen] = useState(false);
+  const [quoteBootstrapDraftId, setQuoteBootstrapDraftId] = useState<number | null>(null);
+  const clearQuoteBootstrapDraft = useCallback(() => {
+    setQuoteBootstrapDraftId(null);
+  }, []);
 
   /** Estado del buscador de producto en la pestaña Precios (misma API y criterios que QuotePanel) */
   const [priceSearchMode, setPriceSearchMode] = useState<"sku" | "name">("name");
@@ -1938,6 +2031,11 @@ export default function ChatContextPanel({
           showPublicationWaMlOrder={showPublicationWaMlOrder}
           canLinkMlOrder={canLinkMlOrder}
           onOpenLinkOrder={() => setLinkOrderOpen(true)}
+          onQuoteCreatedFromMl={(presupuestoId) => {
+            setQuoteBootstrapDraftId(presupuestoId);
+            setQuoteForceOpen(true);
+            void router.refresh();
+          }}
         />
       )}
 
@@ -1973,6 +2071,8 @@ export default function ChatContextPanel({
             customerId={customerId ?? null}
             forceOpen={quoteForceOpen}
             onForceOpenConsumed={() => setQuoteForceOpen(false)}
+            bootstrapDraftQuotationId={quoteBootstrapDraftId}
+            onBootstrapDraftConsumed={clearQuoteBootstrapDraft}
             onSentQuoteChange={setActiveSentQuote}
           />
 

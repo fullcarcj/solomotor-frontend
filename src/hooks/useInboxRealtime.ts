@@ -5,6 +5,7 @@ import { inboxStream } from "@/lib/realtime/inboxStream";
 import { playNewMessageSound, playUrgentSound } from "@/lib/realtime/sounds";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
+  applySseInboxQuickNotify,
   bumpInboxRefetch,
   clearPresence,
   clearSlaDeadline,
@@ -139,19 +140,27 @@ export function useInboxRealtime() {
         }
         case "new_message": {
           const msg = toNewMessagePayload(d);
-          // Sonido solo si hay chat_id válido (evita ruido por payloads malformados)
           if (msg.chat_id !== null && msg.chat_id !== undefined) {
+            dispatch(
+              applySseInboxQuickNotify({
+                chatId: msg.chat_id,
+                preview: msg.preview ?? null,
+              })
+            );
             playNewMessageSound();
           }
-          // Refetch del listado para reflejar el nuevo preview/unread_count.
-          // channel_id y source_type ya llegan en el objeto actualizado del listado;
-          // no hay que parchear el store manualmente.
           dispatch(bumpInboxRefetch());
           break;
         }
         case "chat_reopened": {
           const msg = toNewMessagePayload(d);
           if (msg.chat_id !== null && msg.chat_id !== undefined) {
+            dispatch(
+              applySseInboxQuickNotify({
+                chatId: msg.chat_id,
+                preview: msg.preview ?? null,
+              })
+            );
             playNewMessageSound();
           }
           dispatch(bumpInboxRefetch());

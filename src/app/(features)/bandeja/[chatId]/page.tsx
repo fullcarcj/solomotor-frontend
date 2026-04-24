@@ -48,6 +48,32 @@ const ACTION_LABELS: Record<NonNullable<ActionType>, (name: string | null) => st
 
 function errMsg(e: unknown) { return e instanceof Error ? e.message : "Error."; }
 
+const MAX_CHAT_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+
+/** Codifica archivo para JSON al receptor (ML o WA vía `/api/bandeja/.../messages`). */
+async function encodeFileForInboxAttachment(file: File): Promise<{
+  attachment_base64: string;
+  attachment_mime_type: string;
+  attachment_file_name: string;
+}> {
+  if (file.size > MAX_CHAT_ATTACHMENT_BYTES) {
+    throw new Error("FILE_TOO_LARGE");
+  }
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result || ""));
+    fr.onerror = () => reject(new Error("read_failed"));
+    fr.readAsDataURL(file);
+  });
+  const comma = dataUrl.indexOf(",");
+  const b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+  return {
+    attachment_base64: b64,
+    attachment_mime_type: file.type || "application/octet-stream",
+    attachment_file_name: file.name || "adjunto",
+  };
+}
+
 /**
  * /bandeja/[chatId] — Módulo Unificado de Ventas (Sprint 6A)
  *
@@ -126,8 +152,16 @@ export default function ChatDetailPage() {
   } = useChatMessages(chatId);
 
   const sendMessageForChat = useCallback(
-    async (text: string, sentBy: string): Promise<{ success: boolean; errorMessage?: string }> => {
+    async (text: string, sentBy: string, file?: File | null): Promise<{ success: boolean; errorMessage?: string }> => {
       const src = chat?.source_type ?? "";
+      const trimmed = text.trim();
+
+      if (file && chat && isMlQuestionThreadChat(chat)) {
+        return {
+          success: false,
+          errorMessage: "Las preguntas públicas de ML no admiten adjuntos desde esta bandeja.",
+        };
+      }
 
       if (chat && isMlQuestionThreadChat(chat)) {
         try {
@@ -148,17 +182,41 @@ export default function ChatDetailPage() {
       }
 
       if (src === "ml_message") {
+        if (!trimmed && !file) {
+          return { success: false, errorMessage: "Escribí un mensaje o adjuntá un archivo." };
+        }
         try {
+          const body: Record<string, unknown> = {
+            text: trimmed || (file ? "📎" : ""),
+            answered_by: sentBy,
+          };
+          if (file) {
+            try {
+              Object.assign(body, await encodeFileForInboxAttachment(file));
+            } catch (e) {
+              return {
+                success: false,
+                errorMessage:
+                  e instanceof Error && e.message === "FILE_TOO_LARGE"
+                    ? "El archivo supera 10 MB."
+                    : "No se pudo leer el archivo.",
+              };
+            }
+          }
           const res = await fetch(
             `/api/inbox/${encodeURIComponent(chatId)}/ml-message/reply`,
             {
               method: "POST", credentials: "include",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ text, answered_by: sentBy }),
+              body: JSON.stringify(body),
             }
           );
           const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
           if (!res.ok) {
+            const code = typeof data.code === "string" ? data.code : "";
+            if (code === "ML_ATTACHMENT_FAILED") {
+              return { success: false, errorMessage: "Mercado Libre rechazó el adjunto (tipo o tamaño)." };
+            }
             const errObj = data.error;
             if (res.status === 502 || (typeof errObj === "object" && errObj && "code" in errObj && (errObj as { code?: string }).code === "ML_SEND_FAILED")) {
               return { success: false, errorMessage: "Error al enviar por ML. Verifica que la orden esté activa." };
@@ -176,7 +234,7 @@ export default function ChatDetailPage() {
         }
       }
 
-      const ok = await sendMessage(text, sentBy);
+      const ok = await sendMessage(trimmed || (file ? "(Adjunto)" : ""), sentBy, file ?? undefined);
       return { success: ok, errorMessage: ok ? undefined : "No se pudo enviar el mensaje. Intenta de nuevo." };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchChat se declara debajo; tras POST ML se llama en runtime.
@@ -262,6 +320,7 @@ export default function ChatDetailPage() {
         chat_stage: normalizeChatStage(
           typeof d.chat_stage === "string" ? d.chat_stage : undefined
         ),
+        customer_waiting_reply: raw.customer_waiting_reply === true,
       };
 
       const vehiclesRaw = d.vehicles;

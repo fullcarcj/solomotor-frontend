@@ -37,6 +37,8 @@ export interface InboxChat {
   source_type:       string;
   identity_status:   string;
   last_message_text: string;
+  /** Dirección del último mensaje (listado inbox); parche SSE optimista. */
+  last_message_direction?: string | null;
   last_message_at:   string | null;
   unread_count:      number | string;
   ml_order_id:       string | null;

@@ -2,7 +2,6 @@
 import { useCallback, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { useInboxRealtime } from "@/hooks/useInboxRealtime";
 import { BandejaInboxProvider } from "./BandejaInboxContext";
 import BandejaTriajeMock from "./components/BandejaTriajeMock";
 import ChatList from "./components/ChatList";
@@ -18,15 +17,13 @@ interface Props {
  * Esto evita que ChatList se desmonte y vuelva a montar (y muestre esqueletos)
  * cada vez que el usuario abre o cambia de chat.
  *
- * - useInboxRealtime está aquí (una sola instancia).
+ * - SSE + conteo «Sin atender» global: `InboxLiveProvider` en `(features)/layout`.
  * - ChatList recibe activeChatId desde usePathname() → solo resalta el item
  *   activo, no recarga la lista.
  * - El handle de resize también vive aquí para que el ancho no se resetee al
  *   navegar entre chats.
  */
 export default function BandejaShell({ children }: Props) {
-  useInboxRealtime();
-
   const pathname = usePathname();
   const chatIdMatch = pathname?.match(/^\/bandeja\/(\d+)/);
   const activeChatId = chatIdMatch ? chatIdMatch[1] : undefined;
@@ -59,7 +56,10 @@ export default function BandejaShell({ children }: Props) {
 
   return (
     <BandejaInboxProvider>
-      <div className="page-wrapper" style={{ overflow: "hidden" }}>
+      <div
+        className="page-wrapper"
+        style={{ overflow: "hidden" }}
+      >
         <div className="content p-0">
           <div className={`bandeja-shell${isDetail ? " bandeja-shell--detail" : ""}`}>
 

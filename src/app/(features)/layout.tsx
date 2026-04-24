@@ -5,6 +5,7 @@ import Sidebar from "@/core/common/sidebar/sidebar";
 import ThemeSettings from "@/core/common/sidebar/themeSettings";
 import TwoColumnSidebar from "@/core/common/sidebar/two-column";
 import FeaturesShell from "./FeaturesShell";
+import FeaturesWithInboxLive from "./FeaturesWithInboxLive";
 import "./dashboard/sm-dashboard-shell.scss";
 
 export default function PageLayout({
@@ -15,14 +16,16 @@ export default function PageLayout({
   return (
     <FeaturesAuthGate>
       <FeaturesShell>
-        <div className="main-wrapper">
-          <Header />
-          <Sidebar />
-          <HorizontalSidebar />
-          <TwoColumnSidebar />
-          <ThemeSettings />
-          {children}
-        </div>
+        <FeaturesWithInboxLive>
+          <div className="main-wrapper">
+            <Header />
+            <Sidebar />
+            <HorizontalSidebar />
+            <TwoColumnSidebar />
+            <ThemeSettings />
+            {children}
+          </div>
+        </FeaturesWithInboxLive>
       </FeaturesShell>
     </FeaturesAuthGate>
   );

@@ -11,7 +11,8 @@
     "tsc:ventas": "tsc -p tsconfig.ventas.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "bandeja:sound-test": "node scripts/bandeja-sound-test.js"
   },
   "dependencies": {
     "@ant-design/v5-patch-for-react-19": "^1.0.3",

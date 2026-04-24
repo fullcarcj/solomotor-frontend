@@ -94,7 +94,10 @@ export default function ChatHeader({
     }
   };
 
+  const pendingReply = chat.customer_waiting_reply === true;
+
   return (
+    <>
     <div className="mu-convo-header bandeja-chat-header-wa">
       <Link href="/bandeja" className="btn btn-sm mu-icon-btn d-flex align-items-center gap-1" aria-label="Volver a bandeja">
         <i className="ti ti-arrow-left" />
@@ -121,6 +124,11 @@ export default function ChatHeader({
       <div className="flex-grow-1 min-w-0">
         <div className="mu-convo-name text-truncate d-flex align-items-center gap-2 flex-wrap">
           {displayName}
+          {pendingReply && (
+            <span className="mu-convo-pending-chip" title="El último mensaje es del cliente">
+              Por atender
+            </span>
+          )}
           <SlaCountdown deadline={slaDeadline ?? chat.sla_deadline_at ?? null} />
           {stageNorm && (
             <span className="mu-stage-inline">{CHAT_STAGE_LABELS[stageNorm]}</span>
@@ -244,5 +252,12 @@ export default function ChatHeader({
         </div>
       </div>
     </div>
+    {pendingReply && (
+      <div className="mu-convo-pending-bar" role="status" aria-live="polite">
+        <i className="ti ti-bell-ringing me-2" aria-hidden />
+        Cliente esperando respuesta. Respondé en el hilo o marcá atendido desde la lista si ya contestaste fuera de la bandeja.
+      </div>
+    )}
+    </>
   );
 }

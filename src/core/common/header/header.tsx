@@ -9,11 +9,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAppDispatch } from "@/store/hooks";
 import { clearCredentials } from "@/store/authSlice";
 import { clearMenu } from "@/store/menuSlice";
+import { useInboxLive } from "@/components/inbox/InboxLiveProvider";
 
 export default function Header() {
   const route = all_routes;
   const router = useRouter();
   const dispatch = useAppDispatch();
+  const { sinAtenderCount } = useInboxLive();
 
   const handleLogout = async (): Promise<void> => {
     try {
@@ -421,120 +423,69 @@ export default function Header() {
                 <span className="badge rounded-pill">1</span>
               </Link>
             </li>
-            {/* Notifications */}
+            {/* Bandeja — Sin atender (conteo alineado a GET /api/inbox/counts) */}
             <li className="nav-item dropdown nav-item-box">
               <Link
                 href="#"
-                className="dropdown-toggle nav-link"
+                className="dropdown-toggle nav-link position-relative"
                 data-bs-toggle="dropdown"
+                aria-label="Avisos de bandeja"
               >
-                {/* <i data-feather="bell" /> */}
-                <i className="ti ti-bell"></i>
-                {/* <span className="badge rounded-pill">2</span> */}
+                <i className="ti ti-bell" aria-hidden />
+                {sinAtenderCount != null && sinAtenderCount > 0 ? (
+                  <span className="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle">
+                    {sinAtenderCount > 99 ? "99+" : sinAtenderCount}
+                  </span>
+                ) : null}
               </Link>
               <div className="dropdown-menu notifications">
                 <div className="topnav-dropdown-header">
-                  <h5 className="notification-title">Notifications</h5>
-                  <Link href="#" className="clear-noti">
-                    Mark all as read
-                  </Link>
+                  <h5 className="notification-title">Bandeja</h5>
                 </div>
                 <div className="noti-content">
                   <ul className="notification-list">
                     <li className="notification-message">
-                      <Link href={route.activities}>
-                        <div className="media d-flex">
-                          <span className="avatar flex-shrink-0">
-                            <img
-                              alt="Img"
-                              src="assets/img/profiles/avatar-13.jpg"
-                            />
+                      <Link href={`${route.bandeja}?filter=unread`}>
+                        <div className="media d-flex align-items-start gap-2">
+                          <span className="avatar flex-shrink-0 d-flex align-items-center justify-content-center bg-opacity-25 bg-warning rounded-circle" style={{ width: 40, height: 40 }}>
+                            <i className="ti ti-bell-ringing text-warning" aria-hidden />
                           </span>
                           <div className="flex-grow-1">
-                            <p className="noti-details">
-                              <span className="noti-title">James Kirwin</span>{" "}
-                              confirmed his order. Order No: #78901.Estimated
-                              delivery: 2 days
+                            <p className="noti-details mb-1">
+                              <span className="noti-title">Sin atender</span>
+                              {sinAtenderCount != null ? (
+                                <>
+                                  {" "}
+                                  —{" "}
+                                  <strong>
+                                    {sinAtenderCount}{" "}
+                                    {sinAtenderCount === 1 ? "conversación" : "conversaciones"}
+                                  </strong>
+                                </>
+                              ) : (
+                                <span className="text-muted small"> Cargando…</span>
+                              )}
                             </p>
-                            <p className="noti-time">4 mins ago</p>
-                          </div>
-                        </div>
-                      </Link>
-                    </li>
-                    <li className="notification-message">
-                      <Link href={route.activities}>
-                        <div className="media d-flex">
-                          <span className="avatar flex-shrink-0">
-                            <img
-                              alt="Img"
-                              src="assets/img/profiles/avatar-03.jpg"
-                            />
-                          </span>
-                          <div className="flex-grow-1">
-                            <p className="noti-details">
-                              <span className="noti-title">Leo Kelly</span>{" "}
-                              cancelled his order scheduled for 17 Jan 2025
+                            <p className="noti-time mb-0 small text-muted">
+                              Mismo criterio que el filtro en la bandeja omnicanal.
                             </p>
-                            <p className="noti-time">10 mins ago</p>
-                          </div>
-                        </div>
-                      </Link>
-                    </li>
-                    <li className="notification-message">
-                      <Link href={route.activities} className="recent-msg">
-                        <div className="media d-flex">
-                          <span className="avatar flex-shrink-0">
-                            <img
-                              alt="Img"
-                              src="assets/img/profiles/avatar-17.jpg"
-                            />
-                          </span>
-                          <div className="flex-grow-1">
-                            <p className="noti-details">
-                              Payment of $50 received for Order #67890 from{" "}
-                              <span className="noti-title">Antonio Engle</span>
-                            </p>
-                            <p className="noti-time">05 mins ago</p>
-                          </div>
-                        </div>
-                      </Link>
-                    </li>
-                    <li className="notification-message">
-                      <Link href={route.activities} className="recent-msg">
-                        <div className="media d-flex">
-                          <span className="avatar flex-shrink-0">
-                            <img
-                              alt="Img"
-                              src="assets/img/profiles/avatar-02.jpg"
-                            />
-                          </span>
-                          <div className="flex-grow-1">
-                            <p className="noti-details">
-                              <span className="noti-title">Andrea</span>{" "}
-                              confirmed his order. Order No: #73401.Estimated
-                              delivery: 3 days
-                            </p>
-                            <p className="noti-time">4 mins ago</p>
                           </div>
                         </div>
                       </Link>
                     </li>
                   </ul>
                 </div>
-                <div className="topnav-dropdown-footer d-flex align-items-center gap-3">
-                  <Link href="#" className="btn btn-secondary btn-md w-100">
-                    Cancel
-                  </Link>
+                <div className="topnav-dropdown-footer">
                   <Link
-                    href={route.activities}
+                    href={`${route.bandeja}?filter=unread`}
                     className="btn btn-primary btn-md w-100"
                   >
-                    View all
+                    Abrir bandeja
                   </Link>
                 </div>
               </div>
             </li>
-            {/* /Notifications */}
+            {/* /Bandeja */}
             {/* Theme customizer (offcanvas) — a la derecha, como en el template DreamPOS */}
             <li className="nav-item nav-item-box">
               <Link

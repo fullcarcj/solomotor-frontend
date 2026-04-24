@@ -46,11 +46,13 @@ export function useInbox(initialFilters?: Partial<InboxFilters>) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
    * Debounce para refetches por nonce (SSE + bumpInboxRefetch post-acción).
-   * Varios bumps dentro de la misma ventana de 250 ms se colapsan en un solo fetch,
-   * evitando disparar 3–4 GETs a /api/bandeja por un único cambio de chat.
+   * Ventana corta: prioridad a feedback expedita; aún colapsa ráfagas típicas (release + SSE).
    */
+  const SSE_REFETCH_DEBOUNCE_MS = 75;
   const nonceDebouncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inboxRefetchNonce = useAppSelector((s) => s.realtime.inboxRefetchNonce);
+  const sseQuickTick = useAppSelector((s) => s.realtime.sseInboxQuickNotify?.tick ?? 0);
+  const sseQuick = useAppSelector((s) => s.realtime.sseInboxQuickNotify);
   const prevNonceRef = useRef<number | null>(null);
 
   /**
@@ -122,6 +124,33 @@ export function useInbox(initialFilters?: Partial<InboxFilters>) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void load(initFilters); }, []);
 
+  /** Parche optimista al SSE (preview, pendiente, tope de lista) antes del GET. */
+  useEffect(() => {
+    if (sseQuickTick < 1 || !sseQuick) return;
+    const { chatId, preview } = sseQuick;
+    setChats((prev) => {
+      const idx = prev.findIndex((c) => String(c.id) === chatId);
+      if (idx < 0) return prev;
+      const row = prev[idx];
+      const text =
+        preview != null && String(preview).trim() !== ""
+          ? String(preview)
+          : row.last_message_text;
+      const updated: InboxChat = {
+        ...row,
+        last_message_text: text,
+        last_message_at: new Date().toISOString(),
+        customer_waiting_reply: true,
+        last_message_direction: "inbound",
+        unread_count: (Number(row.unread_count) || 0) + 1,
+      };
+      const next = [...prev];
+      next.splice(idx, 1);
+      next.unshift(updated);
+      return next;
+    });
+  }, [sseQuickTick, sseQuick]);
+
   useEffect(() => {
     if (prevNonceRef.current === null) {
       prevNonceRef.current = inboxRefetchNonce;
@@ -130,14 +159,12 @@ export function useInbox(initialFilters?: Partial<InboxFilters>) {
     if (inboxRefetchNonce === prevNonceRef.current) return;
     prevNonceRef.current = inboxRefetchNonce;
 
-    // Debounce: colapsar rafagas de bumpInboxRefetch (release + SSE clear_notification +
-    // new_message que llegan en <250ms) en un solo fetch al backend.
     if (nonceDebouncRef.current) clearTimeout(nonceDebouncRef.current);
     const capturedFilters = filters;
     nonceDebouncRef.current = setTimeout(() => {
       nonceDebouncRef.current = null;
       void load(capturedFilters, undefined, true);
-    }, 250);
+    }, SSE_REFETCH_DEBOUNCE_MS);
   }, [inboxRefetchNonce, load, filters]);
 
   const loadMore = useCallback(() => {
