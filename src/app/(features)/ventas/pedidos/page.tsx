@@ -15,6 +15,7 @@ import PedidosKpiRibbon from "./components/PedidosKpiRibbon";
 import OrdTable from "./components/OrdTable";
 import MlOrderMessagingModal from "./components/MlOrderMessagingModal";
 import SaleQuoteModal, { type SaleQuoteModalContext } from "./components/SaleQuoteModal";
+import SaleReconcileModal, { type SaleReconcileContext } from "./components/SaleReconcileModal";
 import type { SaleDetail } from "@/types/sales";
 import "./pedidos-theme.scss";
 
@@ -49,6 +50,7 @@ function VentasPedidosPageInner() {
   const [mlPackModal, setMlPackModal] = useState<MlPackModalTarget | null>(null);
   const [dispatchToast, setDispatchToast] = useState(false);
   const [quoteCtx, setQuoteCtx] = useState<SaleQuoteModalContext | null>(null);
+  const [reconcileCtx, setReconcileCtx] = useState<SaleReconcileContext | null>(null);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
 
@@ -60,6 +62,17 @@ function VentasPedidosPageInner() {
 
   const isInitialLoad = loading && !hasData;
   const isRefetching = loading && hasData;
+
+  const openReconcileFromSale = useCallback((sale: Sale) => {
+    const rawId = String(sale.id).replace(/^so-/i, "");
+    const numId = Number(rawId);
+    if (!Number.isFinite(numId) || numId <= 0) return;
+    setReconcileCtx({
+      salesOrderId: numId,
+      totalBs: sale.total_amount_bs ?? null,
+      label: `Venta #${sale.id}${sale.external_order_id ? ` · ML ${sale.external_order_id}` : ""}`,
+    });
+  }, []);
 
   const openQuoteFromSale = useCallback((sale: Sale | SaleDetail) => {
     const src = String(sale.source || "").toLowerCase();
@@ -191,11 +204,13 @@ function VentasPedidosPageInner() {
       const ext = String(s.external_order_id ?? "").toLowerCase();
       const vendor = String(s.sold_by ?? "").toLowerCase();
       const cust = String(s.customer_id ?? "").toLowerCase();
+      const custName = String(s.customer_name ?? "").toLowerCase();
       return (
         id.includes(q) ||
         ext.includes(q) ||
         vendor.includes(q) ||
-        cust.includes(q)
+        cust.includes(q) ||
+        custName.includes(q)
       );
     });
   }, [sales, search]);
@@ -297,6 +312,7 @@ function VentasPedidosPageInner() {
                 setMlPackModal({ saleId: s.id, externalHint: s.external_order_id })
               }
               onOpenQuote={openQuoteFromSale}
+              onReconcile={openReconcileFromSale}
               onFulfillmentUpdated={refetch}
               onClearFilters={() => handleFilterChange("all")}
             />
@@ -312,6 +328,12 @@ function VentasPedidosPageInner() {
       />
 
       <SaleQuoteModal ctx={quoteCtx} onClose={() => setQuoteCtx(null)} />
+
+      <SaleReconcileModal
+        ctx={reconcileCtx}
+        onClose={() => setReconcileCtx(null)}
+        onReconciled={() => { setReconcileCtx(null); void refetch?.(); }}
+      />
 
       {mlPackModal != null && (
         <MlOrderMessagingModal

@@ -67,7 +67,8 @@ export default function SaleQuoteModal({ ctx, onClose }: SaleQuoteModalProps) {
     void (async () => {
       try {
         // Paso 0: lookup previo cross-chat por sales_order_id (evita crear duplicado sea cual sea el chat).
-        const soIdNum = Number(saleId);
+        // El id puede venir con prefijo "so-" (ej. "so-1253") desde v_sales_unified.
+        const soIdNum = Number(String(saleId).replace(/^so-/i, ""));
         if (Number.isFinite(soIdNum) && soIdNum > 0) {
           const prevRes = await fetch(
             `/api/inbox/quotations/by-sales-order/${encodeURIComponent(String(soIdNum))}`,

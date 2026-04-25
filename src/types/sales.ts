@@ -47,6 +47,14 @@ export interface Sale {
   items_preview?: ItemPreview[] | null;
   /** Resumen de la cotización activa vinculada, si existe. */
   quote_preview?: QuotePreview | null;
+  /** Tipo de tasa aplicada (ej. 'NATIVE_VES', 'BCV', 'BINANCE'). */
+  rate_type?: string | null;
+  /** Total en Bolívares según la tasa aplicada al momento de la importación. */
+  total_amount_bs?: number | null;
+  /** Tasa Bs/USD aplicada al importar. */
+  exchange_rate_bs_per_usd?: number | null;
+  /** Nombre del cliente resuelto (customers.full_name o buyer del raw_json ML). */
+  customer_name?: string | null;
 }
 
 export interface SaleItem {

@@ -76,6 +76,22 @@ function normalizeSale(raw: Record<string, unknown>): Sale {
         : String(raw.fulfillment_type).trim(),
     items_preview: normalizeItemPreviews(raw.items_preview),
     quote_preview: normalizeQuotePreview(raw.quote_preview),
+    rate_type:
+      raw.rate_type != null && String(raw.rate_type).trim() !== ""
+        ? String(raw.rate_type).trim()
+        : null,
+    total_amount_bs:
+      raw.total_amount_bs != null && Number.isFinite(Number(raw.total_amount_bs))
+        ? Number(raw.total_amount_bs)
+        : null,
+    exchange_rate_bs_per_usd:
+      raw.exchange_rate_bs_per_usd != null && Number.isFinite(Number(raw.exchange_rate_bs_per_usd))
+        ? Number(raw.exchange_rate_bs_per_usd)
+        : null,
+    customer_name:
+      raw.customer_name != null && String(raw.customer_name).trim() !== ""
+        ? String(raw.customer_name).trim()
+        : null,
   };
 }
 

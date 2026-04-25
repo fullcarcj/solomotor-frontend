@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Sale } from "@/types/sales";
 
 interface Props {
@@ -28,6 +28,29 @@ const UpArrow = () => (
 );
 
 export default function PedidosKpiRibbon({ sales, loading }: Props) {
+  const [bcvRate, setBcvRate] = useState<number | null>(null);
+  const [bcvDate, setBcvDate] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const res = await fetch("/api/currency/today", { cache: "no-store", credentials: "include" });
+        if (!res.ok) return;
+        const j = (await res.json()) as Record<string, unknown>;
+        const data = (j.data ?? j) as Record<string, unknown> | null;
+        if (!data) return;
+        const rate = data.bcv_rate ?? data.active_rate ?? data.rate_bs_per_usd;
+        const dateVal = data.rate_date ?? data.date;
+        if (alive && rate != null && Number.isFinite(Number(rate)) && Number(rate) > 0) {
+          setBcvRate(Number(rate));
+          setBcvDate(dateVal != null ? String(dateVal) : null);
+        }
+      } catch { /* silencioso */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+
   const kpis = useMemo(() => {
     const now = new Date();
     const todayStr = now.toDateString();
@@ -36,16 +59,16 @@ export default function PedidosKpiRibbon({ sales, loading }: Props) {
       (s) => new Date(s.created_at).toDateString() === todayStr
     );
 
-    // TODO(backend): order_total_amount podría ser VES o USD según la venta;
-    //               usar con precaución hasta que el backend exponga total_ves explícito.
-    const todayVes = todaySales.reduce(
-      (a, s) => a + (Number(s.order_total_amount) || 0),
-      0
-    );
-    const todayUsd = todaySales.reduce(
-      (a, s) => a + (Number(s.total_usd) || 0),
-      0
-    );
+    const todayVes = todaySales.reduce((a, s) => {
+      const isVes = s.rate_type === "NATIVE_VES";
+      return a + (isVes
+        ? (Number(s.total_amount_bs) || Number(s.order_total_amount) || 0)
+        : (Number(s.total_amount_bs) || 0));
+    }, 0);
+    const todayUsd = todaySales.reduce((a, s) => {
+      if (s.rate_type === "NATIVE_VES") return a;
+      return a + (Number(s.total_usd) || 0);
+    }, 0);
     const dispatch = sales.filter((s) =>
       ["paid", "ready_to_ship"].includes(String(s.status))
     ).length;
@@ -92,15 +115,25 @@ export default function PedidosKpiRibbon({ sales, loading }: Props) {
         <span className="pd-kpi-delta">Hoy</span>
       </div>
 
-      {/* KPI 3 · Tasa BCV — TODO(backend): no disponible en GET /api/sales */}
+      {/* KPI 3 · Tasa BCV */}
       <div className="pd-kpi-cell">
         <span className="pd-kpi-lbl">Tasa BCV</span>
-        <span className="pd-kpi-val sm">—</span>
+        {loading ? (
+          sk("70%")
+        ) : (
+          <span className="pd-kpi-val sm">
+            {bcvRate != null
+              ? bcvRate.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+              : "—"}
+          </span>
+        )}
         <span
           className="pd-kpi-delta"
-          style={{ color: "var(--pd-text-faint)" }}
+          style={{ color: bcvRate != null ? undefined : "var(--pd-text-faint)" }}
         >
-          No disponible
+          {bcvRate != null
+            ? (bcvDate ? `Bs./${bcvDate}` : "Bs./USD")
+            : "No disponible"}
         </span>
       </div>
 

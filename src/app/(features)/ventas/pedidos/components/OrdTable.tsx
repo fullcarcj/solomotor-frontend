@@ -455,6 +455,7 @@ interface RowProps {
   onOpenMlMessaging?: (sale: Sale) => void;
   /** Misma cotización que bandeja (`chat_id` de la venta). */
   onOpenQuote?: (sale: Sale) => void;
+  onReconcile?: (sale: Sale) => void;
   onFulfillmentUpdated?: () => void | Promise<void>;
 }
 
@@ -465,6 +466,7 @@ function OrdRow({
   onRequestDispatch,
   onOpenMlMessaging,
   onOpenQuote,
+  onReconcile,
   onFulfillmentUpdated,
 }: RowProps) {
   const ch = getChannel(sale.source);
@@ -481,22 +483,33 @@ function OrdRow({
   const vendorIni = vendor ? initials(vendor) : "—";
   const vendorAv = avColor(vendor || String(sale.id));
 
-  // Customer — TODO(backend): customer_name, phone no disponibles en GET /api/sales
+  // Customer
   const custLabel =
-    sale.customer_id != null ? `Cliente #${sale.customer_id}` : "Consumidor final";
-  const custIni =
-    sale.customer_id != null
-      ? `C${String(sale.customer_id).slice(-2)}`
-      : "CF";
+    sale.customer_name && sale.customer_name.trim() !== ""
+      ? sale.customer_name.trim()
+      : sale.customer_id != null
+        ? `Cliente #${sale.customer_id}`
+        : "Consumidor final";
+  const custIni = (() => {
+    if (sale.customer_name && sale.customer_name.trim() !== "") {
+      const parts = sale.customer_name.trim().split(/\s+/);
+      return parts.length >= 2
+        ? (parts[0][0] + parts[1][0]).toUpperCase()
+        : parts[0].slice(0, 2).toUpperCase();
+    }
+    return sale.customer_id != null ? `C${String(sale.customer_id).slice(-2)}` : "CF";
+  })();
   const custAv = avColor(custLabel);
 
-  // Totals
-  const usd = Number(sale.total_usd) || 0;
-  // TODO(backend): order_total_amount interpretado como VES sólo si > 5× el valor USD;
-  //               hasta que el backend exponga total_ves explícito.
-  const rawAlt = Number(sale.order_total_amount) || 0;
-  const showVes = rawAlt > usd * 5 && rawAlt > 0;
-  const vesAmt = showVes ? rawAlt : 0;
+  // Totals — distinguir órdenes nativas VES (ML Venezuela) de órdenes en USD
+  const isNativeVes = sale.rate_type === "NATIVE_VES";
+  const vesAmt = isNativeVes
+    ? (Number(sale.total_amount_bs) || Number(sale.order_total_amount) || 0)
+    : (Number(sale.order_total_amount) > Number(sale.total_usd) * 5
+        ? Number(sale.order_total_amount)
+        : 0);
+  const usd = isNativeVes ? 0 : (Number(sale.total_usd) || 0);
+  const showVes = vesAmt > 0;
 
   const chatHref =
     sale.chat_id != null ? `/bandeja/${sale.chat_id}` : null;
@@ -669,11 +682,11 @@ function OrdRow({
               </div>
             )}
             <div className="total-ves">
-              <span className="c">{showVes ? "VES" : "USD"}</span>
+              <span className="c">{showVes ? "Bs." : "USD"}</span>
               {showVes
                 ? vesAmt.toLocaleString("es-VE", {
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 0,
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
                   })
                 : usd > 0
                   ? usd.toLocaleString("es-VE", {
@@ -753,6 +766,28 @@ function OrdRow({
               >
                 <i className="ti ti-file-invoice" aria-hidden="true" />
                 <span className="act-quote-btn__lbl">Cotización</span>
+              </button>
+            )}
+
+            {onReconcile && (
+              <button
+                type="button"
+                className="act-reconcile-btn"
+                aria-label={`Vincular pago para orden #${sale.id}`}
+                title={
+                  sale.reconciled_statement_id != null
+                    ? "Pago ya conciliado. Vincular otro extracto."
+                    : "Vincular pago bancario a esta orden"
+                }
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReconcile(sale);
+                }}
+              >
+                <i className="ti ti-credit-card" aria-hidden="true" />
+                <span className="act-quote-btn__lbl">
+                  {sale.reconciled_statement_id != null ? "Conciliado" : "Vincular Pago"}
+                </span>
               </button>
             )}
 
@@ -938,6 +973,8 @@ interface OrdTableProps {
   onOpenMlMessaging?: (sale: Sale) => void;
   /** Abre modal de cotización reutilizando el chat CRM de la venta. */
   onOpenQuote?: (sale: Sale) => void;
+  /** Abre modal de conciliación bancaria para la venta. */
+  onReconcile?: (sale: Sale) => void;
   /** Tras PATCH de forma de entrega (refetch listado). */
   onFulfillmentUpdated?: () => void | Promise<void>;
   onClearFilters: () => void;
@@ -951,6 +988,7 @@ export default function OrdTable({
   onRequestDispatch,
   onOpenMlMessaging,
   onOpenQuote,
+  onReconcile,
   onFulfillmentUpdated,
   onClearFilters,
 }: OrdTableProps) {
@@ -1008,6 +1046,7 @@ export default function OrdTable({
               onRequestDispatch={onRequestDispatch}
               onOpenMlMessaging={onOpenMlMessaging}
               onOpenQuote={onOpenQuote}
+              onReconcile={onReconcile}
               onFulfillmentUpdated={onFulfillmentUpdated}
             />
           ))
