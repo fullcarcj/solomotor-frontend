@@ -1,7 +1,8 @@
 "use client";
 
+import { useEffect, useState, type KeyboardEvent } from "react";
 import Link from "next/link";
-import type { Sale } from "@/types/sales";
+import type { Sale, ItemPreview, QuotePreview } from "@/types/sales";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -139,6 +140,101 @@ function fmtElapsed(iso: string): string {
   return `${Math.floor(mins)}m`;
 }
 
+/** Alineado a `sales_orders.fulfillment_type` (CHECK en BD). Por defecto UI: retiro en tienda. */
+const DEFAULT_FULFILLMENT = "retiro_tienda";
+
+const FULFILLMENT_OPTIONS: { value: string; label: string }[] = [
+  { value: "retiro_tienda", label: "Retiro en tienda" },
+  { value: "envio_propio", label: "Envío propio" },
+  { value: "mercado_envios", label: "Mercado Envíos" },
+  { value: "entrega_vendedor", label: "Entrega vendedor" },
+  { value: "retiro_acordado", label: "Retiro acordado" },
+  { value: "desde_bodega", label: "Desde bodega" },
+  { value: "", label: "Sin definir" },
+];
+
+function LogisticsFulfillmentSelect({
+  saleId,
+  value,
+  disabled,
+  onCommitted,
+}: {
+  saleId: string | number;
+  value: string | null | undefined;
+  disabled: boolean;
+  onCommitted: () => void | Promise<void>;
+}) {
+  const effective = value && String(value).trim() !== "" ? String(value).trim() : DEFAULT_FULFILLMENT;
+  const [v, setV] = useState(effective);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    setV(value && String(value).trim() !== "" ? String(value).trim() : DEFAULT_FULFILLMENT);
+  }, [value]);
+
+  if (disabled) {
+    return (
+      <span className="logi-ft-readonly" title="Solo órdenes omnicanal (so-*)">
+        —
+      </span>
+    );
+  }
+
+  return (
+    <select
+      className="logi-ft-select"
+      value={v}
+      disabled={saving}
+      aria-label="Forma de entrega"
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+      onChange={async (e) => {
+        e.stopPropagation();
+        const next = e.target.value;
+        const prev = v;
+        setV(next);
+        setSaving(true);
+        try {
+          const payload =
+            next === "" ? { fulfillment_type: null } : { fulfillment_type: next };
+          const res = await fetch(
+            `/api/ventas/pedidos/${encodeURIComponent(String(saleId))}/fulfillment`,
+            {
+              method: "PATCH",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            }
+          );
+          if (!res.ok) {
+            const j = (await res.json().catch(() => ({}))) as {
+              error?: string | { message?: string };
+              message?: string;
+            };
+            const msg =
+              (typeof j.error === "object" && j.error?.message) ||
+              (typeof j.error === "string" ? j.error : null) ||
+              j.message ||
+              res.statusText;
+            throw new Error(String(msg));
+          }
+          await onCommitted();
+        } catch {
+          setV(prev);
+        } finally {
+          setSaving(false);
+        }
+      }}
+    >
+      {FULFILLMENT_OPTIONS.map((o) => (
+        <option key={o.value || "__empty"} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function elapsedBucket(
   iso: string,
   status: string
@@ -196,10 +292,159 @@ const UpIcon = () => (
   </svg>
 );
 
+// ─── ProductsCell ─────────────────────────────────────────────────────────────
+
+function ProductThumb({
+  url,
+  name,
+}: {
+  url: string | null | undefined;
+  name: string;
+}) {
+  const [imgErr, setImgErr] = useState(false);
+  if (url && !imgErr) {
+    return (
+      <img
+        src={url}
+        alt={name}
+        className="prod-thumb-img"
+        onError={() => setImgErr(true)}
+        loading="lazy"
+      />
+    );
+  }
+  return (
+    <div className="prod-thumb-fallback" aria-hidden="true">
+      <PkgIcon />
+    </div>
+  );
+}
+
+function fmtUsd(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return "";
+  return v.toLocaleString("es-VE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+interface ProductsCellProps {
+  items: ItemPreview[] | null | undefined;
+  quotePreview: QuotePreview | null | undefined;
+  compact?: boolean;
+}
+
+function ProductsCell({ items, quotePreview, compact = false }: ProductsCellProps) {
+  const hasQuote = quotePreview != null && quotePreview.id > 0;
+  const quoteItems = hasQuote ? (quotePreview.items_preview ?? []) : [];
+  const orderItems = items ?? [];
+
+  if (hasQuote) {
+    const displayItems = quoteItems.length > 0 ? quoteItems : orderItems;
+    const totalStr = quotePreview.total != null ? `$${fmtUsd(quotePreview.total)}` : "";
+    const countExtra =
+      quotePreview.items_count > displayItems.length
+        ? quotePreview.items_count - displayItems.length
+        : 0;
+
+    return (
+      <div className={`c-products c-products--quote${compact ? " c-products--compact" : ""}`}>
+        <div className="prod-quote-badge">
+          <i className="ti ti-file-check" aria-hidden="true" />
+          <span className="prod-quote-badge__lbl">Cotización</span>
+          {quotePreview.status && (
+            <span className={`prod-quote-badge__status qs-${quotePreview.status}`}>
+              {quotePreview.status}
+            </span>
+          )}
+          {totalStr && <span className="prod-quote-badge__total">{totalStr}</span>}
+        </div>
+
+        <div className="prod-thumbs-row">
+          {displayItems.slice(0, 3).map((item, idx) => (
+            <div key={idx} className="prod-thumb-wrap" title={`${item.name} × ${item.qty}`}>
+              <ProductThumb url={item.image_url} name={item.name} />
+              {item.qty > 1 && (
+                <span className="prod-thumb-qty">×{item.qty}</span>
+              )}
+            </div>
+          ))}
+          {countExtra > 0 && (
+            <div className="prod-thumb-more">+{countExtra}</div>
+          )}
+        </div>
+
+        {!compact && displayItems.length > 0 && (
+          <div className="prod-list">
+            {displayItems.slice(0, 2).map((item, idx) => (
+              <div key={idx} className="prod-item">
+                <span className="qt">×{item.qty}</span>
+                <div className="body">
+                  <div className="n">{item.name || item.sku}</div>
+                  {item.sku && <div className="s">{item.sku}</div>}
+                </div>
+                {item.unit_price_usd != null && (
+                  <span className="pr">${fmtUsd(item.unit_price_usd)}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (orderItems.length > 0) {
+    const first = orderItems[0];
+    return (
+      <div className={`c-products${compact ? " c-products--compact" : ""}`}>
+        <div className="prod-thumb-big">
+          <ProductThumb url={first.image_url} name={first.name} />
+        </div>
+        <div className="prod-list">
+          {orderItems.map((item, idx) => (
+            <div key={idx} className={`prod-item${idx === 0 ? " main" : ""}`}>
+              <span className="qt">×{item.qty}</span>
+              <div className="body">
+                <div className="n">{item.name || item.sku}</div>
+                {item.sku && <div className="s">{item.sku}</div>}
+              </div>
+              {item.unit_price_usd != null && (
+                <span className="pr">${fmtUsd(item.unit_price_usd)}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`c-products${compact ? " c-products--compact" : ""}`}>
+      <div className="prod-thumb-big">
+        <PkgIcon />
+      </div>
+      <div className="prod-list">
+        <div className="prod-item main">
+          <span className="qt">—</span>
+          <div className="body">
+            <div className="n" style={{ color: "var(--pd-text-faint)", fontStyle: "italic" }}>
+              Ver detalle de orden
+            </div>
+            <div className="s">Click para expandir</div>
+          </div>
+          <span className="pr">—</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Single row ───────────────────────────────────────────────────────────────
 
 function isMercadoLibreSale(source: string): boolean {
-  return String(source || "").toLowerCase().includes("mercadolibre");
+  const s = String(source || "").toLowerCase();
+  return s.includes("mercadolibre") || s.startsWith("ml_");
 }
 
 interface RowProps {
@@ -208,9 +453,20 @@ interface RowProps {
   onRowClick: (id: string | number) => void;
   onRequestDispatch?: (sale: Sale) => void;
   onOpenMlMessaging?: (sale: Sale) => void;
+  /** Misma cotización que bandeja (`chat_id` de la venta). */
+  onOpenQuote?: (sale: Sale) => void;
+  onFulfillmentUpdated?: () => void | Promise<void>;
 }
 
-function OrdRow({ sale, selected, onRowClick, onRequestDispatch, onOpenMlMessaging }: RowProps) {
+function OrdRow({
+  sale,
+  selected,
+  onRowClick,
+  onRequestDispatch,
+  onOpenMlMessaging,
+  onOpenQuote,
+  onFulfillmentUpdated,
+}: RowProps) {
   const ch = getChannel(sale.source);
   const isMl = isMercadoLibreSale(sale.source);
   const cycle = getCycle(sale.status);
@@ -245,7 +501,9 @@ function OrdRow({ sale, selected, onRowClick, onRequestDispatch, onOpenMlMessagi
   const chatHref =
     sale.chat_id != null ? `/bandeja/${sale.chat_id}` : null;
 
-  const handleRowKey = (e: React.KeyboardEvent) => {
+  const canEditFulfillment = String(sale.id).toLowerCase().startsWith("so-");
+
+  const handleRowKey = (e: KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       onRowClick(sale.id);
@@ -300,29 +558,12 @@ function OrdRow({ sale, selected, onRowClick, onRequestDispatch, onOpenMlMessagi
           </div>
         </td>
 
-        {/* Col 2 · Productos — TODO(backend): items no disponibles en listado */}
+        {/* Col 2 · Productos */}
         <td data-label="Productos">
-          <div className="c-products">
-            <div className="prod-thumb-big">
-              <PkgIcon />
-            </div>
-            <div className="prod-list">
-              <div className="prod-item main">
-                <span className="qt">—</span>
-                <div className="body">
-                  <div
-                    className="n"
-                    style={{ color: "var(--pd-text-faint)", fontStyle: "italic" }}
-                  >
-                    {/* TODO(backend): product_name, sku, quantity no expuestos en GET /api/sales */}
-                    Ver detalle de orden
-                  </div>
-                  <div className="s">Click para expandir</div>
-                </div>
-                <span className="pr">—</span>
-              </div>
-            </div>
-          </div>
+          <ProductsCell
+            items={sale.items_preview}
+            quotePreview={sale.quote_preview}
+          />
         </td>
 
         {/* Col 3 · Cliente — TODO(backend): full_name, phone, document no disponibles */}
@@ -350,9 +591,20 @@ function OrdRow({ sale, selected, onRowClick, onRequestDispatch, onOpenMlMessagi
           </div>
         </td>
 
-        {/* Col 4 · Logística — TODO(backend): warehouse_name, stock_status no disponibles */}
+        {/* Col 4 · Logística — forma de entrega editable; almacén/stock pendiente backend */}
         <td data-label="Logística">
           <div className="c-logistics">
+            <div className="logi-row logi-ft-row">
+              <span className="logi-ft-lb">Entrega</span>
+              <LogisticsFulfillmentSelect
+                saleId={sale.id}
+                value={sale.fulfillment_type}
+                disabled={!canEditFulfillment}
+                onCommitted={async () => {
+                  await onFulfillmentUpdated?.();
+                }}
+              />
+            </div>
             <div className="logi-row">
               <HomeIcon />
               {/* TODO(backend): warehouse_name no disponible */}
@@ -482,6 +734,28 @@ function OrdRow({ sale, selected, onRowClick, onRequestDispatch, onOpenMlMessagi
               </button>
             )}
 
+            {onOpenQuote &&
+              (isMl ||
+                (sale.chat_id != null && String(sale.chat_id).trim() !== "")) && (
+              <button
+                type="button"
+                className="act-quote-btn"
+                aria-label={`Cotización orden #${sale.id}`}
+                title={
+                  sale.chat_id != null && String(sale.chat_id).trim() !== ""
+                    ? "Abrir cotización CRM (mismo presupuesto que en Bandeja)."
+                    : "Mercado Libre: abrí la cotización. Si falta chat CRM, vinculá la conversación en Bandeja."
+                }
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenQuote(sale);
+                }}
+              >
+                <i className="ti ti-file-invoice" aria-hidden="true" />
+                <span className="act-quote-btn__lbl">Cotización</span>
+              </button>
+            )}
+
             <button
               className="act-kebab"
               aria-label={`Más opciones para orden #${sale.id}`}
@@ -537,20 +811,14 @@ function OrdRow({ sale, selected, onRowClick, onRequestDispatch, onOpenMlMessagi
             </div>
 
             <div className="ord-card-body">
-              <div className="ord-card-thumb">
-                <PkgIcon />
-              </div>
-              <div className="ord-card-prod-info">
-                <div
-                  className="ord-card-prod-name"
-                  style={{ color: "var(--pd-text-faint)", fontStyle: "italic" }}
-                >
-                  Ver detalle de orden
-                </div>
-                <div className="ord-card-customer">
-                  <PhoneIcon />
-                  {custLabel}
-                </div>
+              <ProductsCell
+                items={sale.items_preview}
+                quotePreview={sale.quote_preview}
+                compact
+              />
+              <div className="ord-card-customer-row">
+                <PhoneIcon />
+                {custLabel}
               </div>
             </div>
 
@@ -574,6 +842,28 @@ function OrdRow({ sale, selected, onRowClick, onRequestDispatch, onOpenMlMessagi
                   }}
                 >
                   ML Msg
+                </button>
+              )}
+              {onOpenQuote &&
+                (isMl ||
+                  (sale.chat_id != null && String(sale.chat_id).trim() !== "")) && (
+                <button
+                  type="button"
+                  className="act-quote-btn"
+                  style={{ marginLeft: 6 }}
+                  aria-label={`Cotización orden #${sale.id}`}
+                  title={
+                    sale.chat_id != null && String(sale.chat_id).trim() !== ""
+                      ? "Cotización CRM (Bandeja)."
+                      : "Cotización ML — vinculá el chat en Bandeja si falta."
+                  }
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenQuote(sale);
+                  }}
+                >
+                  <i className="ti ti-file-invoice" aria-hidden="true" />
+                  <span className="act-quote-btn__lbl">Cotiz.</span>
                 </button>
               )}
               <span className="ord-card-ves">
@@ -646,6 +936,10 @@ interface OrdTableProps {
   onRequestDispatch?: (sale: Sale) => void;
   /** Abre modal de mensajería pack ML (solo filas Mercado Libre). */
   onOpenMlMessaging?: (sale: Sale) => void;
+  /** Abre modal de cotización reutilizando el chat CRM de la venta. */
+  onOpenQuote?: (sale: Sale) => void;
+  /** Tras PATCH de forma de entrega (refetch listado). */
+  onFulfillmentUpdated?: () => void | Promise<void>;
   onClearFilters: () => void;
 }
 
@@ -656,6 +950,8 @@ export default function OrdTable({
   selectedId,
   onRequestDispatch,
   onOpenMlMessaging,
+  onOpenQuote,
+  onFulfillmentUpdated,
   onClearFilters,
 }: OrdTableProps) {
   return (
@@ -711,6 +1007,8 @@ export default function OrdTable({
               onRowClick={onRowClick}
               onRequestDispatch={onRequestDispatch}
               onOpenMlMessaging={onOpenMlMessaging}
+              onOpenQuote={onOpenQuote}
+              onFulfillmentUpdated={onFulfillmentUpdated}
             />
           ))
         )}

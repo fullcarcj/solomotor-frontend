@@ -7,7 +7,9 @@ import { traceMlQuestionUi } from "@/lib/realtime/mlQuestionTrace";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   applySseInboxQuickNotify,
+  applySseNewSaleQuickNotify,
   bumpInboxRefetch,
+  bumpSalesOrdersSseNonce,
   clearPresence,
   clearSlaDeadline,
   clearUrgent,
@@ -184,8 +186,27 @@ export function useInboxRealtime() {
           break;
         }
         case "new_sale": {
+          const oidRaw = d.order_id;
+          const orderId =
+            typeof oidRaw === "number"
+              ? oidRaw
+              : oidRaw != null
+                ? Number(oidRaw)
+                : null;
+          const extRaw = d.external_order_id;
+          const externalOrderId =
+            typeof extRaw === "string" && String(extRaw).trim() !== ""
+              ? String(extRaw).trim()
+              : null;
+          dispatch(
+            applySseNewSaleQuickNotify({
+              external_order_id: externalOrderId,
+              order_id: Number.isFinite(orderId) ? orderId : null,
+            })
+          );
           playNewSaleSound();
           dispatch(bumpInboxRefetch());
+          dispatch(bumpSalesOrdersSseNonce());
           break;
         }
         default:

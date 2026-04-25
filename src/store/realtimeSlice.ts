@@ -8,6 +8,13 @@ export interface SseInboxQuickNotify {
   tick: number;
 }
 
+/** SSE `new_sale` — misma idea que inbox quick notify (título / OS / toast). */
+export interface SseNewSaleQuickNotify {
+  tick: number;
+  external_order_id: string | null;
+  order_id: number | null;
+}
+
 export interface RealtimeState {
   presenceByChat: Record<string, { userName: string; userId: number } | null>;
   urgentChats: Record<string, boolean>;
@@ -19,11 +26,18 @@ export interface RealtimeState {
    * antes del GET /api/bandeja.
    */
   sseInboxQuickNotify: SseInboxQuickNotify | null;
+  sseNewSaleQuickNotify: SseNewSaleQuickNotify | null;
   /**
    * Ajuste temporal al contador "Sin atender" (p. ej. -1 tras marcar atendido con éxito).
    * Se resetea a 0 cuando llegan conteos frescos desde el servidor.
    */
   inboxUnreadOptimisticDelta: number;
+  /**
+   * Órdenes ML nuevas (SSE `new_sale`) pendientes de “ver” en Pedidos; suma al badge de campana.
+   */
+  pendingMlSalesBellCount: number;
+  /** Solo SSE `new_sale`: pantalla Pedidos puede invalidar listado sin mezclar con mensajes inbox. */
+  salesOrdersSseNonce: number;
 }
 
 const initialState: RealtimeState = {
@@ -32,7 +46,10 @@ const initialState: RealtimeState = {
   slaDeadlineByChat: {},
   inboxRefetchNonce: 0,
   sseInboxQuickNotify: null,
+  sseNewSaleQuickNotify: null,
   inboxUnreadOptimisticDelta: 0,
+  pendingMlSalesBellCount: 0,
+  salesOrdersSseNonce: 0,
 };
 
 const realtimeSlice = createSlice({
@@ -85,6 +102,32 @@ const realtimeSlice = createSlice({
         tick: prevTick + 1,
       };
     },
+    applySseNewSaleQuickNotify(
+      state,
+      action: PayloadAction<{ external_order_id: string | null; order_id: number | null }>
+    ) {
+      const prevTick = state.sseNewSaleQuickNotify?.tick ?? 0;
+      state.sseNewSaleQuickNotify = {
+        tick: prevTick + 1,
+        external_order_id:
+          action.payload.external_order_id != null &&
+          String(action.payload.external_order_id).trim() !== ""
+            ? String(action.payload.external_order_id).trim()
+            : null,
+        order_id:
+          action.payload.order_id != null && Number.isFinite(Number(action.payload.order_id))
+            ? Number(action.payload.order_id)
+            : null,
+      };
+      state.pendingMlSalesBellCount += 1;
+      if (state.pendingMlSalesBellCount > 99) state.pendingMlSalesBellCount = 99;
+    },
+    clearPendingMlSalesBellCount(state) {
+      state.pendingMlSalesBellCount = 0;
+    },
+    bumpSalesOrdersSseNonce(state) {
+      state.salesOrdersSseNonce += 1;
+    },
     adjustInboxUnreadOptimisticDelta(state, action: PayloadAction<number>) {
       const n = Number(action.payload);
       if (!Number.isFinite(n) || n === 0) return;
@@ -107,6 +150,9 @@ export const {
   clearSlaDeadline,
   bumpInboxRefetch,
   applySseInboxQuickNotify,
+  applySseNewSaleQuickNotify,
+  clearPendingMlSalesBellCount,
+  bumpSalesOrdersSseNonce,
   adjustInboxUnreadOptimisticDelta,
   resetInboxUnreadOptimisticDelta,
 } = realtimeSlice.actions;

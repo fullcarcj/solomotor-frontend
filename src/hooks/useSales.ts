@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Sale, SalesMeta } from "@/types/sales";
+import type { Sale, SalesMeta, ItemPreview, QuotePreview, QuoteItemPreview } from "@/types/sales";
 
 export interface SalesFilters {
   status?: string;
@@ -52,7 +52,12 @@ function normalizeSale(raw: Record<string, unknown>): Sale {
     external_order_id:
       raw.external_order_id == null ? null : String(raw.external_order_id),
     customer_id: raw.customer_id == null ? null : Number(raw.customer_id),
-    chat_id: raw.chat_id == null ? null : Number(raw.chat_id),
+    chat_id: (() => {
+      const v = raw.chat_id;
+      if (v == null || String(v).trim() === "") return null;
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    })(),
     status: String(raw.status ?? ""),
     order_total_amount: (raw.order_total_amount as number | string) ?? 0,
     total_amount_usd: (raw.total_amount_usd as number | string) ?? 0,
@@ -65,6 +70,67 @@ function normalizeSale(raw: Record<string, unknown>): Sale {
       raw.reconciled_statement_id == null
         ? null
         : Number(raw.reconciled_statement_id),
+    fulfillment_type:
+      raw.fulfillment_type == null || String(raw.fulfillment_type).trim() === ""
+        ? null
+        : String(raw.fulfillment_type).trim(),
+    items_preview: normalizeItemPreviews(raw.items_preview),
+    quote_preview: normalizeQuotePreview(raw.quote_preview),
+  };
+}
+
+function normalizeItemPreviews(raw: unknown): ItemPreview[] | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  return raw.map((r: unknown) => {
+    const item = r as Record<string, unknown>;
+    return {
+      sku: String(item.sku ?? ""),
+      name: String(item.name ?? item.sku ?? ""),
+      qty: Number(item.qty) || 1,
+      unit_price_usd:
+        item.unit_price_usd != null && Number.isFinite(Number(item.unit_price_usd))
+          ? Number(item.unit_price_usd)
+          : null,
+      image_url:
+        item.image_url != null && String(item.image_url).trim() !== ""
+          ? String(item.image_url).trim()
+          : null,
+    };
+  });
+}
+
+function normalizeQuotePreview(raw: unknown): QuotePreview | null {
+  if (raw == null || typeof raw !== "object") return null;
+  const q = raw as Record<string, unknown>;
+  const id = Number(q.id);
+  if (!Number.isFinite(id) || id <= 0) return null;
+  const itemsRaw = q.items_preview;
+  let items: QuoteItemPreview[] | null = null;
+  if (Array.isArray(itemsRaw) && itemsRaw.length > 0) {
+    items = itemsRaw.map((r: unknown) => {
+      const item = r as Record<string, unknown>;
+      return {
+        sku: String(item.sku ?? ""),
+        name: String(item.name ?? item.sku ?? ""),
+        qty: Number(item.qty) || 1,
+        unit_price_usd:
+          item.unit_price_usd != null && Number.isFinite(Number(item.unit_price_usd))
+            ? Number(item.unit_price_usd)
+            : null,
+        image_url:
+          item.image_url != null && String(item.image_url).trim() !== ""
+            ? String(item.image_url).trim()
+            : null,
+      };
+    });
+  }
+  return {
+    id,
+    total:
+      q.total != null && Number.isFinite(Number(q.total)) ? Number(q.total) : null,
+    status: String(q.status ?? ""),
+    items_count: Number(q.items_count) || 0,
+    items_preview: items,
   };
 }
 

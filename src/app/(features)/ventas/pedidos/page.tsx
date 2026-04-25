@@ -1,18 +1,21 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { clearPendingMlSalesBellCount } from "@/store/realtimeSlice";
 import { useSales } from "@/hooks/useSales";
 import type { Sale } from "@/types/sales";
 import SaleDetailModal from "./components/SaleDetailModal";
 import RequestDispatchModal from "@/app/(features)/logistica/components/RequestDispatchModal";
-import PedidosPageIntro from "./components/PedidosPageIntro";
 import PedidosTopbar from "./components/PedidosTopbar";
 import PedidosFiltersBar from "./components/PedidosFiltersBar";
 import type { ActiveFilter } from "./components/PedidosFiltersBar";
 import PedidosKpiRibbon from "./components/PedidosKpiRibbon";
 import OrdTable from "./components/OrdTable";
 import MlOrderMessagingModal from "./components/MlOrderMessagingModal";
+import SaleQuoteModal, { type SaleQuoteModalContext } from "./components/SaleQuoteModal";
+import type { SaleDetail } from "@/types/sales";
 import "./pedidos-theme.scss";
 
 /** Destino del modal de mensajes pack ML (tabla o deep-link desde bandeja). */
@@ -24,12 +27,28 @@ type MlPackModalTarget = {
 function VentasPedidosPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const dispatch = useAppDispatch();
+  const salesOrdersSseNonce = useAppSelector((s) => s.realtime.salesOrdersSseNonce);
+  const prevSalesSseNonceRef = useRef<number | null>(null);
+
   const { sales, meta, loading, error, setFilters, refetch } = useSales();
+
+  useEffect(() => {
+    if (prevSalesSseNonceRef.current === null) {
+      prevSalesSseNonceRef.current = salesOrdersSseNonce;
+      return;
+    }
+    if (salesOrdersSseNonce === prevSalesSseNonceRef.current) return;
+    prevSalesSseNonceRef.current = salesOrdersSseNonce;
+    dispatch(clearPendingMlSalesBellCount());
+    void refetch();
+  }, [salesOrdersSseNonce, refetch, dispatch]);
 
   const [selectedId, setSelectedId] = useState<string | number | null>(null);
   const [dispatchSale, setDispatchSale] = useState<Sale | null>(null);
   const [mlPackModal, setMlPackModal] = useState<MlPackModalTarget | null>(null);
   const [dispatchToast, setDispatchToast] = useState(false);
+  const [quoteCtx, setQuoteCtx] = useState<SaleQuoteModalContext | null>(null);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
 
@@ -41,6 +60,23 @@ function VentasPedidosPageInner() {
 
   const isInitialLoad = loading && !hasData;
   const isRefetching = loading && hasData;
+
+  const openQuoteFromSale = useCallback((sale: Sale | SaleDetail) => {
+    const src = String(sale.source || "").toLowerCase();
+    const isMl = src.includes("mercadolibre") || src.startsWith("ml_");
+    const rawChat = sale.chat_id;
+    const chatId =
+      rawChat != null && String(rawChat).trim() !== "" ? String(rawChat).trim() : "";
+    setQuoteCtx({
+      saleId: sale.id,
+      chatId,
+      customerId: sale.customer_id != null ? Number(sale.customer_id) : null,
+      isMl,
+      saleLabel: `Venta #${sale.id}${
+        sale.external_order_id ? ` · ML ${sale.external_order_id}` : ""
+      }`,
+    });
+  }, []);
 
   /** Query opcional (?open_ml_pack= / ?open_ml_order_id=) p. ej. enlaces guardados. */
   useEffect(() => {
@@ -221,8 +257,6 @@ function VentasPedidosPageInner() {
             </div>
           )}
 
-          <PedidosPageIntro />
-
           <PedidosTopbar
             search={search}
             onSearch={setSearch}
@@ -238,6 +272,12 @@ function VentasPedidosPageInner() {
           />
 
           <PedidosKpiRibbon sales={sales} loading={isInitialLoad} />
+
+          <p className="small text-muted px-1 mb-2 mb-md-0" style={{ maxWidth: 720 }}>
+            <strong className="text-body">Cotización:</strong> en cada fila de Mercado Libre hay un botón
+            violeta <span className="text-nowrap">«Cotización»</span> (mismo borrador que en Bandeja). Si la
+            orden aún no tiene chat CRM, el modal indica cómo vincularla.
+          </p>
 
           {/* Subtle loading bar on refetch (keeps existing rows visible) */}
           {isRefetching && (
@@ -256,6 +296,8 @@ function VentasPedidosPageInner() {
               onOpenMlMessaging={(s) =>
                 setMlPackModal({ saleId: s.id, externalHint: s.external_order_id })
               }
+              onOpenQuote={openQuoteFromSale}
+              onFulfillmentUpdated={refetch}
               onClearFilters={() => handleFilterChange("all")}
             />
           </div>
@@ -266,7 +308,10 @@ function VentasPedidosPageInner() {
       <SaleDetailModal
         saleId={selectedId}
         onClose={() => setSelectedId(null)}
+        onOpenQuote={openQuoteFromSale}
       />
+
+      <SaleQuoteModal ctx={quoteCtx} onClose={() => setQuoteCtx(null)} />
 
       {mlPackModal != null && (
         <MlOrderMessagingModal

@@ -28,6 +28,11 @@ function fmtNum(v: number | string | null | undefined, prefix = "$"): string {
   })}`;
 }
 
+function isMercadoLibreSource(source: string | undefined): boolean {
+  const s = String(source || "").toLowerCase();
+  return s.includes("mercadolibre") || s.startsWith("ml_");
+}
+
 function parseSaleDetail(json: unknown): SaleDetail | null {
   if (!json || typeof json !== "object") return null;
   const o = json as Record<string, unknown>;
@@ -57,9 +62,12 @@ function ItemsSkeleton() {
 export default function SaleDetailModal({
   saleId,
   onClose,
+  onOpenQuote,
 }: {
   saleId: string | number | null;
   onClose: () => void;
+  /** Abre el modal de cotización (mismo chat / presupuesto que bandeja). */
+  onOpenQuote?: (detail: SaleDetail) => void;
 }) {
   const [detail, setDetail] = useState<SaleDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -277,6 +285,26 @@ export default function SaleDetailModal({
             ) : null}
           </div>
           <div className="modal-footer">
+            {detail &&
+            onOpenQuote &&
+            (isMercadoLibreSource(detail.source) ||
+              (detail.chat_id != null && String(detail.chat_id).trim() !== "")) ? (
+              <button
+                type="button"
+                className="btn btn-primary me-auto"
+                title={
+                  detail.chat_id != null && String(detail.chat_id).trim() !== ""
+                    ? "Mismo presupuesto que en Bandeja."
+                    : "Sin chat CRM: vinculá la conversación en Bandeja; igual podés revisar el mensaje al abrir."
+                }
+                onClick={() => {
+                  onOpenQuote(detail);
+                }}
+              >
+                <i className="ti ti-file-invoice me-1" aria-hidden="true" />
+                Cotización
+              </button>
+            ) : null}
             <button
               type="button"
               className="btn btn-secondary"

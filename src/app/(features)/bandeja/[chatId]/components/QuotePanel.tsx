@@ -488,6 +488,11 @@ const SvgSave = () => (
 export interface QuotePanelProps {
   chatId: string;
   customerId: number | null;
+  /**
+   * Ancla la cotización a la transacción (sales_orders.id).
+   * Permite encontrar la cotización cross-chat (preguntas ML, mensajería ML, WA).
+   */
+  salesOrderId?: number | null;
   /** TRUE cuando el usuario pulsa "Cotizar" en el panel de acciones */
   forceOpen?: boolean;
   /** Callback para que el padre sepa que ya consumió el forceOpen */
@@ -611,6 +616,7 @@ function productStubFromPresupuestoLine(r: Record<string, unknown>): Product {
 export default function QuotePanel({
   chatId,
   customerId,
+  salesOrderId,
   forceOpen,
   onForceOpenConsumed,
   bootstrapDraftQuotationId,
@@ -697,14 +703,28 @@ export default function QuotePanel({
   const panelRef                        = useRef<HTMLDivElement>(null);
 
   const loadActiveQuote = useCallback(async () => {
-    if (!chatId) return;
+    // Necesitamos al menos un chatId o salesOrderId para buscar.
+    if (!chatId && !(salesOrderId != null && salesOrderId > 0)) return;
     try {
-      const r = await fetch(`/api/inbox/quotations/${encodeURIComponent(chatId)}`, {
-        credentials: "include",
-        cache: "no-store",
-      });
-      const data = await r.json().catch(() => ({})) as Record<string, unknown>;
-      const items = (data.items ?? []) as Array<Record<string, unknown>>;
+      // Lookup primario: por chatId (directo + cross-chat vía sales_order en BD).
+      let items: Array<Record<string, unknown>> = [];
+      if (chatId && Number.isFinite(Number(chatId)) && Number(chatId) > 0) {
+        const r = await fetch(`/api/inbox/quotations/${encodeURIComponent(chatId)}`, {
+          credentials: "include",
+          cache: "no-store",
+        });
+        const data = await r.json().catch(() => ({})) as Record<string, unknown>;
+        items = (data.items ?? []) as Array<Record<string, unknown>>;
+      }
+      // Lookup secundario: por salesOrderId cuando chatId no devolvió resultados (cross-chat completo).
+      if (!items.length && salesOrderId != null && salesOrderId > 0) {
+        const r2 = await fetch(
+          `/api/inbox/quotations/by-sales-order/${encodeURIComponent(String(salesOrderId))}`,
+          { credentials: "include", cache: "no-store" }
+        );
+        const data2 = await r2.json().catch(() => ({})) as Record<string, unknown>;
+        items = (data2.items ?? []) as Array<Record<string, unknown>>;
+      }
       const active = items.find((q) =>
         ["sent", "approved", "rejected"].includes(String(q.status))
       );
@@ -870,7 +890,7 @@ export default function QuotePanel({
     setCajaUsdSubmitting(false);
     setCajaUsdError(null);
     setCajaUsdOk(null);
-  }, [chatId]);
+  }, [chatId, salesOrderId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Notificar al padre la cotización activa
   useEffect(() => {

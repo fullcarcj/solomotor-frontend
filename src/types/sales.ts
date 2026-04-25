@@ -1,3 +1,27 @@
+export interface ItemPreview {
+  sku: string;
+  name: string;
+  qty: number;
+  unit_price_usd: number | null;
+  image_url: string | null;
+}
+
+export interface QuoteItemPreview {
+  sku: string;
+  name: string;
+  qty: number;
+  unit_price_usd: number | null;
+  image_url: string | null;
+}
+
+export interface QuotePreview {
+  id: number;
+  total: number | null;
+  status: string;
+  items_count: number;
+  items_preview: QuoteItemPreview[] | null;
+}
+
 export interface Sale {
   id: string | number;
   source: string;
@@ -17,6 +41,12 @@ export interface Sale {
   sold_by: string | null;
   created_at: string;
   reconciled_statement_id: number | null;
+  /** Cómo se entrega (CHECK en `sales_orders.fulfillment_type`); null = sin definir. */
+  fulfillment_type?: string | null;
+  /** Preview de los primeros 3 ítems del pedido (desde sales_order_items, ml_order_items o sale_lines). */
+  items_preview?: ItemPreview[] | null;
+  /** Resumen de la cotización activa vinculada, si existe. */
+  quote_preview?: QuotePreview | null;
 }
 
 export interface SaleItem {

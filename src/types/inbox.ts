@@ -95,6 +95,8 @@ export interface InboxCounts {
   payment_pending: number;
   quote:           number;
   dispatch:        number;
+  /** Preguntas ML con status UNANSWERED en ml_questions_pending. */
+  ml_questions_pending?: number;
 }
 
 export interface ChatMessageContent {

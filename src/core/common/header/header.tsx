@@ -15,7 +15,7 @@ export default function Header() {
   const route = all_routes;
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { sinAtenderCount } = useInboxLive();
+  const { sinAtenderCount, pendingMlSalesBellCount, headerBellTotal, mlQuestionsPendingCount } = useInboxLive();
 
   const handleLogout = async (): Promise<void> => {
     try {
@@ -423,6 +423,30 @@ export default function Header() {
                 <span className="badge rounded-pill">1</span>
               </Link>
             </li>
+            {/* Preguntas ML pendientes (ml_questions_pending, status=UNANSWERED) */}
+            <li className="nav-item nav-item-box">
+              <Link
+                href="/mercadolibre/preguntas"
+                className="position-relative"
+                aria-label={
+                  mlQuestionsPendingCount > 0
+                    ? `${mlQuestionsPendingCount} pregunta${mlQuestionsPendingCount === 1 ? "" : "s"} ML sin responder`
+                    : "Preguntas Mercado Libre"
+                }
+                title={
+                  mlQuestionsPendingCount > 0
+                    ? `${mlQuestionsPendingCount} pregunta${mlQuestionsPendingCount === 1 ? "" : "s"} ML sin responder`
+                    : "Preguntas Mercado Libre — sin pendientes"
+                }
+              >
+                <i className="ti ti-message-question" aria-hidden />
+                {mlQuestionsPendingCount > 0 && (
+                  <span className="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle">
+                    {mlQuestionsPendingCount > 99 ? "99+" : mlQuestionsPendingCount}
+                  </span>
+                )}
+              </Link>
+            </li>
             {/* Bandeja — Sin atender (conteo alineado a GET /api/inbox/counts) */}
             <li className="nav-item dropdown nav-item-box">
               <Link
@@ -432,9 +456,9 @@ export default function Header() {
                 aria-label="Avisos de bandeja"
               >
                 <i className="ti ti-bell" aria-hidden />
-                {sinAtenderCount != null && sinAtenderCount > 0 ? (
+                {headerBellTotal > 0 ? (
                   <span className="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle">
-                    {sinAtenderCount > 99 ? "99+" : sinAtenderCount}
+                    {headerBellTotal > 99 ? "99+" : headerBellTotal}
                   </span>
                 ) : null}
               </Link>
@@ -473,6 +497,31 @@ export default function Header() {
                         </div>
                       </Link>
                     </li>
+                    {pendingMlSalesBellCount > 0 ? (
+                      <li className="notification-message">
+                        <Link href={route.ventasPedidos}>
+                          <div className="media d-flex align-items-start gap-2">
+                            <span className="avatar flex-shrink-0 d-flex align-items-center justify-content-center bg-opacity-25 bg-info rounded-circle" style={{ width: 40, height: 40 }}>
+                              <i className="ti ti-shopping-cart text-info" aria-hidden />
+                            </span>
+                            <div className="flex-grow-1">
+                              <p className="noti-details mb-1">
+                                <span className="noti-title">Nuevas órdenes ML</span>
+                                {" "}
+                                —{" "}
+                                <strong>
+                                  {pendingMlSalesBellCount}{" "}
+                                  {pendingMlSalesBellCount === 1 ? "orden" : "órdenes"}
+                                </strong>
+                              </p>
+                              <p className="noti-time mb-0 small text-muted">
+                                Importadas al ERP; se limpian al abrir Pedidos.
+                              </p>
+                            </div>
+                          </div>
+                        </Link>
+                      </li>
+                    ) : null}
                   </ul>
                 </div>
                 <div className="topnav-dropdown-footer">
