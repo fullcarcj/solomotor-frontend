@@ -178,12 +178,14 @@ function fmtTime(iso: string | null): string {
   } catch { return ""; }
 }
 
-function initials(name: string | null, phone: string): string {
+function initials(name: string | null, phone: string | null): string {
   if (name?.trim()) {
     const parts = name.trim().split(" ");
     return (parts[0][0] + (parts[1]?.[0] ?? "")).toUpperCase();
   }
-  return phone.slice(-2).toUpperCase();
+  const p = String(phone ?? "").trim();
+  if (!p) return "--";
+  return p.slice(-2).toUpperCase();
 }
 
 // ─── Avatar color palette ────────────────────────────────────────────────────────

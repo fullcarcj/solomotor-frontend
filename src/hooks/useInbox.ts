@@ -134,7 +134,7 @@ export function useInbox(initialFilters?: Partial<InboxFilters>) {
         const nowIso = new Date().toISOString();
         const optimistic: InboxChat = {
           id: Number(chatId) || chatId,
-          phone: null,
+          phone: "",
           source_type: (sseQuick.sourceType ?? null) as InboxChat["source_type"],
           identity_status: "unknown",
           last_message_text:

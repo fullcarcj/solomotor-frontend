@@ -7,9 +7,11 @@ import { CHAT_STAGE_LABELS, bandejaMlQuestionPipelineStage } from "@/types/inbox
 import SlaCountdown from "@/components/bandeja/SlaCountdown";
 import { isFbWindowExpired, fbWindowRemainingMs } from "./MessageInput";
 
-function initials(name: string | null, phone: string): string {
+function initials(name: string | null, phone: string | null): string {
   if (name) { const p = name.trim().split(" "); return (p[0][0] + (p[1]?.[0] ?? "")).toUpperCase(); }
-  return phone.slice(-2);
+  const ph = String(phone ?? "").trim();
+  if (!ph) return "--";
+  return ph.slice(-2);
 }
 
 interface Props {
