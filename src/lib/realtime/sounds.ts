@@ -1,3 +1,5 @@
+import { traceMlQuestionUi } from "@/lib/realtime/mlQuestionTrace";
+
 /** Máximo un sonido por ventana corta (evita spam si llegan muchos SSE). */
 let lastInboxSoundAt = 0;
 const INBOX_THROTTLE_MS = 400;
@@ -113,9 +115,17 @@ function speakWhatsappInboundCue(): void {
  * Sonidos por `source_type`: WA → TTS; pregunta ML → preguntas.wav; pack ML → ml-message.wav.
  */
 export function playInboxInboundSound(sourceType: string | null | undefined): void {
-  if (!inboxSoundThrottleOk()) return;
-  unlockBandejaAudio();
   const st = (sourceType != null ? String(sourceType) : "").trim().toLowerCase();
+  if (!inboxSoundThrottleOk()) {
+    if (st === "ml_question") {
+      traceMlQuestionUi("frontend_sound_throttled", { source_type: st });
+    }
+    return;
+  }
+  unlockBandejaAudio();
+  if (st === "ml_question") {
+    traceMlQuestionUi("frontend_sound_play_attempt", { source_type: st, sound: "/sounds/preguntas.wav" });
+  }
 
   if (st === "wa_inbound" || st === "wa" || st === "wa_ml_linked") {
     speakWhatsappInboundCue();

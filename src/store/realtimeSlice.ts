@@ -3,6 +3,7 @@ import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 export interface SseInboxQuickNotify {
   chatId: string;
   preview: string | null;
+  sourceType: string | null;
   /** Contador monótono para que useInbox reaccione a cada evento aunque sea el mismo chat. */
   tick: number;
 }
@@ -74,12 +75,13 @@ const realtimeSlice = createSlice({
     },
     applySseInboxQuickNotify(
       state,
-      action: PayloadAction<{ chatId: string | number; preview: string | null }>
+      action: PayloadAction<{ chatId: string | number; preview: string | null; sourceType?: string | null }>
     ) {
       const prevTick = state.sseInboxQuickNotify?.tick ?? 0;
       state.sseInboxQuickNotify = {
         chatId: String(action.payload.chatId),
         preview: action.payload.preview,
+        sourceType: action.payload.sourceType != null ? String(action.payload.sourceType) : null,
         tick: prevTick + 1,
       };
     },

@@ -17,6 +17,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { resetInboxUnreadOptimisticDelta } from "@/store/realtimeSlice";
 import { unlockBandejaAudio } from "@/lib/realtime/sounds";
 import { requestBandejaNotifyPermission, tryBandejaDesktopNotify } from "@/lib/realtime/bandejaAttentionNotify";
+import { traceMlQuestionUi } from "@/lib/realtime/mlQuestionTrace";
 
 const FAVICON_PENDING =
   "data:image/svg+xml," +
@@ -139,6 +140,14 @@ export function InboxLiveProvider({ children }: { children: ReactNode }) {
     if (tick < 1 || !sseQuick) return;
     if (tick <= lastDesktopTickRef.current) return;
     lastDesktopTickRef.current = tick;
+    if ((sseQuick.sourceType ?? "").toLowerCase() === "ml_question") {
+      traceMlQuestionUi("frontend_desktop_notify_attempt", {
+        chat_id: sseQuick.chatId,
+        source_type: sseQuick.sourceType ?? null,
+        preview: sseQuick.preview ?? null,
+        active_chat_id: activeChatId,
+      });
+    }
     tryBandejaDesktopNotify({
       chatId: sseQuick.chatId,
       preview: sseQuick.preview,

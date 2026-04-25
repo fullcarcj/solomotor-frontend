@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { inboxStream } from "@/lib/realtime/inboxStream";
 import { playInboxInboundSound, playNewSaleSound, playUrgentSound } from "@/lib/realtime/sounds";
+import { traceMlQuestionUi } from "@/lib/realtime/mlQuestionTrace";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   applySseInboxQuickNotify,
@@ -145,8 +146,16 @@ export function useInboxRealtime() {
               applySseInboxQuickNotify({
                 chatId: msg.chat_id,
                 preview: msg.preview ?? null,
+                sourceType: msg.source_type ?? null,
               })
             );
+            if ((msg.source_type ?? "").toLowerCase() === "ml_question") {
+              traceMlQuestionUi("frontend_sse_new_message_received", {
+                chat_id: msg.chat_id != null ? String(msg.chat_id) : null,
+                source_type: msg.source_type ?? null,
+                preview: msg.preview ?? null,
+              });
+            }
             playInboxInboundSound(msg.source_type);
           }
           dispatch(bumpInboxRefetch());
@@ -159,8 +168,16 @@ export function useInboxRealtime() {
               applySseInboxQuickNotify({
                 chatId: msg.chat_id,
                 preview: msg.preview ?? null,
+                sourceType: msg.source_type ?? null,
               })
             );
+            if ((msg.source_type ?? "").toLowerCase() === "ml_question") {
+              traceMlQuestionUi("frontend_sse_chat_reopened_received", {
+                chat_id: msg.chat_id != null ? String(msg.chat_id) : null,
+                source_type: msg.source_type ?? null,
+                preview: msg.preview ?? null,
+              });
+            }
             playInboxInboundSound(msg.source_type);
           }
           dispatch(bumpInboxRefetch());

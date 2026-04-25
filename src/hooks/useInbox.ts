@@ -130,7 +130,37 @@ export function useInbox(initialFilters?: Partial<InboxFilters>) {
     const { chatId, preview } = sseQuick;
     setChats((prev) => {
       const idx = prev.findIndex((c) => String(c.id) === chatId);
-      if (idx < 0) return prev;
+      if (idx < 0) {
+        const nowIso = new Date().toISOString();
+        const optimistic: InboxChat = {
+          id: Number(chatId) || chatId,
+          phone: null,
+          source_type: (sseQuick.sourceType ?? null) as InboxChat["source_type"],
+          identity_status: "unknown",
+          last_message_text:
+            preview != null && String(preview).trim() !== "" ? String(preview) : "Nuevo mensaje",
+          last_message_at: nowIso,
+          unread_count: 1,
+          ml_order_id: null,
+          ml_question_id: null,
+          customer_id: null,
+          assigned_to: null,
+          customer_name: null,
+          order: null,
+          chat_stage: "contact",
+          status: "UNASSIGNED",
+          sla_deadline_at: null,
+          last_inbound_at: nowIso,
+          last_outbound_at: null,
+          last_message_direction: "inbound",
+          customer_waiting_reply: true,
+          has_active_exception: false,
+          top_exception_reason: null,
+          top_exception_code: null,
+          is_operational: false,
+        };
+        return [optimistic, ...prev];
+      }
       const row = prev[idx];
       const text =
         preview != null && String(preview).trim() !== ""
