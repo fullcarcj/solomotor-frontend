@@ -174,69 +174,50 @@ export default function SaleQuoteModal({ ctx, onClose }: SaleQuoteModalProps) {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="modal-dialog modal-xl modal-dialog-scrollable" style={{ maxWidth: 960 }}>
+      <div className="modal-dialog modal-xl modal-dialog-scrollable" style={{ maxWidth: 980 }}>
         <div className="modal-content">
-          <div className="modal-header">
-            <h5 className="modal-title" id="sale-quote-modal-title">
-              Cotización — {ctx.saleLabel}
-            </h5>
+          {/* Barra mínima con título y cierre — sin texto redundante */}
+          <div className="modal-header py-2 px-3">
+            <span id="sale-quote-modal-title" className="fw-semibold" style={{ fontSize: 13 }}>
+              <i className="ti ti-file-invoice me-1 text-indigo" aria-hidden />
+              {ctx.saleLabel}
+            </span>
             <button type="button" className="btn-close" aria-label="Cerrar" onClick={onClose} />
           </div>
-          <div className="modal-body py-2">
-            <p className="small text-muted mb-2">
-              Cotización por defecto basada en la oferta ML (ítems y precios de la orden). Si
-              editás precios, el total del presupuesto puede diferir del total de la orden original
-              sin modificar Mercado Libre.{" "}
-              {!hasChatId && (
-                <span>
-                  Al vincular esta orden a un chat CRM en Bandeja, el borrador quedará enlazado
-                  automáticamente.
-                </span>
-              )}
-            </p>
 
+          <div className="modal-body p-0" style={{ minHeight: 420 }}>
             {prepLoading && (
-              <div className="d-flex align-items-center gap-2 small text-muted mb-2" role="status">
+              <div className="d-flex align-items-center gap-2 small text-muted p-3" role="status">
                 <span className="spinner-border spinner-border-sm" aria-hidden="true" />
                 Preparando cotización desde la orden…
               </div>
             )}
             {prepError && (
-              <div className="alert alert-warning py-2 small mb-2" role="alert">
+              <div className="alert alert-warning py-2 small m-3" role="alert">
                 {prepError}
               </div>
             )}
             {prepNote && !prepError && (
-              <div className="alert alert-info py-2 small mb-2" role="status">
+              <div className="alert alert-info py-2 small m-3" role="status">
                 {prepNote}
               </div>
             )}
 
             {canShowPanel && (
-              <div
-                className="border rounded p-2 bg-body-secondary bg-opacity-25"
-                style={{ minHeight: 280 }}
-              >
-                <QuotePanel
-                  key={`${ctx.saleId}-${effectiveChatId || "nochat"}-${bootstrapId ?? "none"}`}
-                  chatId={effectiveChatId}
-                  customerId={ctx.customerId}
-                  salesOrderId={
-                    Number.isFinite(Number(ctx.saleId)) && Number(ctx.saleId) > 0
-                      ? Number(ctx.saleId)
-                      : null
-                  }
-                  forceOpen
-                  bootstrapDraftQuotationId={bootstrapId}
-                  onBootstrapDraftConsumed={onBootstrapConsumed}
-                />
-              </div>
+              <QuotePanel
+                key={`${ctx.saleId}-${effectiveChatId || "nochat"}-${bootstrapId ?? "none"}`}
+                chatId={effectiveChatId}
+                customerId={ctx.customerId}
+                salesOrderId={
+                  Number.isFinite(Number(String(ctx.saleId).replace(/^so-/i, "")))
+                    ? Number(String(ctx.saleId).replace(/^so-/i, ""))
+                    : null
+                }
+                forceOpen
+                bootstrapDraftQuotationId={bootstrapId}
+                onBootstrapDraftConsumed={onBootstrapConsumed}
+              />
             )}
-          </div>
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={onClose}>
-              Cerrar
-            </button>
           </div>
         </div>
       </div>

@@ -29,7 +29,8 @@ const UpArrow = () => (
 
 export default function PedidosKpiRibbon({ sales, loading }: Props) {
   const [bcvRate, setBcvRate] = useState<number | null>(null);
-  const [bcvDate, setBcvDate] = useState<string | null>(null);
+  const [binanceRate, setBinanceRate] = useState<number | null>(null);
+  const [rateDate, setRateDate] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -40,11 +41,13 @@ export default function PedidosKpiRibbon({ sales, loading }: Props) {
         const j = (await res.json()) as Record<string, unknown>;
         const data = (j.data ?? j) as Record<string, unknown> | null;
         if (!data) return;
-        const rate = data.bcv_rate ?? data.active_rate ?? data.rate_bs_per_usd;
+        const bcv = data.bcv_rate;
+        const bin = data.binance_rate;
         const dateVal = data.rate_date ?? data.date;
-        if (alive && rate != null && Number.isFinite(Number(rate)) && Number(rate) > 0) {
-          setBcvRate(Number(rate));
-          setBcvDate(dateVal != null ? String(dateVal) : null);
+        if (alive) {
+          if (bcv != null && Number.isFinite(Number(bcv)) && Number(bcv) > 0) setBcvRate(Number(bcv));
+          if (bin != null && Number.isFinite(Number(bin)) && Number(bin) > 0) setBinanceRate(Number(bin));
+          if (dateVal != null) setRateDate(String(dateVal));
         }
       } catch { /* silencioso */ }
     })();
@@ -117,7 +120,7 @@ export default function PedidosKpiRibbon({ sales, loading }: Props) {
 
       {/* KPI 3 · Tasa BCV */}
       <div className="pd-kpi-cell">
-        <span className="pd-kpi-lbl">Tasa BCV</span>
+        <span className="pd-kpi-lbl">BCV Bs./USD</span>
         {loading ? (
           sk("70%")
         ) : (
@@ -131,9 +134,27 @@ export default function PedidosKpiRibbon({ sales, loading }: Props) {
           className="pd-kpi-delta"
           style={{ color: bcvRate != null ? undefined : "var(--pd-text-faint)" }}
         >
-          {bcvRate != null
-            ? (bcvDate ? `Bs./${bcvDate}` : "Bs./USD")
-            : "No disponible"}
+          {rateDate ? rateDate : (bcvRate == null ? "No disponible" : "Hoy")}
+        </span>
+      </div>
+
+      {/* KPI 3b · Tasa BINANCE */}
+      <div className="pd-kpi-cell">
+        <span className="pd-kpi-lbl">BINANCE Bs./USD</span>
+        {loading ? (
+          sk("70%")
+        ) : (
+          <span className="pd-kpi-val sm" style={{ color: "var(--pd-accent)" }}>
+            {binanceRate != null
+              ? binanceRate.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+              : "—"}
+          </span>
+        )}
+        <span
+          className="pd-kpi-delta"
+          style={{ color: binanceRate != null ? undefined : "var(--pd-text-faint)" }}
+        >
+          {binanceRate != null ? "Paralelo" : "No disponible"}
         </span>
       </div>
 

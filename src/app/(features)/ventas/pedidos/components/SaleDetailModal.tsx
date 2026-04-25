@@ -5,6 +5,7 @@ import type { SaleDetail } from "@/types/sales";
 import SaleSourceBadge from "./SaleSourceBadge";
 import SaleStatusBadge from "./SaleStatusBadge";
 import SaleResolvedCustomerBlock from "./SaleResolvedCustomerBlock";
+import SaleCustomerPanel from "./SaleCustomerPanel";
 
 function fmtDate(iso: string): string {
   const d = new Date(iso);
@@ -218,12 +219,17 @@ export default function SaleDetailModal({
                   </div>
                 </div>
 
-                {detail.source === "mercadolibre" && (
-                  <div className="mb-3">
-                    <h6 className="mb-2">Comprador</h6>
+                <div className="mb-3">
+                  <h6 className="mb-2">Cliente</h6>
+                  {detail.customer_id != null ? (
+                    <SaleCustomerPanel
+                      customerId={Number(detail.customer_id)}
+                      chatId={detail.chat_id}
+                    />
+                  ) : (
                     <SaleResolvedCustomerBlock saleId={detail.id} />
-                  </div>
-                )}
+                  )}
+                </div>
 
                 <h6 className="mb-2">Ítems</h6>
                 <div className="table-responsive mb-3">

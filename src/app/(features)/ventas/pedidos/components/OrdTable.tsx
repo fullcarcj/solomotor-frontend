@@ -395,45 +395,48 @@ function ProductsCell({ items, quotePreview, compact = false }: ProductsCellProp
   }
 
   if (orderItems.length > 0) {
-    const first = orderItems[0];
     return (
-      <div className={`c-products${compact ? " c-products--compact" : ""}`}>
-        <div className="prod-thumb-big">
-          <ProductThumb url={first.image_url} name={first.name} />
-        </div>
-        <div className="prod-list">
+      <div className={`c-products c-products--v${compact ? " c-products--compact" : ""}`}>
+        <div className="prod-list-v">
           {orderItems.map((item, idx) => (
-            <div key={idx} className={`prod-item${idx === 0 ? " main" : ""}`}>
-              <span className="qt">×{item.qty}</span>
-              <div className="body">
-                <div className="n">{item.name || item.sku}</div>
-                {item.sku && <div className="s">{item.sku}</div>}
+            <div key={idx} className={`prod-item-v${idx === 0 ? " main" : ""}`}>
+              <div className="prod-item-v__desc">{item.name || item.sku}</div>
+              <div className="prod-item-v__meta">
+                <span className="qt">×{item.qty}</span>
+                {item.sku && item.sku !== item.name && (
+                  <span className="s">{item.sku}</span>
+                )}
+                {item.unit_price_usd != null && (
+                  <span className="pr">${fmtUsd(item.unit_price_usd)}</span>
+                )}
               </div>
-              {item.unit_price_usd != null && (
-                <span className="pr">${fmtUsd(item.unit_price_usd)}</span>
-              )}
             </div>
           ))}
         </div>
+        {!compact && (
+          <div className="prod-thumbs-row prod-thumbs-row--below">
+            {orderItems.slice(0, 3).map((item, idx) => (
+              <div key={idx} className="prod-thumb-wrap" title={item.name}>
+                <ProductThumb url={item.image_url} name={item.name} />
+                {item.qty > 1 && <span className="prod-thumb-qty">×{item.qty}</span>}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
 
   return (
-    <div className={`c-products${compact ? " c-products--compact" : ""}`}>
-      <div className="prod-thumb-big">
-        <PkgIcon />
-      </div>
-      <div className="prod-list">
-        <div className="prod-item main">
-          <span className="qt">—</span>
-          <div className="body">
-            <div className="n" style={{ color: "var(--pd-text-faint)", fontStyle: "italic" }}>
-              Ver detalle de orden
-            </div>
-            <div className="s">Click para expandir</div>
+    <div className={`c-products c-products--v${compact ? " c-products--compact" : ""}`}>
+      <div className="prod-list-v">
+        <div className="prod-item-v main">
+          <div className="prod-item-v__desc" style={{ color: "var(--pd-text-faint)", fontStyle: "italic" }}>
+            Ver detalle de orden
           </div>
-          <span className="pr">—</span>
+          <div className="prod-item-v__meta">
+            <span className="s">Click para expandir</span>
+          </div>
         </div>
       </div>
     </div>
