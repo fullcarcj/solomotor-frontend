@@ -22,6 +22,31 @@ export interface QuotePreview {
   items_preview: QuoteItemPreview[] | null;
 }
 
+/** Última fila de `reconciliation_log` + extracto / comprobante WA (listado pedidos). */
+export interface SalePaymentReconciliation {
+  source?: string | null;
+  match_level?: number | null;
+  resolved_by?: string | null;
+  created_at?: string | null;
+  bank_statement_id?: number | null;
+  payment_attempt_id?: number | null;
+  bank?: {
+    tx_date?: string | null;
+    amount?: number | string | null;
+    description?: string | null;
+    reference_number?: string | null;
+    payment_type?: string | null;
+  } | null;
+  payment_attempt?: {
+    firebase_url?: string | null;
+    extracted_amount_bs?: number | string | null;
+    extracted_date?: string | null;
+    extracted_reference?: string | null;
+    extracted_bank?: string | null;
+    extracted_payment_type?: string | null;
+  } | null;
+}
+
 export interface Sale {
   id: string | number;
   source: string;
@@ -41,8 +66,12 @@ export interface Sale {
   sold_by: string | null;
   created_at: string;
   reconciled_statement_id: number | null;
+  /** Resumen conciliación (extracto Banesco o comprobante WA). */
+  payment_reconciliation?: SalePaymentReconciliation | null;
   /** Cómo se entrega (CHECK en `sales_orders.fulfillment_type`); null = sin definir. */
   fulfillment_type?: string | null;
+  /** Medio de cobro (`sales_orders.payment_method`); mismo catálogo que POST ventas. */
+  payment_method?: string | null;
   /** Preview de los primeros 3 ítems del pedido (desde sales_order_items, ml_order_items o sale_lines). */
   items_preview?: ItemPreview[] | null;
   /** Resumen de la cotización activa vinculada, si existe. */
@@ -93,4 +122,11 @@ export interface SalesMeta {
   limit: number;
   offset: number;
   exclude_completed_default: boolean;
+}
+
+/** Contexto para abrir el listado de extracto (mismo modal que en Bandeja). */
+export interface SaleReconcileContext {
+  salesOrderId: number;
+  totalBs: number | null;
+  label: string;
 }

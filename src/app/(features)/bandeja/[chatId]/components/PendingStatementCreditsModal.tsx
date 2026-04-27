@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import "@/app/(features)/supervisor/supervisor-theme.scss";
 
 export interface PendingStatementItem {
@@ -22,11 +22,22 @@ export interface PendingStatementItem {
   created_at: string | null;
 }
 
+const DEFAULT_TITLE = "Extracto Banesco · créditos pendientes";
+const DEFAULT_SUBTITLE =
+  "Tocá un movimiento para cargarlo en Comprobantes y conciliación y confirmá o cancelá allí.";
+
 interface Props {
   open: boolean;
   onClose: () => void;
-  /** Al elegir un movimiento se cierra el modal y se delega la confirmación al panel de conciliación. */
-  onPickStatement: (item: PendingStatementItem) => void;
+  /**
+   * Al elegir fila: si devuelve Promise, se espera; si rechaza, el modal permanece abierto y muestra el error.
+   * Si resuelve, se cierra. Sincrónico sin throw: se cierra al instante (Bandeja).
+   */
+  onPickStatement: (item: PendingStatementItem) => void | Promise<void>;
+  title?: string;
+  subtitle?: string;
+  /** Pedidos: total Bs de la orden como referencia visual (no bloquea filas). */
+  expectedTotalBs?: number | null;
 }
 
 const backdrop: CSSProperties = {
@@ -93,10 +104,16 @@ export default function PendingStatementCreditsModal({
   open,
   onClose,
   onPickStatement,
+  title,
+  subtitle,
+  expectedTotalBs,
 }: Props) {
   const [items, setItems] = useState<PendingStatementItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [pickError, setPickError] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
+  const pickBusyRef = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -128,6 +145,9 @@ export default function PendingStatementCreditsModal({
 
   useEffect(() => {
     if (!open) return;
+    setPickError(null);
+    setPicking(false);
+    pickBusyRef.current = false;
     void load();
   }, [open, load]);
 
@@ -141,6 +161,9 @@ export default function PendingStatementCreditsModal({
   }, [open, onClose]);
 
   if (!open) return null;
+
+  const headTitle = title ?? DEFAULT_TITLE;
+  const headSubtitle = subtitle ?? DEFAULT_SUBTITLE;
 
   return (
     <>
@@ -184,11 +207,10 @@ export default function PendingStatementCreditsModal({
                 letterSpacing: "-0.01em",
               }}
             >
-              Extracto Banesco · créditos pendientes
+              {headTitle}
             </h2>
             <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--mu-ink-dim, #a8a89a)", lineHeight: 1.4 }}>
-              Tocá un movimiento para cargarlo en <strong>Comprobantes y conciliación</strong> y confirmá o cancelá
-              allí.
+              {headSubtitle}
             </p>
           </div>
           <button
@@ -201,6 +223,31 @@ export default function PendingStatementCreditsModal({
         </div>
 
         <div style={{ padding: "4px 16px 14px", flex: 1, minHeight: 0, overflowY: "auto" }}>
+          {expectedTotalBs != null && Number.isFinite(Number(expectedTotalBs)) ? (
+            <div
+              style={{
+                marginTop: 4,
+                marginBottom: 10,
+                padding: "8px 12px",
+                borderRadius: 8,
+                background: "rgba(56, 189, 248, 0.1)",
+                border: "1px solid rgba(56, 189, 248, 0.28)",
+                fontSize: 13,
+                color: "var(--mu-text, #e6edf3)",
+              }}
+            >
+              Total esperado de la orden: <strong>{fmtBs(String(expectedTotalBs))}</strong>
+            </div>
+          ) : null}
+          {pickError ? (
+            <div
+              className="alert alert-danger py-2 small mb-2"
+              role="alert"
+              style={{ marginTop: 4, fontSize: 13 }}
+            >
+              {pickError}
+            </div>
+          ) : null}
           <div style={{ ...secLabel, marginTop: 4 }}>
             <span>Movimientos</span>
             <div style={line} />
@@ -267,9 +314,26 @@ export default function PendingStatementCreditsModal({
                       key={r.id}
                       type="button"
                       title={tip}
+                      disabled={loading || picking}
                       onClick={() => {
-                        onPickStatement(r);
-                        onClose();
+                        void (async () => {
+                          if (pickBusyRef.current) return;
+                          pickBusyRef.current = true;
+                          setPickError(null);
+                          setPicking(true);
+                          try {
+                            const out = onPickStatement(r);
+                            if (out != null && typeof (out as Promise<void>).then === "function") {
+                              await out;
+                            }
+                            onClose();
+                          } catch (e) {
+                            setPickError(e instanceof Error ? e.message : "No se pudo completar la acción");
+                          } finally {
+                            pickBusyRef.current = false;
+                            setPicking(false);
+                          }
+                        })();
                       }}
                       style={{
                         ...STMT_ROW_GRID,

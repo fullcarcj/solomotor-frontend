@@ -1,12 +1,24 @@
 "use client";
 
-import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import type { Sale, ItemPreview, QuotePreview } from "@/types/sales";
 import Link from "next/link";
 import {
   usePedidosCustomerContact,
   PedidosCustomerContactView,
 } from "./PedidosCustomerBlock";
+import {
+  paymentOptionsForSale,
+  effectivePaymentSelectValue,
+  DEFAULT_VES_PAYMENT,
+} from "../paymentMethodCatalog";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -201,6 +213,122 @@ const FULFILLMENT_OPTIONS: { value: string; label: string }[] = [
   { value: "desde_bodega", label: "Desde bodega" },
   { value: "", label: "Sin definir" },
 ];
+
+function OrderPaymentMethodSelect({
+  sale,
+  viewerRole,
+  disabled,
+  onCommitted,
+}: {
+  sale: Sale;
+  viewerRole: string | null | undefined;
+  disabled: boolean;
+  onCommitted: () => void | Promise<void>;
+}) {
+  const options = useMemo(
+    () => paymentOptionsForSale(sale, viewerRole),
+    [sale, viewerRole],
+  );
+  /** Tras «Sin definir» en VES, no volver a forzar Banesco hasta que haya valor en BD. */
+  const skipVesDefaultRef = useRef(false);
+  const [v, setV] = useState(() => effectivePaymentSelectValue(sale));
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    const raw = sale.payment_method?.trim().toLowerCase() ?? "";
+    if (raw) {
+      skipVesDefaultRef.current = false;
+      setV(raw);
+      return;
+    }
+    if (sale.rate_type === "NATIVE_VES" && !skipVesDefaultRef.current) {
+      setV(DEFAULT_VES_PAYMENT);
+      return;
+    }
+    setV("");
+  }, [sale.id, sale.payment_method, sale.rate_type]);
+
+  /** POS-only: mostrar catálogo completo pero sin editar. */
+  if (disabled) {
+    return (
+      <select
+        className="logi-ft-select logi-ft-select--readonly-row"
+        value={v}
+        disabled
+        aria-label="Forma de pago"
+        title="Solo lectura en ventas POS."
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        {options.map((o) => (
+          <option key={o.value || "__empty"} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  return (
+    <select
+      className="logi-ft-select"
+      value={v}
+      disabled={saving}
+      aria-label="Forma de pago"
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+      onChange={async (e) => {
+        e.stopPropagation();
+        const next = e.target.value;
+        const prev = v;
+        setV(next);
+        setSaving(true);
+        try {
+          const payload =
+            next === "" ? { payment_method: null } : { payment_method: next };
+          const res = await fetch(
+            `/api/ventas/pedidos/${encodeURIComponent(String(sale.id))}/payment-method`,
+            {
+              method: "PATCH",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            }
+          );
+          if (!res.ok) {
+            const j = (await res.json().catch(() => ({}))) as {
+              error?: string | { message?: string };
+              message?: string;
+            };
+            const msg =
+              (typeof j.error === "object" && j.error?.message) ||
+              (typeof j.error === "string" ? j.error : null) ||
+              j.message ||
+              res.statusText;
+            throw new Error(String(msg));
+          }
+          if (next === "" && sale.rate_type === "NATIVE_VES") {
+            skipVesDefaultRef.current = true;
+          } else if (next !== "") {
+            skipVesDefaultRef.current = false;
+          }
+          await onCommitted();
+        } catch {
+          setV(prev);
+        } finally {
+          setSaving(false);
+        }
+      }}
+    >
+      {options.map((o) => (
+        <option key={o.value || "__empty"} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 function LogisticsFulfillmentSelect({
   saleId,
@@ -499,6 +627,278 @@ function isMercadoLibreSale(source: string): boolean {
   return s.includes("mercadolibre") || s.startsWith("ml_");
 }
 
+function saleHasPaymentLink(sale: Sale): boolean {
+  if (
+    sale.reconciled_statement_id != null &&
+    Number(sale.reconciled_statement_id) > 0
+  ) {
+    return true;
+  }
+  const r = sale.payment_reconciliation;
+  if (!r) return false;
+  if (r.bank && (r.bank.amount != null || r.bank.tx_date)) return true;
+  if (
+    r.payment_attempt &&
+    (Boolean(r.payment_attempt.firebase_url?.trim()) ||
+      r.payment_attempt.extracted_amount_bs != null)
+  ) {
+    return true;
+  }
+  if (r.bank_statement_id != null && Number(r.bank_statement_id) > 0) return true;
+  if (r.payment_attempt_id != null && Number(r.payment_attempt_id) > 0) return true;
+  return false;
+}
+
+function fmtReconDateTime(raw: string | null | undefined): string {
+  if (raw == null || String(raw).trim() === "") return "—";
+  const d = new Date(raw);
+  if (!Number.isNaN(d.getTime())) {
+    return d.toLocaleString("es-VE", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+  return String(raw);
+}
+
+function fmtReconMoneyBs(v: number | string | null | undefined): string {
+  if (v == null || v === "") return "—";
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "—";
+  return `${n.toLocaleString("es-VE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} Bs`;
+}
+
+function isSoOmnichannelId(id: string | number | null | undefined): boolean {
+  return /^so-\d+$/i.test(String(id ?? "").trim());
+}
+
+function PedidosPaymentReconcileBlock({
+  sale,
+  onReconcile,
+}: {
+  sale: Sale;
+  onReconcile?: (s: Sale) => void;
+}) {
+  const soOmnichannel = isSoOmnichannelId(sale.id);
+  const canBankReconcile = Boolean(onReconcile && soOmnichannel);
+  const pr = sale.payment_reconciliation;
+  const linked = saleHasPaymentLink(sale);
+  const manual =
+    pr?.resolved_by === "manual_ui" ||
+    (pr?.match_level != null && Number(pr.match_level) >= 3);
+  const auto = linked && !manual;
+  const b = pr?.bank;
+  const pa = pr?.payment_attempt;
+  const fu = pa?.firebase_url?.trim() ?? "";
+
+  const reconWhenLine =
+    pr?.created_at != null && String(pr.created_at).trim() !== "" ? (
+      <div className="c-pago-recon__ln c-pago-recon__ln--when">
+        <span className="lb">Registro</span>
+        <span className="c-pago-recon__mono" title="Registro en auditoría">
+          {fmtReconDateTime(pr.created_at)}
+        </span>
+      </div>
+    ) : null;
+
+  const reconFallbackExtract =
+    !pr && sale.reconciled_statement_id != null ? (
+      <div className="c-pago-recon__ln">
+        <span className="lb">Extracto</span>
+        <span className="c-pago-recon__mono">#{sale.reconciled_statement_id}</span>
+      </div>
+    ) : null;
+
+  const reconBankBlock = b ? (
+    <div className="c-pago-recon__bank">
+      {b.tx_date != null && String(b.tx_date).trim() !== "" ? (
+        <div className="c-pago-recon__ln">
+          <span className="lb">Fecha movimiento</span>
+          <span className="c-pago-recon__mono">
+            {fmtReconDateTime(String(b.tx_date))}
+          </span>
+        </div>
+      ) : null}
+      <div className="c-pago-recon__ln">
+        <span className="lb">Monto</span>
+        <span className="c-pago-recon__mono">{fmtReconMoneyBs(b.amount)}</span>
+      </div>
+      {b.reference_number != null && String(b.reference_number).trim() !== "" ? (
+        <div className="c-pago-recon__ln">
+          <span className="lb">Referencia</span>
+          <span className="c-pago-recon__mono">{String(b.reference_number)}</span>
+        </div>
+      ) : null}
+      {b.payment_type != null && String(b.payment_type).trim() !== "" ? (
+        <div className="c-pago-recon__ln">
+          <span className="lb">Tipo</span>
+          <span>{String(b.payment_type)}</span>
+        </div>
+      ) : null}
+      {b.description != null && String(b.description).trim() !== "" ? (
+        <div className="c-pago-recon__desc" title={String(b.description)}>
+          {String(b.description).length > 140
+            ? `${String(b.description).slice(0, 137)}…`
+            : String(b.description)}
+        </div>
+      ) : null}
+    </div>
+  ) : null;
+
+  const reconWaBlock =
+    pa &&
+    (fu ||
+      pa.extracted_amount_bs != null ||
+      (pa.extracted_date != null && String(pa.extracted_date).trim() !== "") ||
+      (pa.extracted_reference != null && String(pa.extracted_reference).trim() !== "")) ? (
+      <div className="c-pago-recon__wa">
+        <div className="c-pago-recon__ln">
+          <span className="lb">Comprobante</span>
+        </div>
+        {pa.extracted_amount_bs != null ? (
+          <div className="c-pago-recon__ln">
+            <span className="lb">Monto (IA)</span>
+            <span className="c-pago-recon__mono">
+              {fmtReconMoneyBs(pa.extracted_amount_bs)}
+            </span>
+          </div>
+        ) : null}
+        {pa.extracted_date != null && String(pa.extracted_date).trim() !== "" ? (
+          <div className="c-pago-recon__ln">
+            <span className="lb">Fecha</span>
+            <span className="c-pago-recon__mono">
+              {fmtReconDateTime(String(pa.extracted_date))}
+            </span>
+          </div>
+        ) : null}
+        {pa.extracted_reference != null && String(pa.extracted_reference).trim() !== "" ? (
+          <div className="c-pago-recon__ln">
+            <span className="lb">Ref.</span>
+            <span className="c-pago-recon__mono">{String(pa.extracted_reference)}</span>
+          </div>
+        ) : null}
+        {pa.extracted_bank != null && String(pa.extracted_bank).trim() !== "" ? (
+          <div className="c-pago-recon__ln">
+            <span className="lb">Banco</span>
+            <span>{String(pa.extracted_bank)}</span>
+          </div>
+        ) : null}
+        {pa.extracted_payment_type != null && String(pa.extracted_payment_type).trim() !== "" ? (
+          <div className="c-pago-recon__ln">
+            <span className="lb">Medio</span>
+            <span>{String(pa.extracted_payment_type)}</span>
+          </div>
+        ) : null}
+        {fu && auto ? (
+          <a
+            href={fu}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="c-pago-recon__img-a"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img src={fu} alt="Comprobante (conciliación automática)" className="c-pago-recon__thumb" />
+          </a>
+        ) : null}
+      </div>
+    ) : null;
+
+  const reconDetailCore = (
+    <>
+      {reconFallbackExtract}
+      {reconBankBlock}
+      {reconWaBlock}
+    </>
+  );
+
+  const reconDetailPanelAuto = (
+    <>
+      {reconWhenLine}
+      {reconDetailCore}
+    </>
+  );
+
+  return (
+    <div
+      className="c-pago-recon"
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      {linked ? (
+        <div
+          className="logi-stock-dispatch-row logi-stock-dispatch-row--forced-row c-pago-recon-statusline"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <span className="logi-stock ok">
+            <span className="d" />
+            Pago vinculado
+          </span>
+        </div>
+      ) : null}
+      {linked && auto ? (
+        <details
+          className="c-pago-recon-details"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <summary
+            className="c-pago-recon-details__summary"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="c-pago-recon-details__sum-lb">Conciliación automática</span>
+            <i className="ti ti-chevron-down c-pago-recon-details__chev" aria-hidden="true" />
+          </summary>
+          <div className="c-pago-recon-details__panel">{reconDetailPanelAuto}</div>
+        </details>
+      ) : linked ? (
+        <div className="c-pago-recon__summary">
+          <div className="c-pago-recon__head">
+            <span className="c-pago-recon__mode is-manual">Conciliación manual</span>
+            {pr?.created_at ? (
+              <span className="c-pago-recon__when" title="Registro en auditoría">
+                {fmtReconDateTime(pr.created_at)}
+              </span>
+            ) : null}
+          </div>
+          {reconDetailCore}
+        </div>
+      ) : null}
+      <div className="pd-col-act-row pd-col-act-row--start c-pago-recon__btn-row">
+        <button
+          type="button"
+          className="c-client-edit-btn"
+          disabled={!canBankReconcile}
+          aria-label={`Vincular pago para orden #${sale.id}`}
+          title={
+            !canBankReconcile
+              ? !soOmnichannel
+                ? "Solo pedidos omnicanal (so-*)."
+                : "Sin acción de conciliación disponible."
+              : linked
+                ? "Pago ya conciliado. Vincular otro extracto."
+                : "Vincular pago bancario a esta orden"
+          }
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!canBankReconcile) return;
+            onReconcile!(sale);
+          }}
+        >
+          <i className="ti ti-credit-card" aria-hidden="true" />
+          {linked ? "Conciliado" : "Vincular pago"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function isMlSellerFeedbackPending(sale: Sale): boolean {
   const fs = sale.ml_feedback_sale;
   if (fs == null || String(fs).trim() === "") return true;
@@ -549,6 +949,7 @@ function TotalUsdEquivLines({
 
 interface RowProps {
   sale: Sale;
+  viewerRole: string | null | undefined;
   selected: boolean;
   bcvRate: number | null;
   binanceRate: number | null;
@@ -566,6 +967,7 @@ interface RowProps {
 
 function OrdRow({
   sale,
+  viewerRole,
   selected,
   bcvRate,
   binanceRate,
@@ -652,7 +1054,8 @@ function OrdRow({
     (isMl ||
       (sale.chat_id != null && String(sale.chat_id).trim() !== ""));
 
-  const canEditFulfillment = String(sale.id).toLowerCase().startsWith("so-");
+  /** Listado omnicanal: ids `so-<n>` editan pago y logística; `pos-*` y otros quedan solo lectura. */
+  const canEditFulfillment = isSoOmnichannelId(sale.id);
 
   const handleRowKey = (e: KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") {
@@ -738,6 +1141,8 @@ function OrdRow({
                 <span className="dt" />
                 {ch.label}
               </div>
+            </div>
+            <div className="c-order-id-line">
               <span className="ord-id">#{sale.id}</span>
             </div>
             <div className="c-order-meta">
@@ -815,7 +1220,62 @@ function OrdRow({
           </>
         </td>
 
-        {/* Col 4 · Logística — forma de entrega editable; almacén/stock pendiente backend */}
+        {/* Col 4 · Total */}
+        <td data-label="Total" style={{ textAlign: "left" }}>
+          <div className="c-total">
+            {usd > 0 && (
+              <div className="total-usd">
+                <span className="c">USD</span>
+                {usd.toLocaleString("es-VE", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </div>
+            )}
+            <div className="total-ves">
+              <span className="c">{showVes ? "Bs." : "USD"}</span>
+              {showVes
+                ? vesAmt.toLocaleString("es-VE", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })
+                : usd > 0
+                  ? usd.toLocaleString("es-VE", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })
+                  : "—"}
+            </div>
+            {/* TODO(backend): subtotal, IVA y margin_pct no disponibles en el listado */}
+            <span className="margin-tag">
+              <UpIcon />—
+            </span>
+            <TotalUsdEquivLines
+              sale={sale}
+              bcvRate={bcvRate}
+              binanceRate={binanceRate}
+            />
+          </div>
+        </td>
+
+        {/* Col 5 · Pago — mismo contenedor/fila que Logística (`c-logistics` + `logi-ft-row--select-only`) */}
+        <td data-label="Pago">
+          <div className="c-logistics pedidos-pago-col">
+            <div className="logi-row logi-ft-row logi-ft-row--select-only">
+              <OrderPaymentMethodSelect
+                sale={sale}
+                viewerRole={viewerRole}
+                disabled={!canEditFulfillment}
+                onCommitted={async () => {
+                  await onFulfillmentUpdated?.();
+                }}
+              />
+            </div>
+            <PedidosPaymentReconcileBlock sale={sale} onReconcile={onReconcile} />
+          </div>
+        </td>
+
+        {/* Col 6 · Logística — forma de entrega editable; almacén/stock pendiente backend */}
         <td data-label="Logística">
           <div className="c-logistics">
             <div className="logi-row logi-ft-row logi-ft-row--select-only">
@@ -867,7 +1327,7 @@ function OrdRow({
           </div>
         </td>
 
-        {/* Col 5 · Estado */}
+        {/* Col 7 · Estado */}
         <td data-label="Estado">
           <div className="c-state">
             <span className={`status ${cycle.cls}`}>
@@ -896,7 +1356,7 @@ function OrdRow({
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
               >
-                <div className="pd-col-act-row pd-col-act-row--start">
+                <div className="pd-col-act-row">
                   <button
                     type="button"
                     className="c-client-edit-btn"
@@ -915,71 +1375,6 @@ function OrdRow({
             ) : null}
           </div>
         </td>
-
-        {/* Col 6 · Total */}
-        <td data-label="Total" style={{ textAlign: "right" }}>
-          <div className="c-total">
-            {usd > 0 && (
-              <div className="total-usd">
-                <span className="c">USD</span>
-                {usd.toLocaleString("es-VE", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </div>
-            )}
-            <div className="total-ves">
-              <span className="c">{showVes ? "Bs." : "USD"}</span>
-              {showVes
-                ? vesAmt.toLocaleString("es-VE", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })
-                : usd > 0
-                  ? usd.toLocaleString("es-VE", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })
-                  : "—"}
-            </div>
-            {/* TODO(backend): subtotal, IVA y margin_pct no disponibles en el listado */}
-            <span className="margin-tag">
-              <UpIcon />—
-            </span>
-            <TotalUsdEquivLines
-              sale={sale}
-              bcvRate={bcvRate}
-              binanceRate={binanceRate}
-            />
-            <div
-              className="pd-col-act-row"
-              onClick={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              {onReconcile ? (
-                <button
-                  type="button"
-                  className="c-client-edit-btn"
-                  aria-label={`Vincular pago para orden #${sale.id}`}
-                  title={
-                    sale.reconciled_statement_id != null
-                      ? "Pago ya conciliado. Vincular otro extracto."
-                      : "Vincular pago bancario a esta orden"
-                  }
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onReconcile(sale);
-                  }}
-                >
-                  <i className="ti ti-credit-card" aria-hidden="true" />
-                  {sale.reconciled_statement_id != null
-                    ? "Conciliado"
-                    : "Vincular pago"}
-                </button>
-              ) : null}
-            </div>
-          </div>
-        </td>
       </tr>
 
       {/* ── Mobile card row ───────────────────────────── */}
@@ -988,15 +1383,19 @@ function OrdRow({
         aria-hidden="true"
         onClick={() => onRowClick(sale.id)}
       >
-        <td className="ord-card" colSpan={6}>
+        <td className="ord-card" colSpan={7}>
           <div className="ord-card-inner">
             <div className="ord-card-header">
-              <div className={`origin-chip origin-chip--inline ${ch.key}`}>
-                <span className="dt" />
-                {ch.label}
+              <div className="ord-card-source-line">
+                <div className={`origin-chip origin-chip--inline ${ch.key}`}>
+                  <span className="dt" />
+                  {ch.label}
+                </div>
               </div>
-              <span className="ord-card-id">#{sale.id}</span>
-              <span className="ord-card-date">{fmtDate(sale.created_at)}</span>
+              <div className="ord-card-order-line">
+                <span className="ord-card-id">#{sale.id}</span>
+                <span className="ord-card-date">{fmtDate(sale.created_at)}</span>
+              </div>
               {isMl &&
                 (sale.ml_account_nickname != null ||
                   sale.ml_user_id != null) && (
@@ -1053,6 +1452,70 @@ function OrdRow({
               />
             </div>
 
+            <div className="ord-card-totals" onClick={(e) => e.stopPropagation()}>
+              <div className="ord-card-total-stack">
+                <span className="ord-card-ves">
+                  {usd > 0
+                    ? `$${usd.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    : "—"}
+                </span>
+                <TotalUsdEquivLines
+                  sale={sale}
+                  bcvRate={bcvRate}
+                  binanceRate={binanceRate}
+                />
+              </div>
+            </div>
+
+            <div className="ord-card-pago" onClick={(e) => e.stopPropagation()}>
+              <span className="ord-card-pago-lb">Pago</span>
+              <div className="logi-row logi-ft-row logi-ft-row--select-only ord-card-pago-select-wrap">
+                <OrderPaymentMethodSelect
+                  sale={sale}
+                  viewerRole={viewerRole}
+                  disabled={!canEditFulfillment}
+                  onCommitted={async () => {
+                    await onFulfillmentUpdated?.();
+                  }}
+                />
+              </div>
+              <PedidosPaymentReconcileBlock sale={sale} onReconcile={onReconcile} />
+            </div>
+
+            <div className="ord-card-logi" onClick={(e) => e.stopPropagation()}>
+              <span className="ord-card-logi-lb">Logística</span>
+              <div className="ord-card-logi-inner">
+                <LogisticsFulfillmentSelect
+                  saleId={sale.id}
+                  value={sale.fulfillment_type}
+                  disabled={!canEditFulfillment}
+                  onCommitted={async () => {
+                    await onFulfillmentUpdated?.();
+                  }}
+                />
+                <div className="logi-stock-dispatch-row logi-stock-dispatch-row--forced-row ord-card-logi-stock">
+                  <span className="logi-stock ok">
+                    <span className="d" />
+                    Stock —
+                  </span>
+                  {onRequestDispatch && isPaidForDispatch ? (
+                    <button
+                      type="button"
+                      className="c-client-edit-btn logi-dispatch-inline"
+                      aria-label={`Solicitar despacho orden #${sale.id}`}
+                      title="Solicitar despacho"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRequestDispatch(sale);
+                      }}
+                    >
+                      Despacho
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
             <div className="ord-card-footer">
               <span className={`status ${cycle.cls}`}>
                 <span className="num">{cycle.num} </span>
@@ -1081,51 +1544,6 @@ function OrdRow({
                   </button>
                 </div>
               ) : null}
-              {onReconcile ? (
-                <button
-                  type="button"
-                  className="c-client-edit-btn"
-                  aria-label={`Vincular pago orden #${sale.id}`}
-                  title={
-                    sale.reconciled_statement_id != null
-                      ? "Pago ya conciliado."
-                      : "Vincular pago bancario"
-                  }
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onReconcile(sale);
-                  }}
-                >
-                  <i className="ti ti-credit-card" aria-hidden="true" />
-                  {sale.reconciled_statement_id != null ? "Concil." : "Pago"}
-                </button>
-              ) : null}
-              {onRequestDispatch && isPaidForDispatch ? (
-                <button
-                  type="button"
-                  className="c-client-edit-btn"
-                  aria-label={`Solicitar despacho orden #${sale.id}`}
-                  title="Solicitar despacho"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRequestDispatch(sale);
-                  }}
-                >
-                  Despacho
-                </button>
-              ) : null}
-              <div className="ord-card-total-stack">
-                <span className="ord-card-ves">
-                  {usd > 0
-                    ? `$${usd.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                    : "—"}
-                </span>
-                <TotalUsdEquivLines
-                  sale={sale}
-                  bcvRate={bcvRate}
-                  binanceRate={binanceRate}
-                />
-              </div>
             </div>
           </div>
         </td>
@@ -1136,7 +1554,7 @@ function OrdRow({
 
 // ─── Skeleton rows ─────────────────────────────────────────────────────────────
 
-const SK_WIDTHS = [68, 82, 68, 72, 62, 88];
+const SK_WIDTHS = [64, 78, 64, 68, 56, 72, 82];
 
 function SkeletonRow({ idx }: { idx: number }) {
   const offset = idx % 3;
@@ -1148,7 +1566,7 @@ function SkeletonRow({ idx }: { idx: number }) {
             className="pd-skeleton"
             style={{ width: `${w - offset * 5}%`, height: 14 }}
           />
-          {i < 4 && (
+          {i < 5 && (
             <span
               className="pd-skeleton"
               style={{
@@ -1188,6 +1606,8 @@ interface OrdTableProps {
   /** Tras guardar teléfono / fusionar chat (refetch listado). */
   onCustomerDirectoryChanged?: () => void | Promise<void>;
   onClearFilters: () => void;
+  /** Rol JWT (catálogo VES extendido para admin/supervisor/contador). */
+  viewerRole?: string | null;
 }
 
 export default function OrdTable({
@@ -1205,6 +1625,7 @@ export default function OrdTable({
   onFulfillmentUpdated,
   onCustomerDirectoryChanged,
   onClearFilters,
+  viewerRole = null,
 }: OrdTableProps) {
   return (
     <table className="ord-table" role="grid">
@@ -1215,12 +1636,13 @@ export default function OrdTable({
           </th>
           <th scope="col">Productos</th>
           <th scope="col">Cliente</th>
-          <th scope="col">Logística</th>
           <th scope="col">
-            Estado <span className="sort" aria-hidden="true">↕</span>
-          </th>
-          <th scope="col" className="right">
             Total <span className="sort" aria-hidden="true">↕</span>
+          </th>
+          <th scope="col">Pago</th>
+          <th scope="col">Logística</th>
+          <th scope="col" className="right">
+            Estado <span className="sort" aria-hidden="true">↕</span>
           </th>
         </tr>
       </thead>
@@ -1229,7 +1651,7 @@ export default function OrdTable({
           Array.from({ length: 7 }, (_, i) => <SkeletonRow key={i} idx={i} />)
         ) : sales.length === 0 ? (
           <tr className="ord-row" style={{ cursor: "default" }}>
-            <td colSpan={6} style={{ padding: 0, border: "none" }}>
+            <td colSpan={7} style={{ padding: 0, border: "none" }}>
               <div className="pd-empty" role="status">
                 <div className="pd-empty-icon" aria-hidden="true">
                   📋
@@ -1252,6 +1674,7 @@ export default function OrdTable({
             <OrdRow
               key={s.id}
               sale={s}
+              viewerRole={viewerRole}
               selected={selectedId === s.id}
               bcvRate={bcvRate}
               binanceRate={binanceRate}

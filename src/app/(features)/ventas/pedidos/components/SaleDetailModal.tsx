@@ -6,6 +6,7 @@ import SaleSourceBadge from "./SaleSourceBadge";
 import SaleStatusBadge from "./SaleStatusBadge";
 import SaleResolvedCustomerBlock from "./SaleResolvedCustomerBlock";
 import SaleCustomerPanel from "./SaleCustomerPanel";
+import { paymentMethodLabel } from "../paymentMethodCatalog";
 
 function fmtDate(iso: string): string {
   const d = new Date(iso);
@@ -218,7 +219,7 @@ export default function SaleDetailModal({
                       )}
                       <dt className="col-6 text-muted">Método pago</dt>
                       <dd className="col-6">
-                        {detail.payment_method?.trim() || "—"}
+                        {paymentMethodLabel(detail.payment_method)}
                       </dd>
                     </dl>
                   </div>

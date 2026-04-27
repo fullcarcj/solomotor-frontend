@@ -7,7 +7,10 @@ function base() { const r = BACKEND_URL.trim().replace(/\/+$/, ""); return /^htt
 function hdr(req: NextRequest) {
   return { "Content-Type": "application/json", Accept: "application/json", cookie: req.headers.get("cookie") ?? "", ...(req.headers.get("authorization") ? { authorization: req.headers.get("authorization")! } : {}) };
 }
-const FWD = ["src", "stage", "result", "search", "pipeline_default"] as const;
+const FWD = ["src", "stage", "result", "search", "pipeline_default", "facets"] as const;
+
+/** Vercel/Node: polling de counts puede superar 10s si la DB está cargada. */
+export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   try {

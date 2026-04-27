@@ -90,7 +90,7 @@ export function InboxLiveProvider({ children }: { children: ReactNode }) {
       if (authToken !== "cookie") {
         headers.Authorization = `Bearer ${authToken}`;
       }
-      const r = await fetch("/api/bandeja/counts?pipeline_default=1", {
+      const r = await fetch("/api/bandeja/counts?pipeline_default=1&facets=0", {
         credentials: "include",
         cache: "no-store",
         headers,

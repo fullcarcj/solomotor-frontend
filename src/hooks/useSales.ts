@@ -1,7 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Sale, SalesMeta, ItemPreview, QuotePreview, QuoteItemPreview } from "@/types/sales";
+import type {
+  Sale,
+  SalesMeta,
+  ItemPreview,
+  QuotePreview,
+  QuoteItemPreview,
+  SalePaymentReconciliation,
+} from "@/types/sales";
 
 export interface SalesFilters {
   status?: string;
@@ -70,10 +77,19 @@ function normalizeSale(raw: Record<string, unknown>): Sale {
       raw.reconciled_statement_id == null
         ? null
         : Number(raw.reconciled_statement_id),
+    payment_reconciliation: (() => {
+      const j = raw.payment_reconciliation;
+      if (j == null || typeof j !== "object") return null;
+      return j as SalePaymentReconciliation;
+    })(),
     fulfillment_type:
       raw.fulfillment_type == null || String(raw.fulfillment_type).trim() === ""
         ? null
         : String(raw.fulfillment_type).trim(),
+    payment_method:
+      raw.payment_method != null && String(raw.payment_method).trim() !== ""
+        ? String(raw.payment_method).trim().toLowerCase()
+        : null,
     items_preview: normalizeItemPreviews(raw.items_preview),
     quote_preview: normalizeQuotePreview(raw.quote_preview),
     rate_type:

@@ -59,6 +59,7 @@ export default function InboxCountBadges({
       if (listFilters?.result) p.set("result", listFilters.result);
       if (listFilters?.search) p.set("search", listFilters.search);
       if (pipelineDefault) p.set("pipeline_default", "1");
+      p.set("facets", "0");
       const qs = p.toString();
       const headers: Record<string, string> = {};
       if (authToken !== "cookie") {

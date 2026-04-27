@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearPendingMlSalesBellCount } from "@/store/realtimeSlice";
 import { useSales } from "@/hooks/useSales";
-import type { Sale } from "@/types/sales";
+import type { Sale, SaleReconcileContext } from "@/types/sales";
 import SaleDetailModal from "./components/SaleDetailModal";
 import RequestDispatchModal from "@/app/(features)/logistica/components/RequestDispatchModal";
 import PedidosTopbar from "./components/PedidosTopbar";
@@ -16,7 +16,7 @@ import { useTodayCurrencyRates } from "@/hooks/useTodayCurrencyRates";
 import MlOrderMessagingModal from "./components/MlOrderMessagingModal";
 import MlSellerFeedbackModal from "./components/MlSellerFeedbackModal";
 import SaleQuoteModal, { type SaleQuoteModalContext } from "./components/SaleQuoteModal";
-import SaleReconcileModal, { type SaleReconcileContext } from "./components/SaleReconcileModal";
+import PendingStatementCreditsModal from "@/app/(features)/bandeja/[chatId]/components/PendingStatementCreditsModal";
 import type { SaleDetail } from "@/types/sales";
 import "./pedidos-theme.scss";
 
@@ -287,6 +287,7 @@ function VentasPedidosPageInner() {
             <OrdTable
               sales={filteredSales}
               loading={isInitialLoad}
+              viewerRole={authRole}
               bcvRate={todayRates.bcvRate}
               binanceRate={todayRates.binanceRate}
               onRowClick={setSelectedId}
@@ -315,10 +316,39 @@ function VentasPedidosPageInner() {
 
       <SaleQuoteModal ctx={quoteCtx} onClose={() => setQuoteCtx(null)} />
 
-      <SaleReconcileModal
-        ctx={reconcileCtx}
+      <PendingStatementCreditsModal
+        open={reconcileCtx != null}
         onClose={() => setReconcileCtx(null)}
-        onReconciled={() => { setReconcileCtx(null); void refetch?.(); }}
+        subtitle={
+          reconcileCtx
+            ? `Vincular pago a ${reconcileCtx.label}. Tocá un movimiento del extracto para vincularlo a esta orden.`
+            : undefined
+        }
+        expectedTotalBs={reconcileCtx?.totalBs ?? undefined}
+        onPickStatement={async (item) => {
+          const ctx = reconcileCtx;
+          if (!ctx) return;
+          const stmtId = Number(String(item.id).trim());
+          if (!Number.isFinite(stmtId) || stmtId <= 0) {
+            throw new Error("Movimiento inválido");
+          }
+          const soNumId = Number(String(ctx.salesOrderId).replace(/^so-/i, ""));
+          const res = await fetch(
+            `/api/sales/orders/${encodeURIComponent(String(soNumId))}/reconcile`,
+            {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ statement_id: stmtId }),
+              cache: "no-store",
+            }
+          );
+          const j = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+          if (!res.ok) {
+            throw new Error(String(j.message ?? j.error ?? "Error al vincular el pago."));
+          }
+          void refetch?.();
+        }}
       />
 
       {mlPackModal != null && (
