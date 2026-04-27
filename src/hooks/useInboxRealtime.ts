@@ -63,8 +63,14 @@ function toNewMessagePayload(d: Record<string, unknown>): NewMessagePayload {
 export function useInboxRealtime() {
   const dispatch = useAppDispatch();
   const myUserId = useAppSelector((s) => s.auth.userId);
+  const authToken = useAppSelector((s) => s.auth.token);
+  const authRestoring = useAppSelector((s) => s.auth.restoring);
 
   useEffect(() => {
+    if (authToken === null || authRestoring) {
+      inboxStream.disconnect();
+      return;
+    }
     inboxStream.connect();
     const off = inboxStream.subscribe((event, data) => {
       const d = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
@@ -215,6 +221,7 @@ export function useInboxRealtime() {
     });
     return () => {
       off();
+      inboxStream.disconnect();
     };
-  }, [dispatch, myUserId]);
+  }, [dispatch, myUserId, authToken, authRestoring]);
 }

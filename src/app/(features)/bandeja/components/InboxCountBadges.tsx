@@ -38,6 +38,8 @@ export default function InboxCountBadges({
   pipelineDefault = true,
 }: Props) {
   const dispatch = useAppDispatch();
+  const authToken = useAppSelector((s) => s.auth.token);
+  const authRestoring = useAppSelector((s) => s.auth.restoring);
   const [counts, setCounts] = useState<InboxCounts | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   /** Evita que una respuesta vieja de /counts pise una más nueva (p. ej. 1→0 y luego aparece 8). */
@@ -48,6 +50,7 @@ export default function InboxCountBadges({
   );
 
   const fetchCounts = useCallback(async () => {
+    if (authToken === null || authRestoring) return;
     const gen = ++countsFetchGenRef.current;
     try {
       const p = new URLSearchParams();
@@ -57,9 +60,14 @@ export default function InboxCountBadges({
       if (listFilters?.search) p.set("search", listFilters.search);
       if (pipelineDefault) p.set("pipeline_default", "1");
       const qs = p.toString();
+      const headers: Record<string, string> = {};
+      if (authToken !== "cookie") {
+        headers.Authorization = `Bearer ${authToken}`;
+      }
       const r = await fetch(`/api/bandeja/counts${qs ? `?${qs}` : ""}`, {
         credentials: "include",
         cache: "no-store",
+        headers,
       });
       if (gen !== countsFetchGenRef.current) return;
       if (!r.ok) return;
@@ -72,7 +80,11 @@ export default function InboxCountBadges({
     } catch {
       /* silent */
     }
-  }, [listFilters, dispatch, pipelineDefault]);
+  }, [listFilters, dispatch, pipelineDefault, authToken, authRestoring]);
+
+  useEffect(() => {
+    if (authToken === null && !authRestoring) setCounts(null);
+  }, [authToken, authRestoring]);
 
   useEffect(() => {
     void fetchCounts();

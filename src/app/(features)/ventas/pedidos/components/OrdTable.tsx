@@ -1,8 +1,13 @@
 "use client";
 
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
 import Link from "next/link";
 import type { Sale, ItemPreview, QuotePreview } from "@/types/sales";
+import {
+  usePedidosCustomerContact,
+  PedidosCustomerContactView,
+} from "./PedidosCustomerBlock";
+import { mlVentasOrderUrl } from "./mlVentasUrls";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -42,14 +47,53 @@ interface CycleInfo {
   next: string;
 }
 
-function getCycle(status: string): CycleInfo {
-  switch (status.toLowerCase()) {
+/**
+ * Unifica variantes de API/BD (español, ML `confirmed`, etc.) con el switch de ciclo UI.
+ */
+function normalizeOrderStatusForCycle(raw: string): string {
+  const s = String(raw ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/-+/g, "_");
+  const aliases: Record<string, string> = {
+    pagada: "paid",
+    anulada: "cancelled",
+    cancelada: "cancelled",
+    pendiente: "pending",
+    cerrada: "completed",
+    entregada: "delivered",
+    enviada: "shipped",
+    despachada: "dispatched",
+    /** ML: orden cobrada; en listados a veces llega antes de normalizar a `paid`. */
+    confirmed: "paid",
+  };
+  return aliases[s] ?? s;
+}
+
+function getCycle(statusRaw: string): CycleInfo {
+  const status = normalizeOrderStatusForCycle(statusRaw);
+  switch (status) {
     case "pending":
       return { num: "01", label: "Captura", cls: "st-01", next: "02 Cotizar" };
     case "pending_payment":
       return { num: "02", label: "Cotizada", cls: "st-02", next: "03 Aprob." };
     case "approved":
       return { num: "03", label: "Aprobada", cls: "st-03", next: "04 Pago" };
+    case "pending_cash_approval":
+      return {
+        num: "04",
+        label: "Pago (caja)",
+        cls: "st-02",
+        next: "Aprueba caja",
+      };
+    case "payment_overdue":
+      return {
+        num: "02",
+        label: "Cobro vencido",
+        cls: "st-02",
+        next: "Regularizar",
+      };
     case "paid":
       return { num: "04", label: "Pagada", cls: "st-04", next: "05 Picking" };
     case "ready_to_ship":
@@ -77,9 +121,15 @@ function getCycle(status: string): CycleInfo {
       };
     case "cancelled":
     case "canceled":
+    case "refunded":
       return { num: "—", label: "Anulada", cls: "st-07", next: "—" };
     default:
-      return { num: "?", label: status, cls: "st-07", next: "—" };
+      return {
+        num: "?",
+        label: status || "—",
+        cls: "st-07",
+        next: "—",
+      };
   }
 }
 
@@ -239,9 +289,9 @@ function elapsedBucket(
   iso: string,
   status: string
 ): "hot" | "warn" | "cold" | "ok" {
-  const s = status.toLowerCase();
+  const s = normalizeOrderStatusForCycle(status);
   if (
-    ["completed", "delivered", "cancelled", "canceled"].includes(s)
+    ["completed", "delivered", "cancelled", "canceled", "refunded"].includes(s)
   )
     return "ok";
   const h = (Date.now() - new Date(iso).getTime()) / 3_600_000;
@@ -263,27 +313,10 @@ const ChatIcon = () => (
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
   </svg>
 );
-const HomeIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-    <path d="M3 9l9-6 9 6v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-  </svg>
-);
-const PhoneIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-  </svg>
-);
 const PkgIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
     <rect x="3" y="8" width="18" height="12" rx="2" />
     <path d="M7 8V5a5 5 0 0 1 10 0v3" />
-  </svg>
-);
-const KebabIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-    <circle cx="12" cy="5" r="1.5" />
-    <circle cx="12" cy="12" r="1.5" />
-    <circle cx="12" cy="19" r="1.5" />
   </svg>
 );
 const UpIcon = () => (
@@ -332,9 +365,23 @@ interface ProductsCellProps {
   items: ItemPreview[] | null | undefined;
   quotePreview: QuotePreview | null | undefined;
   compact?: boolean;
+  /** Última línea (p. ej. botón Cotización), alineada en columna Productos. */
+  footerActions?: ReactNode;
 }
 
-function ProductsCell({ items, quotePreview, compact = false }: ProductsCellProps) {
+function ProductsCellFooter({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="pd-col-act-row pd-col-act-row--start"
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ProductsCell({ items, quotePreview, compact = false, footerActions }: ProductsCellProps) {
   const hasQuote = quotePreview != null && quotePreview.id > 0;
   const quoteItems = hasQuote ? (quotePreview.items_preview ?? []) : [];
   const orderItems = items ?? [];
@@ -390,6 +437,7 @@ function ProductsCell({ items, quotePreview, compact = false }: ProductsCellProp
             ))}
           </div>
         )}
+        {footerActions ? <ProductsCellFooter>{footerActions}</ProductsCellFooter> : null}
       </div>
     );
   }
@@ -423,6 +471,7 @@ function ProductsCell({ items, quotePreview, compact = false }: ProductsCellProp
             ))}
           </div>
         )}
+        {footerActions ? <ProductsCellFooter>{footerActions}</ProductsCellFooter> : null}
       </div>
     );
   }
@@ -439,6 +488,7 @@ function ProductsCell({ items, quotePreview, compact = false }: ProductsCellProp
           </div>
         </div>
       </div>
+      {footerActions ? <ProductsCellFooter>{footerActions}</ProductsCellFooter> : null}
     </div>
   );
 }
@@ -450,34 +500,113 @@ function isMercadoLibreSale(source: string): boolean {
   return s.includes("mercadolibre") || s.startsWith("ml_");
 }
 
+/** `feedback.sale`: calificación del vendedor hacia el comprador. */
+function sellerFeedbackToClientLabel(raw: string | null | undefined): string {
+  if (raw == null || String(raw).trim() === "") return "Pendiente";
+  const s = String(raw).trim().toLowerCase();
+  if (s === "pending") return "Pendiente";
+  if (s === "positive") return "Positiva";
+  if (s === "neutral") return "Neutra";
+  if (s === "negative") return "Negativa";
+  return String(raw).trim();
+}
+
+function isMlSellerFeedbackPending(sale: Sale): boolean {
+  const fs = sale.ml_feedback_sale;
+  if (fs == null || String(fs).trim() === "") return true;
+  return String(fs).trim().toLowerCase() === "pending";
+}
+
+/** Bolívares de la fila para equivalentes USD (alineado a la columna Total). */
+function getSaleBsForEquiv(sale: Sale): number {
+  const isNativeVes = sale.rate_type === "NATIVE_VES";
+  const fromBs = Number(sale.total_amount_bs) || 0;
+  if (isNativeVes) {
+    return fromBs || Number(sale.order_total_amount) || 0;
+  }
+  return fromBs;
+}
+
+function TotalUsdEquivLines({
+  sale,
+  bcvRate,
+  binanceRate,
+}: {
+  sale: Sale;
+  bcvRate: number | null;
+  binanceRate: number | null;
+}) {
+  const bs = getSaleBsForEquiv(sale);
+  if (!(bs > 0)) return null;
+  const bcvR = bcvRate != null && bcvRate > 0 ? bcvRate : 0;
+  const binR = binanceRate != null && binanceRate > 0 ? binanceRate : 0;
+  if (bcvR <= 0 && binR <= 0) return null;
+  const fmt = (n: number) =>
+    n.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (
+    <div className="total-equiv" aria-label="Equivalente en dólares según tasas BCV y Binance del día">
+      {bcvR > 0 && (
+        <div className="total-equiv__row total-equiv__row--bcv">
+          ≈ {fmt(bs / bcvR)} USD <span className="total-equiv__tag">BCV</span>
+        </div>
+      )}
+      {binR > 0 && (
+        <div className="total-equiv__row total-equiv__row--bin">
+          ≈ {fmt(bs / binR)} USD <span className="total-equiv__tag">Binance</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface RowProps {
   sale: Sale;
   selected: boolean;
+  bcvRate: number | null;
+  binanceRate: number | null;
   onRowClick: (id: string | number) => void;
   onRequestDispatch?: (sale: Sale) => void;
   onOpenMlMessaging?: (sale: Sale) => void;
   /** Misma cotización que bandeja (`chat_id` de la venta). */
   onOpenQuote?: (sale: Sale) => void;
   onReconcile?: (sale: Sale) => void;
+  /** Modal: calificación del vendedor hacia el comprador (API ML). */
+  onOpenMlSellerFeedback?: (sale: Sale) => void;
   onFulfillmentUpdated?: () => void | Promise<void>;
+  onCustomerDirectoryChanged?: () => void | Promise<void>;
 }
 
 function OrdRow({
   sale,
   selected,
+  bcvRate,
+  binanceRate,
   onRowClick,
   onRequestDispatch,
   onOpenMlMessaging,
   onOpenQuote,
   onReconcile,
+  onOpenMlSellerFeedback,
   onFulfillmentUpdated,
+  onCustomerDirectoryChanged,
 }: RowProps) {
+  const custContact = usePedidosCustomerContact(sale, () => {
+    const p = onCustomerDirectoryChanged?.();
+    return p ?? Promise.resolve();
+  });
+
   const ch = getChannel(sale.source);
   const isMl = isMercadoLibreSale(sale.source);
+  const statusNorm = normalizeOrderStatusForCycle(sale.status);
   const cycle = getCycle(sale.status);
-  const isClosed = ["completed", "delivered", "cancelled", "canceled"].includes(
-    sale.status.toLowerCase()
-  );
+  const isClosed = [
+    "completed",
+    "delivered",
+    "cancelled",
+    "canceled",
+    "refunded",
+  ].includes(statusNorm);
+  const isPaidForDispatch = statusNorm === "paid";
   const elapsed = fmtElapsed(sale.created_at);
   const bucket = elapsedBucket(sale.created_at, sale.status);
 
@@ -517,6 +646,24 @@ function OrdRow({
   const chatHref =
     sale.chat_id != null ? `/bandeja/${sale.chat_id}` : null;
 
+  const mlVentasHref =
+    isMl && sale.ml_api_order_id != null
+      ? mlVentasOrderUrl(sale.ml_site_id ?? null, sale.ml_api_order_id)
+      : null;
+  const showMlSellerFeedbackRow =
+    isMl && sale.ml_user_id != null && sale.ml_api_order_id != null;
+  const canSubmitMlSellerFeedback =
+    Boolean(onOpenMlSellerFeedback) &&
+    !isClosed &&
+    statusNorm !== "cancelled" &&
+    isMlSellerFeedbackPending(sale);
+
+  const hasCustomerPhone = Boolean(sale.customer_phones_line?.trim());
+  const canOpenQuote =
+    Boolean(onOpenQuote) &&
+    (isMl ||
+      (sale.chat_id != null && String(sale.chat_id).trim() !== ""));
+
   const canEditFulfillment = String(sale.id).toLowerCase().startsWith("so-");
 
   const handleRowKey = (e: KeyboardEvent) => {
@@ -539,25 +686,28 @@ function OrdRow({
       >
         {/* Col 1 · Orden */}
         <td data-label="Orden">
-          <div className="c-order">
-            <div className="ord-id">#{sale.id}</div>
-            {sale.external_order_id && (
-              <div className="ord-ext">
-                <span className="lb">{ch.extPrefix} </span>
-                {sale.external_order_id}
+          <div className="c-order c-order--compact">
+            <div className="c-order-head">
+              <div className={`origin-chip origin-chip--inline ${ch.key}`}>
+                <span className="dt" />
+                {ch.label}
               </div>
-            )}
-            <div className="ord-date">
-              <ClockIcon />
-              {fmtDate(sale.created_at)}
+              <span className="ord-id">#{sale.id}</span>
             </div>
-            <div className={`origin-chip ${ch.key}`}>
-              <span className="dt" />
-              {ch.label}
+            <div className="c-order-meta">
+              {sale.external_order_id ? (
+                <span className="ord-ext">
+                  <span className="lb">{ch.extPrefix} </span>
+                  {sale.external_order_id}
+                </span>
+              ) : null}
+              <span className="ord-date">
+                <ClockIcon />
+                {fmtDate(sale.created_at)}
+              </span>
             </div>
             {isMl &&
-              (sale.ml_account_nickname != null ||
-                sale.ml_user_id != null) && (
+            (sale.ml_account_nickname != null || sale.ml_user_id != null) ? (
               <div
                 className="ord-ext ord-ml-seller"
                 title={
@@ -570,7 +720,7 @@ function OrdRow({
                 {sale.ml_account_nickname ??
                   (sale.ml_user_id != null ? `#${sale.ml_user_id}` : "—")}
               </div>
-            )}
+            ) : null}
           </div>
         </td>
 
@@ -579,39 +729,100 @@ function OrdRow({
           <ProductsCell
             items={sale.items_preview}
             quotePreview={sale.quote_preview}
+            footerActions={
+              canOpenQuote ? (
+                <button
+                  type="button"
+                  className="c-client-edit-btn"
+                  aria-label={`Cotización orden #${sale.id}`}
+                  title={
+                    sale.chat_id != null && String(sale.chat_id).trim() !== ""
+                      ? "Abrir cotización CRM (mismo presupuesto que en Bandeja)."
+                      : "Mercado Libre: abrí la cotización. Si falta chat CRM, vinculá la conversación en Bandeja."
+                  }
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenQuote!(sale);
+                  }}
+                >
+                  <i className="ti ti-file-invoice" aria-hidden="true" />
+                  Cotización
+                </button>
+              ) : null
+            }
           />
         </td>
 
-        {/* Col 3 · Cliente — TODO(backend): full_name, phone, document no disponibles */}
+        {/* Col 3 · Cliente — tres líneas como Bandeja (nombre / teléfonos / ID MERCADOLIBRE) */}
         <td data-label="Cliente">
-          <div className="c-client">
+          <>
+            <PedidosCustomerContactView
+              variant="table"
+              sale={sale}
+              custLabel={custLabel}
+              custIni={custIni}
+              custAv={custAv}
+              phonesBlock={custContact.phonesBlock}
+            />
             <div
-              className="c-client-av"
-              style={{ background: custAv.bg, color: custAv.color }}
-              aria-hidden="true"
+              className="pd-col-act-row pd-col-act-row--start"
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
             >
-              {custIni}
+              {isMl && onOpenMlMessaging ? (
+                <button
+                  type="button"
+                  className="c-client-edit-btn c-ml-msg-btn"
+                  aria-label={`Mensajería Mercado Libre orden #${sale.id}`}
+                  title="Mensajería interna Mercado Libre (post-venta)"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenMlMessaging(sale);
+                  }}
+                >
+                  Mensajería
+                </button>
+              ) : null}
+              {hasCustomerPhone ? (
+                chatHref && !isClosed ? (
+                  <Link
+                    href={chatHref}
+                    className="c-client-edit-btn"
+                    aria-label={`Abrir cliente / chat de la orden #${sale.id}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Cliente
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    className="c-client-edit-btn"
+                    disabled={isClosed || !chatHref}
+                    aria-label={
+                      !chatHref
+                        ? "Sin conversación vinculada"
+                        : "Cliente (orden cerrada)"
+                    }
+                    title={
+                      !chatHref
+                        ? "Agregá o vinculá un chat en Bandeja para abrir la conversación."
+                        : undefined
+                    }
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Cliente
+                  </button>
+                )
+              ) : null}
             </div>
-            <div className="c-client-info">
-              <div className="c-client-nm">{custLabel}</div>
-              <div className="c-client-ced">
-                <span className="lb">ID </span>
-                {sale.customer_id ?? "—"}
-              </div>
-              {/* TODO(backend): phone no disponible */}
-              <div className="c-client-contact">
-                <PhoneIcon />
-                —
-              </div>
-            </div>
-          </div>
+            {custContact.editModal}
+          </>
         </td>
 
         {/* Col 4 · Logística — forma de entrega editable; almacén/stock pendiente backend */}
         <td data-label="Logística">
           <div className="c-logistics">
-            <div className="logi-row logi-ft-row">
-              <span className="logi-ft-lb">Entrega</span>
+            <div className="logi-row logi-ft-row logi-ft-row--select-only">
               <LogisticsFulfillmentSelect
                 saleId={sale.id}
                 value={sale.fulfillment_type}
@@ -621,16 +832,30 @@ function OrdRow({
                 }}
               />
             </div>
-            <div className="logi-row">
-              <HomeIcon />
-              {/* TODO(backend): warehouse_name no disponible */}
-              <span>—</span>
+            <div
+              className="logi-stock-dispatch-row"
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <span className="logi-stock ok">
+                <span className="d" />
+                Stock —
+              </span>
+              {onRequestDispatch && isPaidForDispatch ? (
+                <button
+                  type="button"
+                  className="c-client-edit-btn logi-dispatch-inline"
+                  aria-label={`Solicitar despacho orden #${sale.id}`}
+                  title="Solicitar despacho"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRequestDispatch(sale);
+                  }}
+                >
+                  Solicitar despacho
+                </button>
+              ) : null}
             </div>
-            {/* TODO(backend): stock_status no disponible */}
-            <span className="logi-stock ok">
-              <span className="d" />
-              Stock —
-            </span>
             {vendor && (
               <div className="vend-chip">
                 <div
@@ -669,6 +894,48 @@ function OrdRow({
                 </span>
               )}
             </div>
+            {showMlSellerFeedbackRow ? (
+              <div
+                className="ml-seller-fb-block"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <div className="ml-seller-fb-line" title="Calificación del vendedor hacia el comprador en Mercado Libre">
+                  <span className="ml-seller-fb-lb">Tu calif. al cliente</span>
+                  <span className="ml-seller-fb-val">{sellerFeedbackToClientLabel(sale.ml_feedback_sale)}</span>
+                </div>
+                <div className="pd-col-act-row pd-col-act-row--start">
+                  {canSubmitMlSellerFeedback ? (
+                    <button
+                      type="button"
+                      className="c-client-edit-btn"
+                      aria-label={`Calificar al comprador en Mercado Libre, orden ${sale.ml_api_order_id}`}
+                      title="Enviar calificación positiva cumplida vía API de Mercado Libre"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenMlSellerFeedback!(sale);
+                      }}
+                    >
+                      <i className="ti ti-star" aria-hidden="true" />
+                      Calificar en ML
+                    </button>
+                  ) : null}
+                  {mlVentasHref ? (
+                    <a
+                      href={mlVentasHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="c-client-edit-btn"
+                      style={{ textDecoration: "none" }}
+                      title="Abrir la venta en el sitio de Mercado Libre"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Sitio ML ↗
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
           </div>
         </td>
 
@@ -702,116 +969,38 @@ function OrdRow({
             <span className="margin-tag">
               <UpIcon />—
             </span>
-          </div>
-        </td>
-
-        {/* Col 7 · Acciones */}
-        <td
-          data-label="Acciones"
-          onClick={(e) => e.stopPropagation()}
-          style={{ textAlign: "right" }}
-        >
-          <div className="c-actions">
-            {chatHref ? (
-              <Link
-                href={chatHref}
-                className={`act-chat-btn${isClosed ? " disabled" : ""}`}
-                aria-label={`Abrir chat de la orden #${sale.id}`}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <ChatIcon />
-                Chat
-                {!isClosed && sale.chat_id != null && (
-                  <span className="notif-d" aria-hidden="true" />
-                )}
-              </Link>
-            ) : (
-              <span
-                className="act-chat-btn disabled"
-                aria-label="Sin chat vinculado a esta orden"
-              >
-                <ChatIcon />
-                Chat
-              </span>
-            )}
-
-            {isMl && onOpenMlMessaging && (
-              <button
-                type="button"
-                className="act-ml-btn"
-                aria-label={`Mensajería ML orden #${sale.id}`}
-                title="Mensajería interna Mercado Libre (post-venta)"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenMlMessaging(sale);
-                }}
-              >
-                ML
-              </button>
-            )}
-
-            {onOpenQuote &&
-              (isMl ||
-                (sale.chat_id != null && String(sale.chat_id).trim() !== "")) && (
-              <button
-                type="button"
-                className="act-quote-btn"
-                aria-label={`Cotización orden #${sale.id}`}
-                title={
-                  sale.chat_id != null && String(sale.chat_id).trim() !== ""
-                    ? "Abrir cotización CRM (mismo presupuesto que en Bandeja)."
-                    : "Mercado Libre: abrí la cotización. Si falta chat CRM, vinculá la conversación en Bandeja."
-                }
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenQuote(sale);
-                }}
-              >
-                <i className="ti ti-file-invoice" aria-hidden="true" />
-                <span className="act-quote-btn__lbl">Cotización</span>
-              </button>
-            )}
-
-            {onReconcile && (
-              <button
-                type="button"
-                className="act-reconcile-btn"
-                aria-label={`Vincular pago para orden #${sale.id}`}
-                title={
-                  sale.reconciled_statement_id != null
-                    ? "Pago ya conciliado. Vincular otro extracto."
-                    : "Vincular pago bancario a esta orden"
-                }
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onReconcile(sale);
-                }}
-              >
-                <i className="ti ti-credit-card" aria-hidden="true" />
-                <span className="act-quote-btn__lbl">
-                  {sale.reconciled_statement_id != null ? "Conciliado" : "Vincular Pago"}
-                </span>
-              </button>
-            )}
-
-            <button
-              className="act-kebab"
-              aria-label={`Más opciones para orden #${sale.id}`}
-              title={
-                onRequestDispatch && sale.status === "paid"
-                  ? "Solicitar despacho"
-                  : "Más opciones"
-              }
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (onRequestDispatch && sale.status === "paid") {
-                  onRequestDispatch(sale);
-                }
-              }}
+            <TotalUsdEquivLines
+              sale={sale}
+              bcvRate={bcvRate}
+              binanceRate={binanceRate}
+            />
+            <div
+              className="pd-col-act-row"
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
             >
-              <KebabIcon />
-            </button>
+              {onReconcile ? (
+                <button
+                  type="button"
+                  className="c-client-edit-btn"
+                  aria-label={`Vincular pago para orden #${sale.id}`}
+                  title={
+                    sale.reconciled_statement_id != null
+                      ? "Pago ya conciliado. Vincular otro extracto."
+                      : "Vincular pago bancario a esta orden"
+                  }
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onReconcile(sale);
+                  }}
+                >
+                  <i className="ti ti-credit-card" aria-hidden="true" />
+                  {sale.reconciled_statement_id != null
+                    ? "Conciliado"
+                    : "Vincular pago"}
+                </button>
+              ) : null}
+            </div>
           </div>
         </td>
       </tr>
@@ -822,10 +1011,10 @@ function OrdRow({
         aria-hidden="true"
         onClick={() => onRowClick(sale.id)}
       >
-        <td className="ord-card" colSpan={7}>
+        <td className="ord-card" colSpan={6}>
           <div className="ord-card-inner">
             <div className="ord-card-header">
-              <div className={`origin-chip ${ch.key}`}>
+              <div className={`origin-chip origin-chip--inline ${ch.key}`}>
                 <span className="dt" />
                 {ch.label}
               </div>
@@ -853,11 +1042,85 @@ function OrdRow({
                 items={sale.items_preview}
                 quotePreview={sale.quote_preview}
                 compact
+                footerActions={
+                  canOpenQuote ? (
+                    <button
+                      type="button"
+                      className="c-client-edit-btn"
+                      aria-label={`Cotización orden #${sale.id}`}
+                      title={
+                        sale.chat_id != null &&
+                        String(sale.chat_id).trim() !== ""
+                          ? "Cotización CRM (Bandeja)."
+                          : "Cotización ML — vinculá el chat en Bandeja si falta."
+                      }
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenQuote!(sale);
+                      }}
+                    >
+                      <i className="ti ti-file-invoice" aria-hidden="true" />
+                      Cotiz.
+                    </button>
+                  ) : null
+                }
               />
-              <div className="ord-card-customer-row">
-                <PhoneIcon />
-                {custLabel}
-              </div>
+              <PedidosCustomerContactView
+                variant="card"
+                sale={sale}
+                custLabel={custLabel}
+                custIni={custIni}
+                custAv={custAv}
+                phonesBlock={custContact.phonesBlock}
+              />
+              {(isMl && onOpenMlMessaging) || hasCustomerPhone ? (
+                <div
+                  className="pd-card-client-actions"
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  {isMl && onOpenMlMessaging ? (
+                    <button
+                      type="button"
+                      className="c-client-edit-btn c-ml-msg-btn"
+                      aria-label={`Mensajería Mercado Libre orden #${sale.id}`}
+                      title="Mensajería interna Mercado Libre (post-venta)"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenMlMessaging(sale);
+                      }}
+                    >
+                      Mensajería
+                    </button>
+                  ) : null}
+                  {hasCustomerPhone ? (
+                    chatHref && !isClosed ? (
+                      <Link
+                        href={chatHref}
+                        className="c-client-edit-btn"
+                        aria-label={`Abrir cliente / chat de la orden #${sale.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Cliente
+                      </Link>
+                    ) : (
+                      <button
+                        type="button"
+                        className="c-client-edit-btn"
+                        disabled={isClosed || !chatHref}
+                        title={
+                          !chatHref
+                            ? "Agregá o vinculá un chat en Bandeja para abrir la conversación."
+                            : undefined
+                        }
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Cliente
+                      </button>
+                    )
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
             <div className="ord-card-footer">
@@ -869,62 +1132,86 @@ function OrdRow({
                 <ClockIcon />
                 {elapsed}
               </span>
-              {isMl && onOpenMlMessaging && (
-                <button
-                  type="button"
-                  className="act-ml-btn"
-                  style={{ marginLeft: 6 }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenMlMessaging(sale);
-                  }}
+              {showMlSellerFeedbackRow ? (
+                <div
+                  className="ml-seller-fb-block ml-seller-fb-block--card"
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
                 >
-                  ML Msg
-                </button>
-              )}
-              {onOpenQuote &&
-                (isMl ||
-                  (sale.chat_id != null && String(sale.chat_id).trim() !== "")) && (
+                  <span className="ml-seller-fb-lb">Tu calif. cliente:</span>{" "}
+                  <span className="ml-seller-fb-val">{sellerFeedbackToClientLabel(sale.ml_feedback_sale)}</span>
+                  {canSubmitMlSellerFeedback ? (
+                    <button
+                      type="button"
+                      className="c-client-edit-btn"
+                      aria-label="Calificar en Mercado Libre"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenMlSellerFeedback!(sale);
+                      }}
+                    >
+                      Calificar
+                    </button>
+                  ) : null}
+                  {mlVentasHref ? (
+                    <a
+                      href={mlVentasHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="c-client-edit-btn"
+                      style={{ textDecoration: "none" }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      ML ↗
+                    </a>
+                  ) : null}
+                </div>
+              ) : null}
+              {onReconcile ? (
                 <button
                   type="button"
-                  className="act-quote-btn"
-                  style={{ marginLeft: 6 }}
-                  aria-label={`Cotización orden #${sale.id}`}
+                  className="c-client-edit-btn"
+                  aria-label={`Vincular pago orden #${sale.id}`}
                   title={
-                    sale.chat_id != null && String(sale.chat_id).trim() !== ""
-                      ? "Cotización CRM (Bandeja)."
-                      : "Cotización ML — vinculá el chat en Bandeja si falta."
+                    sale.reconciled_statement_id != null
+                      ? "Pago ya conciliado."
+                      : "Vincular pago bancario"
                   }
                   onClick={(e) => {
                     e.stopPropagation();
-                    onOpenQuote(sale);
+                    onReconcile(sale);
                   }}
                 >
-                  <i className="ti ti-file-invoice" aria-hidden="true" />
-                  <span className="act-quote-btn__lbl">Cotiz.</span>
+                  <i className="ti ti-credit-card" aria-hidden="true" />
+                  {sale.reconciled_statement_id != null ? "Concil." : "Pago"}
                 </button>
-              )}
-              <span className="ord-card-ves">
-                {usd > 0
-                  ? `$${usd.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                  : "—"}
-              </span>
-              {chatHref ? (
-                <Link
-                  href={chatHref}
-                  className={`act-chat-btn${isClosed ? " disabled" : ""}`}
-                  aria-label={`Chat de la orden #${sale.id}`}
-                  onClick={(e) => e.stopPropagation()}
+              ) : null}
+              {onRequestDispatch && isPaidForDispatch ? (
+                <button
+                  type="button"
+                  className="c-client-edit-btn"
+                  aria-label={`Solicitar despacho orden #${sale.id}`}
+                  title="Solicitar despacho"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRequestDispatch(sale);
+                  }}
                 >
-                  <ChatIcon />
-                  Chat
-                </Link>
-              ) : (
-                <span className="act-chat-btn disabled">
-                  <ChatIcon />
-                  Chat
+                  Despacho
+                </button>
+              ) : null}
+              <div className="ord-card-total-stack">
+                <span className="ord-card-ves">
+                  {usd > 0
+                    ? `$${usd.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    : "—"}
                 </span>
-              )}
+                <TotalUsdEquivLines
+                  sale={sale}
+                  bcvRate={bcvRate}
+                  binanceRate={binanceRate}
+                />
+              </div>
             </div>
           </div>
         </td>
@@ -935,7 +1222,7 @@ function OrdRow({
 
 // ─── Skeleton rows ─────────────────────────────────────────────────────────────
 
-const SK_WIDTHS = [70, 80, 65, 75, 60, 85, 50];
+const SK_WIDTHS = [68, 82, 68, 72, 62, 88];
 
 function SkeletonRow({ idx }: { idx: number }) {
   const offset = idx % 3;
@@ -969,6 +1256,9 @@ function SkeletonRow({ idx }: { idx: number }) {
 interface OrdTableProps {
   sales: Sale[];
   loading: boolean;
+  /** Tasas Bs/USD del día (misma fuente que el KPI ribbon). */
+  bcvRate?: number | null;
+  binanceRate?: number | null;
   onRowClick: (id: string | number) => void;
   selectedId: string | number | null;
   onRequestDispatch?: (sale: Sale) => void;
@@ -978,21 +1268,28 @@ interface OrdTableProps {
   onOpenQuote?: (sale: Sale) => void;
   /** Abre modal de conciliación bancaria para la venta. */
   onReconcile?: (sale: Sale) => void;
+  onOpenMlSellerFeedback?: (sale: Sale) => void;
   /** Tras PATCH de forma de entrega (refetch listado). */
   onFulfillmentUpdated?: () => void | Promise<void>;
+  /** Tras guardar teléfono / fusionar chat (refetch listado). */
+  onCustomerDirectoryChanged?: () => void | Promise<void>;
   onClearFilters: () => void;
 }
 
 export default function OrdTable({
   sales,
   loading,
+  bcvRate = null,
+  binanceRate = null,
   onRowClick,
   selectedId,
   onRequestDispatch,
   onOpenMlMessaging,
   onOpenQuote,
   onReconcile,
+  onOpenMlSellerFeedback,
   onFulfillmentUpdated,
+  onCustomerDirectoryChanged,
   onClearFilters,
 }: OrdTableProps) {
   return (
@@ -1011,9 +1308,6 @@ export default function OrdTable({
           <th scope="col" className="right">
             Total <span className="sort" aria-hidden="true">↕</span>
           </th>
-          <th scope="col" className="right">
-            Acciones
-          </th>
         </tr>
       </thead>
       <tbody>
@@ -1021,7 +1315,7 @@ export default function OrdTable({
           Array.from({ length: 7 }, (_, i) => <SkeletonRow key={i} idx={i} />)
         ) : sales.length === 0 ? (
           <tr className="ord-row" style={{ cursor: "default" }}>
-            <td colSpan={7} style={{ padding: 0, border: "none" }}>
+            <td colSpan={6} style={{ padding: 0, border: "none" }}>
               <div className="pd-empty" role="status">
                 <div className="pd-empty-icon" aria-hidden="true">
                   📋
@@ -1045,12 +1339,16 @@ export default function OrdTable({
               key={s.id}
               sale={s}
               selected={selectedId === s.id}
+              bcvRate={bcvRate}
+              binanceRate={binanceRate}
               onRowClick={onRowClick}
               onRequestDispatch={onRequestDispatch}
               onOpenMlMessaging={onOpenMlMessaging}
               onOpenQuote={onOpenQuote}
               onReconcile={onReconcile}
+              onOpenMlSellerFeedback={onOpenMlSellerFeedback}
               onFulfillmentUpdated={onFulfillmentUpdated}
+              onCustomerDirectoryChanged={onCustomerDirectoryChanged}
             />
           ))
         )}

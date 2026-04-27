@@ -61,6 +61,8 @@ export function InboxLiveProvider({ children }: { children: ReactNode }) {
   useInboxRealtime();
   const dispatch = useAppDispatch();
   const pathname = usePathname();
+  const authToken = useAppSelector((s) => s.auth.token);
+  const authRestoring = useAppSelector((s) => s.auth.restoring);
   const inboxRefetchNonce = useAppSelector((s) => s.realtime.inboxRefetchNonce);
   const inboxUnreadOptimisticDelta = useAppSelector((s) => s.realtime.inboxUnreadOptimisticDelta ?? 0);
   const pendingMlSalesBellCount = useAppSelector((s) => s.realtime.pendingMlSalesBellCount ?? 0);
@@ -80,11 +82,18 @@ export function InboxLiveProvider({ children }: { children: ReactNode }) {
   const activeChatId = activeMatch ? activeMatch[1] : null;
 
   const fetchCounts = useCallback(async () => {
+    // Sin sesión no llamamos al receptor: GET /api/inbox/counts exige JWT/cookie + permiso crm:read → evita 401 en consola.
+    if (authToken === null || authRestoring) return;
     const gen = ++countsFetchGenRef.current;
     try {
+      const headers: Record<string, string> = {};
+      if (authToken !== "cookie") {
+        headers.Authorization = `Bearer ${authToken}`;
+      }
       const r = await fetch("/api/bandeja/counts?pipeline_default=1", {
         credentials: "include",
         cache: "no-store",
+        headers,
       });
       if (gen !== countsFetchGenRef.current) return;
       if (!r.ok) return;
@@ -97,7 +106,11 @@ export function InboxLiveProvider({ children }: { children: ReactNode }) {
     } catch {
       /* silent */
     }
-  }, [dispatch]);
+  }, [dispatch, authToken, authRestoring]);
+
+  useEffect(() => {
+    if (authToken === null && !authRestoring) setCounts(null);
+  }, [authToken, authRestoring]);
 
   useEffect(() => {
     void fetchCounts();

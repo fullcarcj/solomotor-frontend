@@ -2,15 +2,38 @@
 
 import type { ChangeEvent } from "react";
 import { useEffect, useState } from "react";
+import type { ActiveFilter, PedidosFilterCounts } from "./PedidosFiltersBar";
 
 interface Props {
   search: string;
   onSearch: (v: string) => void;
   onRefetch: () => void;
   isLoading: boolean;
-  /** Si hay alertas reales, mostrar número en el badge (opcional). */
   notificationCount?: number;
+  activeFilter: ActiveFilter;
+  onFilterChange: (f: ActiveFilter) => void;
+  counts: PedidosFilterCounts;
 }
+
+const PILLS: [ActiveFilter, string, keyof PedidosFilterCounts][] = [
+  ["all", "Todas", "all"],
+  ["pending", "Pendientes", "pending"],
+  ["in_progress", "En proceso", "inProgress"],
+  ["closed", "Cerradas", "closed"],
+];
+
+const CalendarIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+    <rect x="3" y="4" width="18" height="18" rx="2" />
+    <path d="M16 2v4M8 2v4M3 10h18" />
+  </svg>
+);
+
+const FilterIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+    <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
+  </svg>
+);
 
 function fmtClock(d: Date): string {
   return d.toLocaleTimeString("es-VE", {
@@ -25,6 +48,9 @@ export default function PedidosTopbar({
   onRefetch,
   isLoading,
   notificationCount,
+  activeFilter,
+  onFilterChange,
+  counts,
 }: Props) {
   const [now, setNow] = useState<Date>(() => new Date());
 
@@ -34,13 +60,8 @@ export default function PedidosTopbar({
   }, []);
 
   return (
-    <div className="pd-topbar">
-      <div className="pd-page-title">
-        <span className="pd-path">Operaciones · Bandeja</span>
-        Órdenes omnicanal
-      </div>
-
-      <div className="pd-search">
+    <div className="pd-topbar pd-topbar--unified" role="toolbar" aria-label="Pedidos omnicanal">
+      <div className="pd-search pd-search--toolbar">
         <svg
           viewBox="0 0 24 24"
           fill="none"
@@ -53,14 +74,50 @@ export default function PedidosTopbar({
         </svg>
         <input
           type="search"
-          placeholder="Buscar por cliente, SKU, referencia, orden…"
+          placeholder="Cliente, SKU, orden…"
           value={search}
-          onChange={(e: ChangeEvent<HTMLInputElement>) =>
-            onSearch(e.target.value)
-          }
+          onChange={(e: ChangeEvent<HTMLInputElement>) => onSearch(e.target.value)}
           aria-label="Buscar órdenes"
         />
         <kbd className="pd-search-kbd">⌘K</kbd>
+      </div>
+
+      <div className="pd-toolbar-filters">
+        <button
+          type="button"
+          className="pd-filter-pill pd-filter-pill--soon"
+          title="Próximamente: rango de fechas"
+          onClick={(e) => e.preventDefault()}
+          aria-disabled="true"
+        >
+          <CalendarIcon />
+          Últimos 7 días
+        </button>
+        <button
+          type="button"
+          className="pd-filter-pill pd-filter-pill--soon"
+          title="Próximamente: filtros avanzados"
+          onClick={(e) => e.preventDefault()}
+          aria-disabled="true"
+        >
+          <FilterIcon />
+          Filtros avanzados
+        </button>
+      </div>
+
+      <div className="pd-filter-pills-group">
+        {PILLS.map(([key, label, countKey]) => (
+          <button
+            key={key}
+            className={`pd-filter-pill${activeFilter === key ? " active" : ""}`}
+            onClick={() => onFilterChange(key)}
+            aria-pressed={activeFilter === key}
+            type="button"
+          >
+            {label}
+            <span className="pd-filter-cnt">{counts[countKey]}</span>
+          </button>
+        ))}
       </div>
 
       <div className="pd-topbar-actions">
@@ -126,3 +183,5 @@ export default function PedidosTopbar({
     </div>
   );
 }
+
+export type { ActiveFilter, PedidosFilterCounts } from "./PedidosFiltersBar";

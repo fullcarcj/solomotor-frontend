@@ -21,20 +21,19 @@ export default function FeaturesAuthGate({
   const restoring = useAppSelector((s) => s.auth.restoring);
   const [checked, setChecked] = useState(false);
 
+  // Siempre validar contra /api/auth/me al entrar a (features). Antes, si Redux ya tenía
+  // `token: "cookie"` (p. ej. tras login) se omitía restoreSession: sin cookie real o cookie
+  // expirada, el gate dejaba montar la app y /api/bandeja/counts devolvía 401 en bucle.
   useEffect(() => {
     let alive = true;
     (async () => {
-      if (token) {
-        setChecked(true);
-        return;
-      }
       await dispatch(restoreSession());
       if (alive) setChecked(true);
     })();
     return () => {
       alive = false;
     };
-  }, [dispatch, token]);
+  }, [dispatch]);
 
   useEffect(() => {
     if (!checked) return;

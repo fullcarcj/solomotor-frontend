@@ -55,6 +55,18 @@ export interface Sale {
   exchange_rate_bs_per_usd?: number | null;
   /** Nombre del cliente resuelto (customers.full_name o buyer del raw_json ML). */
   customer_name?: string | null;
+  /** Teléfonos del `customers` del pedido (`phone` / `phone_2` / `alternative_phone`). */
+  customer_phones_line?: string | null;
+  /** `customers.primary_ml_buyer_id` — misma línea 3 que en Bandeja. */
+  customer_primary_ml_buyer_id?: number | null;
+  /** Id numérico de orden en API ML (`orders/{id}`), desde `external_order_id` tipo `{ml_user_id}-{order_id}`. */
+  ml_api_order_id?: number | null;
+  /** Resumen `feedback.sale` en ML: vendedor → comprador (`ml_orders.feedback_sale`). */
+  ml_feedback_sale?: string | null;
+  /** Resumen `feedback.purchase`: comprador → vendedor. */
+  ml_feedback_purchase?: string | null;
+  /** `site_id` de la orden ML (MLV, MLA, …) para enlaces al sitio. */
+  ml_site_id?: string | null;
 }
 
 export interface SaleItem {

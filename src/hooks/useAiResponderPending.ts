@@ -5,6 +5,7 @@ import type {
   AiPendingMessage,
   AiPendingMessageContent,
 } from '@/types/ai-responder';
+import { useAppSelector } from '@/store/hooks';
 
 export type { AiPendingMessage, AiPendingMessageContent };
 
@@ -74,8 +75,18 @@ export function useAiResponderPending(): Result {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
   const cancelledRef          = useRef(false);
+  const authToken = useAppSelector((s) => s.auth.token);
+  const authRestoring = useAppSelector((s) => s.auth.restoring);
 
   const fetchPending = useCallback(async () => {
+    if (authToken === null || authRestoring) {
+      if (!cancelledRef.current) {
+        setRows([]);
+        setTotal(0);
+        setLoading(false);
+      }
+      return;
+    }
     try {
       const res = await fetch('/api/ai-responder/pending?limit=200', {
         credentials: 'include',
@@ -99,7 +110,7 @@ export function useAiResponderPending(): Result {
     } finally {
       if (!cancelledRef.current) setLoading(false);
     }
-  }, []);
+  }, [authToken, authRestoring]);
 
   useEffect(() => {
     cancelledRef.current = false;

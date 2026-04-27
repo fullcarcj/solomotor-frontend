@@ -1,12 +1,8 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { bffBackendBase } from "@/lib/bffBackendBase";
 
 export const runtime = "nodejs";
-
-const BACKEND_URL =
-  process.env.BACKEND_URL ??
-  process.env.WEBHOOK_RECEIVER_BASE_URL ??
-  "http://localhost:3001";
 
 function forwardHeaders(req: NextRequest) {
   const cookieHeader = req.headers.get("cookie") ?? "";
@@ -21,7 +17,7 @@ function forwardHeaders(req: NextRequest) {
 
 /** BFF → GET /api/ai-responder/settings */
 export async function GET(req: NextRequest) {
-  const base = BACKEND_URL.replace(/\/+$/, "");
+  const base = bffBackendBase();
   const res = await fetch(`${base}/api/ai-responder/settings`, {
     method: "GET",
     headers: forwardHeaders(req),
@@ -41,7 +37,7 @@ export async function GET(req: NextRequest) {
 
 /** BFF → PATCH /api/ai-responder/settings */
 export async function PATCH(req: NextRequest) {
-  const base = BACKEND_URL.replace(/\/+$/, "");
+  const base = bffBackendBase();
   const body = await req.text();
   const res = await fetch(`${base}/api/ai-responder/settings`, {
     method: "PATCH",

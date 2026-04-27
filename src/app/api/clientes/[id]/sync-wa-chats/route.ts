@@ -1,31 +1,44 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { bffBackendBase } from "@/lib/bffBackendBase";
 
 export const runtime = "nodejs";
 
+const BACKEND_URL =
+  process.env.BACKEND_URL ??
+  process.env.WEBHOOK_RECEIVER_BASE_URL ??
+  "http://localhost:3001";
+
 /**
- * BFF proxy → backend GET /api/ai-responder/log
- * Devuelve el historial de acciones del AI Responder.
- * Acepta ?limit=N (default 80, max 500).
+ * BFF → POST /api/crm/customers/:id/sync-wa-chats-by-phone
+ * Cuerpo opcional: { sales_order_id?: number } (PK `sales_orders.id` para rellenar `conversation_id`).
  */
-export async function GET(req: NextRequest) {
-  const base = bffBackendBase();
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const base = BACKEND_URL.replace(/\/+$/, "");
   const cookieHeader = req.headers.get("cookie") ?? "";
   const authHeader = req.headers.get("authorization") ?? "";
 
-  const url = new URL(req.url);
-  const limit = url.searchParams.get("limit") ?? "80";
+  let body: unknown = {};
+  try {
+    body = await req.json();
+  } catch {
+    body = {};
+  }
 
   const res = await fetch(
-    `${base}/api/ai-responder/log?limit=${encodeURIComponent(limit)}`,
+    `${base}/api/crm/customers/${encodeURIComponent(id)}/sync-wa-chats-by-phone`,
     {
-      method: "GET",
+      method: "POST",
       headers: {
+        "Content-Type": "application/json",
         Accept: "application/json",
         ...(authHeader ? { Authorization: authHeader } : {}),
         ...(cookieHeader ? { Cookie: cookieHeader } : {}),
       },
+      body: JSON.stringify(body && typeof body === "object" ? body : {}),
       cache: "no-store",
     }
   );

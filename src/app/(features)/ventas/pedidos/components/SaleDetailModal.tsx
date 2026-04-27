@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import type { SaleDetail } from "@/types/sales";
 import SaleSourceBadge from "./SaleSourceBadge";
 import SaleStatusBadge from "./SaleStatusBadge";
@@ -73,6 +73,11 @@ export default function SaleDetailModal({
   const [detail, setDetail] = useState<SaleDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [detailRefreshNonce, setDetailRefreshNonce] = useState(0);
+
+  const bumpDetailRefresh = useCallback(() => {
+    setDetailRefreshNonce((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     if (saleId == null) {
@@ -108,7 +113,7 @@ export default function SaleDetailModal({
     return () => {
       alive = false;
     };
-  }, [saleId]);
+  }, [saleId, detailRefreshNonce]);
 
   if (saleId == null) return null;
 
@@ -225,6 +230,7 @@ export default function SaleDetailModal({
                     <SaleCustomerPanel
                       customerId={Number(detail.customer_id)}
                       chatId={detail.chat_id}
+                      onCustomerMutated={bumpDetailRefresh}
                     />
                   ) : (
                     <SaleResolvedCustomerBlock saleId={detail.id} />

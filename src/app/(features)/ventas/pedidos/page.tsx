@@ -9,11 +9,12 @@ import type { Sale } from "@/types/sales";
 import SaleDetailModal from "./components/SaleDetailModal";
 import RequestDispatchModal from "@/app/(features)/logistica/components/RequestDispatchModal";
 import PedidosTopbar from "./components/PedidosTopbar";
-import PedidosFiltersBar from "./components/PedidosFiltersBar";
 import type { ActiveFilter } from "./components/PedidosFiltersBar";
 import PedidosKpiRibbon from "./components/PedidosKpiRibbon";
 import OrdTable from "./components/OrdTable";
+import { useTodayCurrencyRates } from "@/hooks/useTodayCurrencyRates";
 import MlOrderMessagingModal from "./components/MlOrderMessagingModal";
+import MlSellerFeedbackModal from "./components/MlSellerFeedbackModal";
 import SaleQuoteModal, { type SaleQuoteModalContext } from "./components/SaleQuoteModal";
 import SaleReconcileModal, { type SaleReconcileContext } from "./components/SaleReconcileModal";
 import type { SaleDetail } from "@/types/sales";
@@ -33,6 +34,7 @@ function VentasPedidosPageInner() {
   const prevSalesSseNonceRef = useRef<number | null>(null);
 
   const { sales, meta, loading, error, setFilters, refetch } = useSales();
+  const todayRates = useTodayCurrencyRates();
 
   useEffect(() => {
     if (prevSalesSseNonceRef.current === null) {
@@ -48,6 +50,7 @@ function VentasPedidosPageInner() {
   const [selectedId, setSelectedId] = useState<string | number | null>(null);
   const [dispatchSale, setDispatchSale] = useState<Sale | null>(null);
   const [mlPackModal, setMlPackModal] = useState<MlPackModalTarget | null>(null);
+  const [mlSellerFeedbackSale, setMlSellerFeedbackSale] = useState<Sale | null>(null);
   const [dispatchToast, setDispatchToast] = useState(false);
   const [quoteCtx, setQuoteCtx] = useState<SaleQuoteModalContext | null>(null);
   const [reconcileCtx, setReconcileCtx] = useState<SaleReconcileContext | null>(null);
@@ -215,26 +218,6 @@ function VentasPedidosPageInner() {
     });
   }, [sales, search]);
 
-  // SLA time buckets derived from loaded sales
-  const slaBuckets = useMemo(() => {
-    let hot = 0;
-    let warn = 0;
-    let cold = 0;
-    for (const s of sales) {
-      const st = String(s.status).toLowerCase();
-      if (
-        ["completed", "delivered", "cancelled", "canceled"].includes(st)
-      )
-        continue;
-      const hours =
-        (Date.now() - new Date(s.created_at).getTime()) / 3_600_000;
-      if (hours > 48) hot++;
-      else if (hours > 12) warn++;
-      else cold++;
-    }
-    return { hot, warn, cold };
-  }, [sales]);
-
   // Status counts for filter pills
   const statusCounts = useMemo(() => {
     const pending = sales.filter((s) =>
@@ -277,22 +260,12 @@ function VentasPedidosPageInner() {
             onSearch={setSearch}
             onRefetch={handleRefetch}
             isLoading={isRefetching}
-          />
-
-          <PedidosFiltersBar
             activeFilter={activeFilter}
             onFilterChange={handleFilterChange}
             counts={statusCounts}
-            sla={slaBuckets}
           />
 
-          <PedidosKpiRibbon sales={sales} loading={isInitialLoad} />
-
-          <p className="small text-muted px-1 mb-2 mb-md-0" style={{ maxWidth: 720 }}>
-            <strong className="text-body">Cotización:</strong> en cada fila de Mercado Libre hay un botón
-            violeta <span className="text-nowrap">«Cotización»</span> (mismo borrador que en Bandeja). Si la
-            orden aún no tiene chat CRM, el modal indica cómo vincularla.
-          </p>
+          <PedidosKpiRibbon sales={sales} loading={isInitialLoad} rates={todayRates} />
 
           {/* Subtle loading bar on refetch (keeps existing rows visible) */}
           {isRefetching && (
@@ -305,6 +278,8 @@ function VentasPedidosPageInner() {
             <OrdTable
               sales={filteredSales}
               loading={isInitialLoad}
+              bcvRate={todayRates.bcvRate}
+              binanceRate={todayRates.binanceRate}
               onRowClick={setSelectedId}
               selectedId={selectedId}
               onRequestDispatch={setDispatchSale}
@@ -314,6 +289,8 @@ function VentasPedidosPageInner() {
               onOpenQuote={openQuoteFromSale}
               onReconcile={openReconcileFromSale}
               onFulfillmentUpdated={refetch}
+              onCustomerDirectoryChanged={refetch}
+              onOpenMlSellerFeedback={(s) => setMlSellerFeedbackSale(s)}
               onClearFilters={() => handleFilterChange("all")}
             />
           </div>
@@ -340,6 +317,14 @@ function VentasPedidosPageInner() {
           saleId={mlPackModal.saleId}
           externalHint={mlPackModal.externalHint ?? undefined}
           onClose={() => setMlPackModal(null)}
+        />
+      )}
+
+      {mlSellerFeedbackSale != null && (
+        <MlSellerFeedbackModal
+          sale={mlSellerFeedbackSale}
+          onClose={() => setMlSellerFeedbackSale(null)}
+          onSubmitted={() => void refetch()}
         />
       )}
 

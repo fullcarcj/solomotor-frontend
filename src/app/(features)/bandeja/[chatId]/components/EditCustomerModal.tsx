@@ -55,6 +55,9 @@ interface Props {
   sourceType?: string | null;
   onClose: () => void;
   onSuccess: () => void;
+  /** Si el modal se monta encima de otro (p. ej. detalle Pedidos), usar z-index mayor que el padre. */
+  overlayZIndex?: number;
+  dialogZIndex?: number;
 }
 
 const panel: CSSProperties = {
@@ -106,6 +109,8 @@ export default function EditCustomerModal({
   sourceType,
   onClose,
   onSuccess,
+  overlayZIndex = 1050,
+  dialogZIndex = 1051,
 }: Props) {
   const [fullName, setFullName] = useState("");
   const [crmStatus, setCrmStatus] = useState<"draft" | "active" | "blocked">("draft");
@@ -237,7 +242,7 @@ export default function EditCustomerModal({
           position: "fixed",
           inset: 0,
           background: "rgba(0,0,0,0.55)",
-          zIndex: 1050,
+          zIndex: overlayZIndex,
         }}
         onClick={onClose}
         aria-hidden
@@ -252,7 +257,7 @@ export default function EditCustomerModal({
           top: "50%",
           left: "50%",
           transform: "translate(-50%, -50%)",
-          zIndex: 1051,
+          zIndex: dialogZIndex,
           width: "min(520px, calc(100vw - 1.5rem))",
           maxHeight: "min(92vh, 720px)",
           display: "flex",

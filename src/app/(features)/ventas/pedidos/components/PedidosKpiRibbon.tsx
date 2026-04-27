@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { Sale } from "@/types/sales";
+import type { TodayRates } from "@/hooks/useTodayCurrencyRates";
 
 interface Props {
   sales: Sale[];
   loading: boolean;
+  /** Tasas del día (una sola petición desde la página de Pedidos). */
+  rates: TodayRates;
 }
 
 function fmtCompact(n: number): string {
@@ -27,32 +30,8 @@ const UpArrow = () => (
   </svg>
 );
 
-export default function PedidosKpiRibbon({ sales, loading }: Props) {
-  const [bcvRate, setBcvRate] = useState<number | null>(null);
-  const [binanceRate, setBinanceRate] = useState<number | null>(null);
-  const [rateDate, setRateDate] = useState<string | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    void (async () => {
-      try {
-        const res = await fetch("/api/currency/today", { cache: "no-store", credentials: "include" });
-        if (!res.ok) return;
-        const j = (await res.json()) as Record<string, unknown>;
-        const data = (j.data ?? j) as Record<string, unknown> | null;
-        if (!data) return;
-        const bcv = data.bcv_rate;
-        const bin = data.binance_rate;
-        const dateVal = data.rate_date ?? data.date;
-        if (alive) {
-          if (bcv != null && Number.isFinite(Number(bcv)) && Number(bcv) > 0) setBcvRate(Number(bcv));
-          if (bin != null && Number.isFinite(Number(bin)) && Number(bin) > 0) setBinanceRate(Number(bin));
-          if (dateVal != null) setRateDate(String(dateVal));
-        }
-      } catch { /* silencioso */ }
-    })();
-    return () => { alive = false; };
-  }, []);
+export default function PedidosKpiRibbon({ sales, loading, rates }: Props) {
+  const { bcvRate, binanceRate, rateDate } = rates;
 
   const kpis = useMemo(() => {
     const now = new Date();
@@ -174,18 +153,6 @@ export default function PedidosKpiRibbon({ sales, loading }: Props) {
           className={`pd-kpi-delta${kpis.dispatch > 5 ? " down" : ""}`}
         >
           {kpis.dispatch > 0 ? "Pendientes despacho" : "Sin pendientes"}
-        </span>
-      </div>
-
-      {/* KPI 5 · Conversión 7d — TODO(backend): no disponible en el shape actual */}
-      <div className="pd-kpi-cell">
-        <span className="pd-kpi-lbl">Conversión 7d</span>
-        <span className="pd-kpi-val sm">—</span>
-        <span
-          className="pd-kpi-delta"
-          style={{ color: "var(--pd-text-faint)" }}
-        >
-          No disponible
         </span>
       </div>
     </div>

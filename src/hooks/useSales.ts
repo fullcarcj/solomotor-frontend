@@ -92,6 +92,32 @@ function normalizeSale(raw: Record<string, unknown>): Sale {
       raw.customer_name != null && String(raw.customer_name).trim() !== ""
         ? String(raw.customer_name).trim()
         : null,
+    customer_phones_line:
+      raw.customer_phones_line != null && String(raw.customer_phones_line).trim() !== ""
+        ? String(raw.customer_phones_line).trim()
+        : null,
+    customer_primary_ml_buyer_id:
+      raw.customer_primary_ml_buyer_id != null &&
+      Number.isFinite(Number(raw.customer_primary_ml_buyer_id)) &&
+      Number(raw.customer_primary_ml_buyer_id) > 0
+        ? Number(raw.customer_primary_ml_buyer_id)
+        : null,
+    ml_api_order_id:
+      raw.ml_api_order_id != null && Number.isFinite(Number(raw.ml_api_order_id))
+        ? Number(raw.ml_api_order_id)
+        : null,
+    ml_feedback_sale:
+      raw.ml_feedback_sale != null && String(raw.ml_feedback_sale).trim() !== ""
+        ? String(raw.ml_feedback_sale).trim()
+        : null,
+    ml_feedback_purchase:
+      raw.ml_feedback_purchase != null && String(raw.ml_feedback_purchase).trim() !== ""
+        ? String(raw.ml_feedback_purchase).trim()
+        : null,
+    ml_site_id:
+      raw.ml_site_id != null && String(raw.ml_site_id).trim() !== ""
+        ? String(raw.ml_site_id).trim().toUpperCase()
+        : null,
   };
 }
 
@@ -171,7 +197,7 @@ function parseResponse(json: unknown): {
   const m = (data.meta ?? o.meta) as Record<string, unknown> | undefined;
   const meta: SalesMeta = {
     total: Number(m?.total) || 0,
-    limit: Number(m?.limit) || 50,
+    limit: Number(m?.limit) || 100,
     offset: Number(m?.offset) || 0,
     exclude_completed_default: Boolean(m?.exclude_completed_default),
   };
@@ -181,7 +207,7 @@ function parseResponse(json: unknown): {
 
 export function useSales() {
   const [filters, setFilters] = useState<SalesFilters>({
-    limit: 50,
+    limit: 100,
     offset: 0,
   });
 
@@ -202,7 +228,7 @@ export function useSales() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [meta, setMeta] = useState<SalesMeta>({
     total: 0,
-    limit: 50,
+    limit: 100,
     offset: 0,
     exclude_completed_default: true,
   });

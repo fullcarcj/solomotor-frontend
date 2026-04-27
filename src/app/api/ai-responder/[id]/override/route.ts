@@ -1,12 +1,8 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { bffBackendBase } from "@/lib/bffBackendBase";
 
 export const runtime = "nodejs";
-
-const BACKEND_URL =
-  process.env.BACKEND_URL ??
-  process.env.WEBHOOK_RECEIVER_BASE_URL ??
-  "http://localhost:3001";
 
 /**
  * BFF proxy → backend POST /api/ai-responder/:id/override
@@ -18,7 +14,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const base = BACKEND_URL.replace(/\/+$/, "");
+  const base = bffBackendBase();
   const cookieHeader = req.headers.get("cookie") ?? "";
   const authHeader = req.headers.get("authorization") ?? "";
 
