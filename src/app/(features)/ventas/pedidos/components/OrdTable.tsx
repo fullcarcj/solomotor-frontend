@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
-import Link from "next/link";
 import type { Sale, ItemPreview, QuotePreview } from "@/types/sales";
+import Link from "next/link";
 import {
   usePedidosCustomerContact,
   PedidosCustomerContactView,
 } from "./PedidosCustomerBlock";
-import { mlVentasOrderUrl } from "./mlVentasUrls";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -500,17 +499,6 @@ function isMercadoLibreSale(source: string): boolean {
   return s.includes("mercadolibre") || s.startsWith("ml_");
 }
 
-/** `feedback.sale`: calificación del vendedor hacia el comprador. */
-function sellerFeedbackToClientLabel(raw: string | null | undefined): string {
-  if (raw == null || String(raw).trim() === "") return "Pendiente";
-  const s = String(raw).trim().toLowerCase();
-  if (s === "pending") return "Pendiente";
-  if (s === "positive") return "Positiva";
-  if (s === "neutral") return "Neutra";
-  if (s === "negative") return "Negativa";
-  return String(raw).trim();
-}
-
 function isMlSellerFeedbackPending(sale: Sale): boolean {
   const fs = sale.ml_feedback_sale;
   if (fs == null || String(fs).trim() === "") return true;
@@ -643,22 +631,22 @@ function OrdRow({
   const usd = isNativeVes ? 0 : (Number(sale.total_usd) || 0);
   const showVes = vesAmt > 0;
 
-  const chatHref =
-    sale.chat_id != null ? `/bandeja/${sale.chat_id}` : null;
-
-  const mlVentasHref =
-    isMl && sale.ml_api_order_id != null
-      ? mlVentasOrderUrl(sale.ml_site_id ?? null, sale.ml_api_order_id)
-      : null;
-  const showMlSellerFeedbackRow =
-    isMl && sale.ml_user_id != null && sale.ml_api_order_id != null;
   const canSubmitMlSellerFeedback =
     Boolean(onOpenMlSellerFeedback) &&
     !isClosed &&
     statusNorm !== "cancelled" &&
     isMlSellerFeedbackPending(sale);
+  const showMlSellerFeedbackActions =
+    isMl &&
+    sale.ml_user_id != null &&
+    sale.ml_api_order_id != null &&
+    canSubmitMlSellerFeedback;
+
+  const chatHref =
+    sale.chat_id != null ? `/bandeja/${sale.chat_id}` : null;
 
   const hasCustomerPhone = Boolean(sale.customer_phones_line?.trim());
+
   const canOpenQuote =
     Boolean(onOpenQuote) &&
     (isMl ||
@@ -672,6 +660,64 @@ function OrdRow({
       onRowClick(sale.id);
     }
   };
+
+  const clientActionsRow =
+    (custContact.editClientButton != null) ||
+    (isMl && onOpenMlMessaging) ||
+    hasCustomerPhone ? (
+      <div
+        className="pd-col-act-row pd-col-act-row--start pd-col-act-row--client-line"
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        {custContact.editClientButton}
+        {isMl && onOpenMlMessaging ? (
+          <button
+            type="button"
+            className="c-client-edit-btn c-ml-msg-btn"
+            aria-label={`Mensajería Mercado Libre orden #${sale.id}`}
+            title="Mensajería interna Mercado Libre (post-venta)"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenMlMessaging(sale);
+            }}
+          >
+            Mensajería
+          </button>
+        ) : null}
+        {hasCustomerPhone ? (
+          chatHref && !isClosed ? (
+            <Link
+              href={chatHref}
+              className="c-client-edit-btn"
+              aria-label={`Abrir cliente / chat de la orden #${sale.id}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              Cliente
+            </Link>
+          ) : (
+            <button
+              type="button"
+              className="c-client-edit-btn"
+              disabled={isClosed || !chatHref}
+              aria-label={
+                !chatHref
+                  ? "Sin conversación vinculada"
+                  : "Cliente (orden cerrada)"
+              }
+              title={
+                !chatHref
+                  ? "Agregá o vinculá un chat en Bandeja para abrir la conversación."
+                  : undefined
+              }
+              onClick={(e) => e.stopPropagation()}
+            >
+              Cliente
+            </button>
+          )
+        ) : null}
+      </div>
+    ) : null;
 
   return (
     <>
@@ -763,58 +809,8 @@ function OrdRow({
               custIni={custIni}
               custAv={custAv}
               phonesBlock={custContact.phonesBlock}
+              clientActions={clientActionsRow}
             />
-            <div
-              className="pd-col-act-row pd-col-act-row--start"
-              onClick={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              {isMl && onOpenMlMessaging ? (
-                <button
-                  type="button"
-                  className="c-client-edit-btn c-ml-msg-btn"
-                  aria-label={`Mensajería Mercado Libre orden #${sale.id}`}
-                  title="Mensajería interna Mercado Libre (post-venta)"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenMlMessaging(sale);
-                  }}
-                >
-                  Mensajería
-                </button>
-              ) : null}
-              {hasCustomerPhone ? (
-                chatHref && !isClosed ? (
-                  <Link
-                    href={chatHref}
-                    className="c-client-edit-btn"
-                    aria-label={`Abrir cliente / chat de la orden #${sale.id}`}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    Cliente
-                  </Link>
-                ) : (
-                  <button
-                    type="button"
-                    className="c-client-edit-btn"
-                    disabled={isClosed || !chatHref}
-                    aria-label={
-                      !chatHref
-                        ? "Sin conversación vinculada"
-                        : "Cliente (orden cerrada)"
-                    }
-                    title={
-                      !chatHref
-                        ? "Agregá o vinculá un chat en Bandeja para abrir la conversación."
-                        : undefined
-                    }
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    Cliente
-                  </button>
-                )
-              ) : null}
-            </div>
             {custContact.editModal}
           </>
         </td>
@@ -833,7 +829,7 @@ function OrdRow({
               />
             </div>
             <div
-              className="logi-stock-dispatch-row"
+              className="logi-stock-dispatch-row logi-stock-dispatch-row--forced-row"
               onClick={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
             >
@@ -894,45 +890,26 @@ function OrdRow({
                 </span>
               )}
             </div>
-            {showMlSellerFeedbackRow ? (
+            {showMlSellerFeedbackActions ? (
               <div
                 className="ml-seller-fb-block"
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
               >
-                <div className="ml-seller-fb-line" title="Calificación del vendedor hacia el comprador en Mercado Libre">
-                  <span className="ml-seller-fb-lb">Tu calif. al cliente</span>
-                  <span className="ml-seller-fb-val">{sellerFeedbackToClientLabel(sale.ml_feedback_sale)}</span>
-                </div>
                 <div className="pd-col-act-row pd-col-act-row--start">
-                  {canSubmitMlSellerFeedback ? (
-                    <button
-                      type="button"
-                      className="c-client-edit-btn"
-                      aria-label={`Calificar al comprador en Mercado Libre, orden ${sale.ml_api_order_id}`}
-                      title="Enviar calificación positiva cumplida vía API de Mercado Libre"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenMlSellerFeedback!(sale);
-                      }}
-                    >
-                      <i className="ti ti-star" aria-hidden="true" />
-                      Calificar en ML
-                    </button>
-                  ) : null}
-                  {mlVentasHref ? (
-                    <a
-                      href={mlVentasHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="c-client-edit-btn"
-                      style={{ textDecoration: "none" }}
-                      title="Abrir la venta en el sitio de Mercado Libre"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      Sitio ML ↗
-                    </a>
-                  ) : null}
+                  <button
+                    type="button"
+                    className="c-client-edit-btn"
+                    aria-label={`Calificar al comprador en Mercado Libre, orden ${sale.ml_api_order_id}`}
+                    title="Enviar calificación positiva cumplida vía API de Mercado Libre"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenMlSellerFeedback!(sale);
+                    }}
+                  >
+                    <i className="ti ti-star" aria-hidden="true" />
+                    Calificar en ML
+                  </button>
                 </div>
               </div>
             ) : null}
@@ -1072,55 +1049,8 @@ function OrdRow({
                 custIni={custIni}
                 custAv={custAv}
                 phonesBlock={custContact.phonesBlock}
+                clientActions={clientActionsRow}
               />
-              {(isMl && onOpenMlMessaging) || hasCustomerPhone ? (
-                <div
-                  className="pd-card-client-actions"
-                  onClick={(e) => e.stopPropagation()}
-                  onMouseDown={(e) => e.stopPropagation()}
-                >
-                  {isMl && onOpenMlMessaging ? (
-                    <button
-                      type="button"
-                      className="c-client-edit-btn c-ml-msg-btn"
-                      aria-label={`Mensajería Mercado Libre orden #${sale.id}`}
-                      title="Mensajería interna Mercado Libre (post-venta)"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenMlMessaging(sale);
-                      }}
-                    >
-                      Mensajería
-                    </button>
-                  ) : null}
-                  {hasCustomerPhone ? (
-                    chatHref && !isClosed ? (
-                      <Link
-                        href={chatHref}
-                        className="c-client-edit-btn"
-                        aria-label={`Abrir cliente / chat de la orden #${sale.id}`}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        Cliente
-                      </Link>
-                    ) : (
-                      <button
-                        type="button"
-                        className="c-client-edit-btn"
-                        disabled={isClosed || !chatHref}
-                        title={
-                          !chatHref
-                            ? "Agregá o vinculá un chat en Bandeja para abrir la conversación."
-                            : undefined
-                        }
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        Cliente
-                      </button>
-                    )
-                  ) : null}
-                </div>
-              ) : null}
             </div>
 
             <div className="ord-card-footer">
@@ -1132,39 +1062,23 @@ function OrdRow({
                 <ClockIcon />
                 {elapsed}
               </span>
-              {showMlSellerFeedbackRow ? (
+              {showMlSellerFeedbackActions ? (
                 <div
                   className="ml-seller-fb-block ml-seller-fb-block--card"
                   onClick={(e) => e.stopPropagation()}
                   onMouseDown={(e) => e.stopPropagation()}
                 >
-                  <span className="ml-seller-fb-lb">Tu calif. cliente:</span>{" "}
-                  <span className="ml-seller-fb-val">{sellerFeedbackToClientLabel(sale.ml_feedback_sale)}</span>
-                  {canSubmitMlSellerFeedback ? (
-                    <button
-                      type="button"
-                      className="c-client-edit-btn"
-                      aria-label="Calificar en Mercado Libre"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenMlSellerFeedback!(sale);
-                      }}
-                    >
-                      Calificar
-                    </button>
-                  ) : null}
-                  {mlVentasHref ? (
-                    <a
-                      href={mlVentasHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="c-client-edit-btn"
-                      style={{ textDecoration: "none" }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      ML ↗
-                    </a>
-                  ) : null}
+                  <button
+                    type="button"
+                    className="c-client-edit-btn"
+                    aria-label="Calificar en Mercado Libre"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenMlSellerFeedback!(sale);
+                    }}
+                  >
+                    Calificar
+                  </button>
                 </div>
               ) : null}
               {onReconcile ? (

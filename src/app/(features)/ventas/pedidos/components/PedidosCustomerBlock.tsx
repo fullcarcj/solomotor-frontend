@@ -34,7 +34,7 @@ function validatePhoneDigits(raw: string): { ok: true; digits: string } | { ok: 
 export function usePedidosCustomerContact(
   sale: Sale,
   onRefetch: () => void | Promise<void>
-): { phonesBlock: ReactNode; editModal: ReactNode } {
+): { phonesBlock: ReactNode; editClientButton: ReactNode; editModal: ReactNode } {
   const [editOpen, setEditOpen] = useState(false);
   const [phoneDraft, setPhoneDraft] = useState("");
   const [saving, setSaving] = useState(false);
@@ -105,17 +105,6 @@ export function usePedidosCustomerContact(
         hasPhone ? (
           <span className="c-client-phone-row">
             <span className="c-client-phone-txt">{sale.customer_phones_line!.trim()}</span>
-            <button
-              type="button"
-              className="c-client-edit-btn"
-              disabled={saving}
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditOpen(true);
-              }}
-            >
-              Editar cliente
-            </button>
           </span>
         ) : (
           <form className="c-client-phone-form" onSubmit={saveInlinePhone}>
@@ -132,17 +121,6 @@ export function usePedidosCustomerContact(
             />
             <button type="submit" className="c-client-save-btn" disabled={saving}>
               {saving ? "…" : "Guardar"}
-            </button>
-            <button
-              type="button"
-              className="c-client-edit-btn c-client-edit-btn--ghost"
-              disabled={saving}
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditOpen(true);
-              }}
-            >
-              Editar cliente
             </button>
             {err ? <span className="c-client-phone-err">{err}</span> : null}
           </form>
@@ -173,7 +151,22 @@ export function usePedidosCustomerContact(
       />
     ) : null;
 
-  return { phonesBlock, editModal };
+  const editClientButton =
+    cid != null ? (
+      <button
+        type="button"
+        className="c-client-edit-btn"
+        disabled={saving}
+        onClick={(e) => {
+          e.stopPropagation();
+          setEditOpen(true);
+        }}
+      >
+        Editar cliente
+      </button>
+    ) : null;
+
+  return { phonesBlock, editClientButton, editModal };
 }
 
 export function PedidosCustomerContactView({
@@ -183,6 +176,7 @@ export function PedidosCustomerContactView({
   custIni = "?",
   custAv = { bg: "#1e293b", color: "#94a3b8" },
   phonesBlock,
+  clientActions,
 }: {
   variant: "table" | "card";
   sale: Sale;
@@ -190,6 +184,7 @@ export function PedidosCustomerContactView({
   custIni?: string;
   custAv?: { bg: string; color: string };
   phonesBlock: ReactNode;
+  clientActions?: ReactNode | null;
 }) {
   if (variant === "table") {
     return (
@@ -207,6 +202,9 @@ export function PedidosCustomerContactView({
           <div className="c-client-ln c-client-ln--ml">
             {customerMlBuyerSummaryLine(sale.customer_primary_ml_buyer_id ?? null)}
           </div>
+          {clientActions ? (
+            <div className="c-client-actions-wrap">{clientActions}</div>
+          ) : null}
         </div>
       </div>
     );
@@ -218,6 +216,11 @@ export function PedidosCustomerContactView({
       <div className="c-client-ln c-client-ln--ml">
         {customerMlBuyerSummaryLine(sale.customer_primary_ml_buyer_id ?? null)}
       </div>
+      {clientActions ? (
+        <div className="c-client-actions-wrap c-client-actions-wrap--card">
+          {clientActions}
+        </div>
+      ) : null}
     </div>
   );
 }

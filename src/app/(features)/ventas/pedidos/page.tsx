@@ -31,6 +31,13 @@ function VentasPedidosPageInner() {
   const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
   const salesOrdersSseNonce = useAppSelector((s) => s.realtime.salesOrdersSseNonce);
+  const authRole = useAppSelector((s) => s.auth.role);
+
+  /** Cinta HOY VES / tasas / por despachar: solo contador, supervisor y superuser (ERP). */
+  const showPedidosKpiRibbon = useMemo(() => {
+    const r = (authRole || "").trim().toUpperCase();
+    return r === "CONTADOR" || r === "SUPERVISOR" || r === "SUPERUSER";
+  }, [authRole]);
   const prevSalesSseNonceRef = useRef<number | null>(null);
 
   const { sales, meta, loading, error, setFilters, refetch } = useSales();
@@ -265,7 +272,9 @@ function VentasPedidosPageInner() {
             counts={statusCounts}
           />
 
-          <PedidosKpiRibbon sales={sales} loading={isInitialLoad} rates={todayRates} />
+          {showPedidosKpiRibbon ? (
+            <PedidosKpiRibbon sales={sales} loading={isInitialLoad} rates={todayRates} />
+          ) : null}
 
           {/* Subtle loading bar on refetch (keeps existing rows visible) */}
           {isRefetching && (

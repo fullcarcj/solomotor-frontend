@@ -478,16 +478,19 @@
   }
 
   /* ── Main table ──────────────────────────────────── */
+  /* separate + th sticky: collapse rompe thead sticky al scroll en Chromium */
   .ord-table {
     width:            100%;
-    border-collapse:  collapse;
+    border-collapse:  separate;
+    border-spacing:   0;
     table-layout:     fixed;
 
-    thead {
+    thead th {
       position:   sticky;
       top:        0;
+      z-index:    25;
       background: var(--pd-panel-2);
-      z-index:    5;
+      box-shadow: 0 1px 0 var(--pd-border);
     }
     th {
       padding:        12px 14px;
@@ -498,17 +501,20 @@
       font-family:    var(--pd-mono);
       text-transform: uppercase;
       font-weight:    700;
-      border-bottom:  1px solid var(--pd-border);
+      border-bottom:  none;
       white-space:    nowrap;
       &.right { text-align: right; }
       .sort { margin-left: 4px; opacity: .4; }
     }
     tbody tr.ord-row {
-      border-bottom: 1px solid rgba(36, 43, 53, .6);
       cursor:        pointer;
       transition:    background .12s;
       &:hover   { background: rgba(255, 255, 255, .02); }
       &.selected { background: rgba(197, 242, 74, .04); box-shadow: inset 3px 0 0 var(--pd-accent); }
+    }
+    tbody tr.ord-row td {
+      border-bottom:  1px solid rgba(36, 43, 53, .6);
+      vertical-align:   top;
     }
     td {
       padding:        16px 14px;
@@ -815,6 +821,17 @@
     gap: 4px;
     min-width: 0;
   }
+  .c-client-actions-wrap {
+    margin-top: 6px;
+    width:      100%;
+    min-width:  0;
+    &--card {
+      margin-top: 4px;
+    }
+  }
+  .c-client-ln--phones-pedidos .c-client-edit-btn {
+    display: none !important;
+  }
   .c-client-ln {
     font-family: var(--pd-mono);
     font-size: 9.5px;
@@ -846,17 +863,12 @@
     }
   }
   .c-client-ln--phones-pedidos {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px 8px;
+    display: block;
     width: 100%;
   }
+  /* solo número / formulario; Editar va en clientActions bajo ID ML */
   .c-client-phone-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px;
+    display: block;
     width: 100%;
     min-width: 0;
   }
@@ -935,6 +947,7 @@
       color: #fef9c3;
     }
   }
+  /* Botones de acción: misma baseline visual entre columnas (Cliente / Estado / Total) */
   .pd-col-act-row {
     display: flex;
     flex-wrap: wrap;
@@ -946,15 +959,17 @@
     &--start {
       justify-content: flex-start;
     }
-  }
-  .pd-card-client-actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    margin-top: 10px;
-    padding-top: 8px;
-    border-top: 1px dashed rgba(255, 255, 255, 0.08);
+    &--client-line {
+      flex-wrap: nowrap;
+      gap: 6px;
+      min-width: 0;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+      .c-client-edit-btn {
+        flex-shrink: 0;
+      }
+    }
   }
   .c-client-phone-err {
     width: 100%;
@@ -1010,12 +1025,34 @@
   }
   .logi-stock-dispatch-row {
     display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
     align-items: center;
-    flex-wrap: wrap;
+    justify-content: flex-start;
     gap: 8px;
     width: 100%;
+    min-width: 0;
+    .logi-stock {
+      flex-shrink: 0;
+    }
     .logi-dispatch-inline {
-      margin-left: auto;
+      margin-left: 0;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+  }
+  /* Stock + Solicitar despacho: una sola línea aunque otro CSS fuerce column/flex-wrap */
+  .logi-stock-dispatch-row--forced-row {
+    display:               flex !important;
+    flex-direction:        row !important;
+    flex-wrap:             nowrap !important;
+    align-items:           center !important;
+    justify-content:       flex-start !important;
+    width:                 100%;
+    min-width:             0;
+    .logi-stock,
+    .logi-dispatch-inline {
+      display: inline-flex !important;
     }
   }
   .logi-ft-select {
