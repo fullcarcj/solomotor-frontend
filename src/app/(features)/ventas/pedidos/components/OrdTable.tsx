@@ -9,11 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Sale, ItemPreview, QuotePreview } from "@/types/sales";
-import Link from "next/link";
-import {
-  usePedidosCustomerContact,
-  PedidosCustomerContactView,
-} from "./PedidosCustomerBlock";
+import { usePedidosCustomerContact } from "./PedidosCustomerBlock";
 import {
   paymentOptionsForSale,
   effectivePaymentSelectValue,
@@ -1005,24 +1001,6 @@ function OrdRow({
   const vendorIni = vendor ? initials(vendor) : "—";
   const vendorAv = avColor(vendor || String(sale.id));
 
-  // Customer
-  const custLabel =
-    sale.customer_name && sale.customer_name.trim() !== ""
-      ? sale.customer_name.trim()
-      : sale.customer_id != null
-        ? `Cliente #${sale.customer_id}`
-        : "Consumidor final";
-  const custIni = (() => {
-    if (sale.customer_name && sale.customer_name.trim() !== "") {
-      const parts = sale.customer_name.trim().split(/\s+/);
-      return parts.length >= 2
-        ? (parts[0][0] + parts[1][0]).toUpperCase()
-        : parts[0].slice(0, 2).toUpperCase();
-    }
-    return sale.customer_id != null ? `C${String(sale.customer_id).slice(-2)}` : "CF";
-  })();
-  const custAv = avColor(custLabel);
-
   // Totals — distinguir órdenes nativas VES (ML Venezuela) de órdenes en USD
   const isNativeVes = sale.rate_type === "NATIVE_VES";
   const vesAmt = isNativeVes
@@ -1044,11 +1022,6 @@ function OrdRow({
     sale.ml_api_order_id != null &&
     canSubmitMlSellerFeedback;
 
-  const chatHref =
-    sale.chat_id != null ? `/bandeja/${sale.chat_id}` : null;
-
-  const hasCustomerPhone = Boolean(sale.customer_phones_line?.trim());
-
   const canOpenQuote =
     Boolean(onOpenQuote) &&
     (isMl ||
@@ -1064,10 +1037,9 @@ function OrdRow({
     }
   };
 
+  /** Editar cliente + ML mensajería (antes en col. Cliente; sin enlace “Cliente” a bandeja). */
   const clientActionsRow =
-    (custContact.editClientButton != null) ||
-    (isMl && onOpenMlMessaging) ||
-    hasCustomerPhone ? (
+    custContact.editClientButton != null || (isMl && onOpenMlMessaging) ? (
       <div
         className="pd-col-act-row pd-col-act-row--start pd-col-act-row--client-line"
         onClick={(e) => e.stopPropagation()}
@@ -1087,37 +1059,6 @@ function OrdRow({
           >
             Mensajería
           </button>
-        ) : null}
-        {hasCustomerPhone ? (
-          chatHref && !isClosed ? (
-            <Link
-              href={chatHref}
-              className="c-client-edit-btn"
-              aria-label={`Abrir cliente / chat de la orden #${sale.id}`}
-              onClick={(e) => e.stopPropagation()}
-            >
-              Cliente
-            </Link>
-          ) : (
-            <button
-              type="button"
-              className="c-client-edit-btn"
-              disabled={isClosed || !chatHref}
-              aria-label={
-                !chatHref
-                  ? "Sin conversación vinculada"
-                  : "Cliente (orden cerrada)"
-              }
-              title={
-                !chatHref
-                  ? "Agregá o vinculá un chat en Bandeja para abrir la conversación."
-                  : undefined
-              }
-              onClick={(e) => e.stopPropagation()}
-            >
-              Cliente
-            </button>
-          )
         ) : null}
       </div>
     ) : null;
@@ -1181,46 +1122,33 @@ function OrdRow({
             items={sale.items_preview}
             quotePreview={sale.quote_preview}
             footerActions={
-              canOpenQuote ? (
-                <button
-                  type="button"
-                  className="c-client-edit-btn"
-                  aria-label={`Cotización orden #${sale.id}`}
-                  title={
-                    sale.chat_id != null && String(sale.chat_id).trim() !== ""
-                      ? "Abrir cotización CRM (mismo presupuesto que en Bandeja)."
-                      : "Mercado Libre: abrí la cotización. Si falta chat CRM, vinculá la conversación en Bandeja."
-                  }
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenQuote!(sale);
-                  }}
-                >
-                  <i className="ti ti-file-invoice" aria-hidden="true" />
-                  Cotización
-                </button>
-              ) : null
+              <>
+                {clientActionsRow}
+                {canOpenQuote ? (
+                  <button
+                    type="button"
+                    className="c-client-edit-btn"
+                    aria-label={`Cotización orden #${sale.id}`}
+                    title={
+                      sale.chat_id != null && String(sale.chat_id).trim() !== ""
+                        ? "Abrir cotización CRM (mismo presupuesto que en Bandeja)."
+                        : "Mercado Libre: abrí la cotización. Si falta chat CRM, vinculá la conversación en Bandeja."
+                    }
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenQuote!(sale);
+                    }}
+                  >
+                    <i className="ti ti-file-invoice" aria-hidden="true" />
+                    Cotización
+                  </button>
+                ) : null}
+              </>
             }
           />
         </td>
 
-        {/* Col 3 · Cliente — tres líneas como Bandeja (nombre / teléfonos / ID MERCADOLIBRE) */}
-        <td data-label="Cliente">
-          <>
-            <PedidosCustomerContactView
-              variant="table"
-              sale={sale}
-              custLabel={custLabel}
-              custIni={custIni}
-              custAv={custAv}
-              phonesBlock={custContact.phonesBlock}
-              clientActions={clientActionsRow}
-            />
-            {custContact.editModal}
-          </>
-        </td>
-
-        {/* Col 4 · Total */}
+        {/* Col 3 · Total (sin columna Cliente en listado) */}
         <td data-label="Total" style={{ textAlign: "left" }}>
           <div className="c-total">
             {usd > 0 && (
@@ -1383,7 +1311,7 @@ function OrdRow({
         aria-hidden="true"
         onClick={() => onRowClick(sale.id)}
       >
-        <td className="ord-card" colSpan={7}>
+        <td className="ord-card" colSpan={6}>
           <div className="ord-card-inner">
             <div className="ord-card-header">
               <div className="ord-card-source-line">
@@ -1419,36 +1347,30 @@ function OrdRow({
                 quotePreview={sale.quote_preview}
                 compact
                 footerActions={
-                  canOpenQuote ? (
-                    <button
-                      type="button"
-                      className="c-client-edit-btn"
-                      aria-label={`Cotización orden #${sale.id}`}
-                      title={
-                        sale.chat_id != null &&
-                        String(sale.chat_id).trim() !== ""
-                          ? "Cotización CRM (Bandeja)."
-                          : "Cotización ML — vinculá el chat en Bandeja si falta."
-                      }
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenQuote!(sale);
-                      }}
-                    >
-                      <i className="ti ti-file-invoice" aria-hidden="true" />
-                      Cotiz.
-                    </button>
-                  ) : null
+                  <>
+                    {clientActionsRow}
+                    {canOpenQuote ? (
+                      <button
+                        type="button"
+                        className="c-client-edit-btn"
+                        aria-label={`Cotización orden #${sale.id}`}
+                        title={
+                          sale.chat_id != null &&
+                          String(sale.chat_id).trim() !== ""
+                            ? "Cotización CRM (Bandeja)."
+                            : "Cotización ML — vinculá el chat en Bandeja si falta."
+                        }
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenQuote!(sale);
+                        }}
+                      >
+                        <i className="ti ti-file-invoice" aria-hidden="true" />
+                        Cotiz.
+                      </button>
+                    ) : null}
+                  </>
                 }
-              />
-              <PedidosCustomerContactView
-                variant="card"
-                sale={sale}
-                custLabel={custLabel}
-                custIni={custIni}
-                custAv={custAv}
-                phonesBlock={custContact.phonesBlock}
-                clientActions={clientActionsRow}
               />
             </div>
 
@@ -1548,13 +1470,14 @@ function OrdRow({
           </div>
         </td>
       </tr>
+      {custContact.editModal}
     </>
   );
 }
 
 // ─── Skeleton rows ─────────────────────────────────────────────────────────────
 
-const SK_WIDTHS = [64, 78, 64, 68, 56, 72, 82];
+const SK_WIDTHS = [64, 78, 68, 56, 72, 82];
 
 function SkeletonRow({ idx }: { idx: number }) {
   const offset = idx % 3;
@@ -1566,7 +1489,7 @@ function SkeletonRow({ idx }: { idx: number }) {
             className="pd-skeleton"
             style={{ width: `${w - offset * 5}%`, height: 14 }}
           />
-          {i < 5 && (
+          {i < 4 && (
             <span
               className="pd-skeleton"
               style={{
@@ -1635,7 +1558,6 @@ export default function OrdTable({
             Orden <span className="sort" aria-hidden="true">↕</span>
           </th>
           <th scope="col">Productos</th>
-          <th scope="col">Cliente</th>
           <th scope="col">
             Total <span className="sort" aria-hidden="true">↕</span>
           </th>
@@ -1651,7 +1573,7 @@ export default function OrdTable({
           Array.from({ length: 7 }, (_, i) => <SkeletonRow key={i} idx={i} />)
         ) : sales.length === 0 ? (
           <tr className="ord-row" style={{ cursor: "default" }}>
-            <td colSpan={7} style={{ padding: 0, border: "none" }}>
+            <td colSpan={6} style={{ padding: 0, border: "none" }}>
               <div className="pd-empty" role="status">
                 <div className="pd-empty-icon" aria-hidden="true">
                   📋

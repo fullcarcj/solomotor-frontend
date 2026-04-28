@@ -521,20 +521,19 @@
       font-size:      12px;
       vertical-align: top;
     }
-    /* Column widths — Orden · Productos · Cliente · Total · Pago · Logística · Estado */
-    th:nth-child(1), td:nth-child(1) { width: 11%; }
-    th:nth-child(2), td:nth-child(2) { width: 20%; }
-    th:nth-child(3), td:nth-child(3) { width: 15%; }
-    th:nth-child(4), td:nth-child(4) { width: 16%; }
-    th:nth-child(5), td:nth-child(5) { width: 11%; }
-    th:nth-child(6), td:nth-child(6) { width: 12%; }
-    th:nth-child(7), td:nth-child(7) { width: 15%; padding-right: 16px; }
-    thead tr th:nth-child(4),
-    tbody tr.ord-row td:nth-child(4) {
+    /* Column widths — Orden · Productos · Total · Pago · Logística · Estado */
+    th:nth-child(1), td:nth-child(1) { width: 12%; }
+    th:nth-child(2), td:nth-child(2) { width: 24%; }
+    th:nth-child(3), td:nth-child(3) { width: 16%; }
+    th:nth-child(4), td:nth-child(4) { width: 12%; }
+    th:nth-child(5), td:nth-child(5) { width: 13%; }
+    th:nth-child(6), td:nth-child(6) { width: 23%; padding-right: 16px; }
+    thead tr th:nth-child(3),
+    tbody tr.ord-row td:nth-child(3) {
       text-align: left;
     }
-    thead tr th:nth-child(7),
-    tbody tr.ord-row td:nth-child(7) {
+    thead tr th:nth-child(6),
+    tbody tr.ord-row td:nth-child(6) {
       text-align: right;
     }
   }
@@ -1675,8 +1674,7 @@
     .ord-table th:nth-child(3), .ord-table td:nth-child(3),
     .ord-table th:nth-child(4), .ord-table td:nth-child(4),
     .ord-table th:nth-child(5), .ord-table td:nth-child(5),
-    .ord-table th:nth-child(6), .ord-table td:nth-child(6),
-    .ord-table th:nth-child(7), .ord-table td:nth-child(7) { width: auto; }
+    .ord-table th:nth-child(6), .ord-table td:nth-child(6) { width: auto; }
   }
 
   @media (max-width: 900px) {
