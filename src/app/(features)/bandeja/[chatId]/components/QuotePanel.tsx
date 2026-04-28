@@ -46,9 +46,52 @@ interface DeliveryZoneRow {
   id: number;
   zone_name: string;
   client_price_bs?: number | string;
+  /** Precio en USD (zonas con currency_pago = 'USD'). */
+  base_cost_usd?: number | string | null;
+  /** Moneda base de la zona; 'USD' indica que el precio se recalcula con la tasa del día. */
+  currency_pago?: string;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Calcula el precio en Bs de una zona de delivery.
+ * Zonas USD (currency_pago = 'USD'): multiplica base_cost_usd × tasa activa del día.
+ * Zonas Bs: devuelve client_price_bs directamente.
+ * Devuelve cadena vacía si no se puede calcular (sin tasa).
+ */
+function resolveZonePriceBs(zone: DeliveryZoneRow, activeRate: number | null): string {
+  const isUsd = String(zone.currency_pago ?? "").toUpperCase() === "USD";
+  if (isUsd) {
+    const usd = Number(zone.base_cost_usd ?? 0);
+    if (!Number.isFinite(usd) || usd <= 0 || !activeRate) return "";
+    return String((usd * activeRate).toFixed(2));
+  }
+  const bs = zone.client_price_bs;
+  if (bs == null || String(bs).trim() === "") return "";
+  const n = Number(String(bs).replace(",", "."));
+  return Number.isFinite(n) && n > 0 ? String(n) : "";
+}
+
+/** Texto que se muestra en el option del selector de zona. */
+function zoneOptionLabel(zone: DeliveryZoneRow, activeRate: number | null): string {
+  const isUsd = String(zone.currency_pago ?? "").toUpperCase() === "USD";
+  if (isUsd) {
+    const usd = Number(zone.base_cost_usd ?? 0);
+    if (Number.isFinite(usd) && usd > 0) {
+      const bsStr = activeRate
+        ? ` · Bs ${(usd * activeRate).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        : "";
+      return `${zone.zone_name} · $${usd.toFixed(2)}${bsStr}`;
+    }
+  }
+  const bs = zone.client_price_bs;
+  const bsNum = bs != null ? Number(String(bs).replace(",", ".")) : NaN;
+  const bsLabel = Number.isFinite(bsNum) && bsNum > 0
+    ? ` · Bs ${bsNum.toLocaleString("es-VE", { minimumFractionDigits: 2 })}`
+    : "";
+  return `${zone.zone_name}${bsLabel}`;
+}
 
 function parseProducts(json: unknown): Product[] {
   const o = json as Record<string, unknown> | null;
@@ -500,6 +543,11 @@ export interface QuotePanelProps {
   /** Carga líneas de un borrador ya persistido (p. ej. «Llevar a cotización» desde orden ML). */
   bootstrapDraftQuotationId?: number | null;
   onBootstrapDraftConsumed?: () => void;
+  /**
+   * Resultado de `GET …/quotations/by-sales-order/:id` (items) ya obtenido por el padre.
+   * Evita repetir `GET …/quotations/:chatId` al abrir cotización desde Ventas/Pedidos.
+   */
+  prefetchedInboxQuotationItems?: Array<Record<string, unknown>> | null;
   /** Callback tras crear la cotización con éxito */
   onSuccess?: () => void;
   /** Notifica al padre la cotización activa enviada (id + referencia + total USD) o null si no hay */
@@ -578,6 +626,8 @@ interface SentQuote {
   /** Ya hay parte en Bs conciliada / imputada (base para complemento USD en caja). */
   hasBsReconciledBaseline?: boolean;
   linkedSalesOrderId?: number | null;
+  /** ID de zona de delivery ya asociada (de la cabecera del presupuesto). */
+  delivery_zone_id?: number | string | null;
 }
 
 /** Pierna de pago imputada a la cotización (del listado de imputaciones). */
@@ -621,6 +671,7 @@ export default function QuotePanel({
   onForceOpenConsumed,
   bootstrapDraftQuotationId,
   onBootstrapDraftConsumed,
+  prefetchedInboxQuotationItems,
   onSuccess,
   onSentQuoteChange,
 }: QuotePanelProps) {
@@ -652,7 +703,8 @@ export default function QuotePanel({
       : null;
   const hasBinanceQuote = binanceNum != null && binanceNum > 0;
 
-  const [isOpen, setIsOpen]             = useState(false);
+  /** En modal Pedidos (`forceOpen`) el panel debe abrirse ya expandido. */
+  const [isOpen, setIsOpen]             = useState(() => Boolean(forceOpen));
   const [searchMode, setSearchMode]     = useState<"sku" | "name">("name");
   /** Vista de precios en el armado de la cotización: VES por defecto. */
   const [displayCurrency, setDisplayCurrency] = useState<"VES" | "USD">("VES");
@@ -682,6 +734,14 @@ export default function QuotePanel({
   const [deliveryZonesLoading, setDeliveryZonesLoading] = useState(false);
   const [deliveryZoneId, setDeliveryZoneId] = useState<string>("");
   const [deliveryCostBs, setDeliveryCostBs] = useState<string>("");
+  /** Modal "Incluir delivery en cotización" */
+  const [dlvModalOpen, setDlvModalOpen]       = useState(false);
+  const [dlvZones, setDlvZones]               = useState<DeliveryZoneRow[]>([]);
+  const [dlvZonesLoading, setDlvZonesLoading] = useState(false);
+  const [dlvZoneId, setDlvZoneId]             = useState<string>("");
+  const [dlvCustomBs, setDlvCustomBs]         = useState<string>("");
+  const [dlvSubmitting, setDlvSubmitting]     = useState(false);
+  const [dlvError, setDlvError]               = useState<string | null>(null);
   /** Piernas de pago de la cotización activa */
   const [allocations, setAllocations]   = useState<PaymentAllocation[]>([]);
   /** Formulario de imputación de pago */
@@ -701,6 +761,12 @@ export default function QuotePanel({
   const [cajaUsdOk, setCajaUsdOk] = useState<string | null>(null);
   const searchInputRef                  = useRef<HTMLInputElement>(null);
   const panelRef                        = useRef<HTMLDivElement>(null);
+  /** Una sola vez por montaje cuando el padre ya trajo `by-sales-order`. */
+  const inboxPrefetchConsumedRef        = useRef(false);
+
+  useEffect(() => {
+    inboxPrefetchConsumedRef.current = false;
+  }, [chatId, salesOrderId, prefetchedInboxQuotationItems]);
 
   const loadActiveQuote = useCallback(async () => {
     // Necesitamos al menos un chatId o salesOrderId para buscar.
@@ -708,7 +774,13 @@ export default function QuotePanel({
     try {
       // Lookup primario: por chatId (directo + cross-chat vía sales_order en BD).
       let items: Array<Record<string, unknown>> = [];
-      if (chatId && Number.isFinite(Number(chatId)) && Number(chatId) > 0) {
+      if (
+        prefetchedInboxQuotationItems != null &&
+        !inboxPrefetchConsumedRef.current
+      ) {
+        inboxPrefetchConsumedRef.current = true;
+        items = prefetchedInboxQuotationItems;
+      } else if (chatId && Number.isFinite(Number(chatId)) && Number(chatId) > 0) {
         const r = await fetch(`/api/inbox/quotations/${encodeURIComponent(chatId)}`, {
           credentials: "include",
           cache: "no-store",
@@ -747,6 +819,10 @@ export default function QuotePanel({
             active.linked_sales_order_id != null && active.linked_sales_order_id !== ""
               ? Number(active.linked_sales_order_id)
               : null,
+          delivery_zone_id:
+            active.delivery_zone_id != null && active.delivery_zone_id !== ""
+              ? Number(active.delivery_zone_id)
+              : null,
         });
         setIsOpen(true);
         // Cargar piernas de pago de esta cotización
@@ -763,7 +839,7 @@ export default function QuotePanel({
         setAllocations([]);
       }
     } catch {/* ignore */}
-  }, [chatId]);
+  }, [chatId, salesOrderId, prefetchedInboxQuotationItems]);
 
   // Debounce
   useEffect(() => {
@@ -830,29 +906,62 @@ export default function QuotePanel({
           return;
         }
         const pres = data.presupuesto as Record<string, unknown> | undefined;
+        const chatTrim = String(chatId ?? "").trim();
         if (
+          chatTrim !== "" &&
           pres?.chat_id != null &&
           Number(pres.chat_id) > 0 &&
-          Number(pres.chat_id) !== Number(chatId)
+          Number(pres.chat_id) !== Number(chatTrim)
         ) {
           onBootstrapDraftConsumed?.();
           return;
         }
         const rawLines = (data.lines ?? []) as Record<string, unknown>[];
-        const nextLines: QuoteLine[] = rawLines
-          .map((row, idx) => ({
-            key: `boot-${qid}-${row.id ?? idx}`,
-            product: productStubFromPresupuestoLine(row),
-            cantidad: Number(row.cantidad) > 0 ? Number(row.cantidad) : 1,
-            precio_unitario: Number(row.precio_unitario) >= 0 ? Number(row.precio_unitario) : 0,
-          }))
-          .filter((L) => L.product.id > 0);
-        setSentQuote(null);
-        setReadonlyQuoteLines([]);
-        setQuoteEditing(false);
-        setLines(nextLines);
-        setIsOpen(true);
-        setError(null);
+        const st = String(pres?.status ?? "").toLowerCase();
+        if (["sent", "approved", "rejected"].includes(st)) {
+          // Cotización ya enviada: no reemplazar por editor de borrador (mantiene botón Incluir delivery, pagos, etc.)
+          setReadonlyQuoteLines(rawLines.map(normalizeReadonlyLine));
+          setSentQuote({
+            id: Number(pres?.id ?? qid),
+            reference: String(pres?.reference ?? `COT-${pres?.id ?? qid}`),
+            status: st as SentQuote["status"],
+            total: Number(pres?.total ?? 0),
+            channelId: pres?.channel_id != null ? Number(pres.channel_id) : undefined,
+            paymentVerified: false,
+            paymentFullySettled: false,
+            paymentCoveredUsdEq: undefined,
+            paymentPendingUsdCaja: false,
+            hasBsReconciledBaseline: false,
+            linkedSalesOrderId:
+              pres?.linked_sales_order_id != null && pres.linked_sales_order_id !== ""
+                ? Number(pres.linked_sales_order_id)
+                : null,
+            delivery_zone_id:
+              pres?.delivery_zone_id != null && pres.delivery_zone_id !== ""
+                ? Number(pres.delivery_zone_id)
+                : null,
+          });
+          setLines([]);
+          setQuoteEditing(false);
+          setIsOpen(true);
+          setError(null);
+          await loadActiveQuote();
+        } else {
+          const nextLines: QuoteLine[] = rawLines
+            .map((row, idx) => ({
+              key: `boot-${qid}-${row.id ?? idx}`,
+              product: productStubFromPresupuestoLine(row),
+              cantidad: Number(row.cantidad) > 0 ? Number(row.cantidad) : 1,
+              precio_unitario: Number(row.precio_unitario) >= 0 ? Number(row.precio_unitario) : 0,
+            }))
+            .filter((L) => L.product.id > 0);
+          setSentQuote(null);
+          setReadonlyQuoteLines([]);
+          setQuoteEditing(false);
+          setLines(nextLines);
+          setIsOpen(true);
+          setError(null);
+        }
         setTimeout(() => {
           panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
         }, 80);
@@ -865,16 +974,16 @@ export default function QuotePanel({
     return () => {
       alive = false;
     };
-  }, [bootstrapDraftQuotationId, chatId, onBootstrapDraftConsumed]);
+  }, [bootstrapDraftQuotationId, chatId, onBootstrapDraftConsumed, loadActiveQuote]);
 
-  // Reset cuando cambia el chat
+  // Reset cuando cambia el chat (Pedidos abre el mismo panel con forceOpen → mantener expandido)
   useEffect(() => {
     setLines([]);
     setSearchQuery("");
     setResults([]);
     setError(null);
     setSuccess(false);
-    setIsOpen(false);
+    setIsOpen(Boolean(forceOpen));
     setSentQuote(null);
     setQuoteEditing(false);
     setReadonlyQuoteLines([]);
@@ -890,7 +999,7 @@ export default function QuotePanel({
     setCajaUsdSubmitting(false);
     setCajaUsdError(null);
     setCajaUsdOk(null);
-  }, [chatId, salesOrderId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chatId, salesOrderId, forceOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Notificar al padre la cotización activa
   useEffect(() => {
@@ -1335,6 +1444,85 @@ export default function QuotePanel({
     }
   };
 
+  /** Abre el modal de delivery: carga zonas si hace falta, pre-carga zona ya guardada. */
+  const openDeliveryModal = () => {
+    setDlvError(null);
+    setDlvSubmitting(false);
+    setDlvModalOpen(true);
+
+    const populateZone = (zones: DeliveryZoneRow[]) => {
+      // Si ya hay un item SVC-DELIVERY en la cotización, pre-seleccionar su zona y precio
+      const existingDlv = readonlyQuoteLines.find((l) => String(l.sku ?? "") === "SVC-DELIVERY");
+      if (existingDlv && sentQuote?.delivery_zone_id) {
+        const row = zones.find((z) => String(z.id) === String(sentQuote.delivery_zone_id));
+        if (row) {
+          setDlvZoneId(String(row.id));
+          const preBs = resolveZonePriceBs(row, activeRate);
+          if (preBs) setDlvCustomBs(preBs);
+          return;
+        }
+      }
+      setDlvZoneId("");
+      setDlvCustomBs("");
+    };
+
+    if (dlvZones.length > 0) {
+      populateZone(dlvZones);
+      return;
+    }
+    setDlvZonesLoading(true);
+    void fetch("/api/delivery/zones", { credentials: "include", cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        const raw = (j as { data?: unknown }).data;
+        const zones = Array.isArray(raw) ? (raw as DeliveryZoneRow[]) : [];
+        setDlvZones(zones);
+        populateZone(zones);
+      })
+      .catch(() => setDlvZones([]))
+      .finally(() => setDlvZonesLoading(false));
+  };
+
+  /** Envía POST /api/inbox/quotations/:id/add-delivery y recarga la cotización. */
+  const confirmDelivery = async () => {
+    if (!sentQuote || dlvSubmitting) return;
+    const zid = Number(dlvZoneId);
+    if (!Number.isFinite(zid) || zid <= 0) {
+      setDlvError("Seleccioná una zona de delivery.");
+      return;
+    }
+    setDlvSubmitting(true);
+    setDlvError(null);
+    try {
+      const body: Record<string, unknown> = { zone_id: zid };
+      const customBs = parseFloat(String(dlvCustomBs).replace(",", "."));
+      if (Number.isFinite(customBs) && customBs > 0) body.delivery_client_price_bs = customBs;
+      const res = await fetch(
+        `/api/inbox/quotations/${encodeURIComponent(String(sentQuote.id))}/add-delivery`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          cache: "no-store",
+        }
+      );
+      const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!res.ok) {
+        setDlvError(String(json.message ?? json.error ?? "No se pudo agregar el delivery."));
+        return;
+      }
+      setDlvModalOpen(false);
+      setDlvZoneId("");
+      setDlvCustomBs("");
+      await loadActiveQuote();
+    } catch {
+      setDlvError("Error de red al agregar el delivery.");
+    } finally {
+      setDlvSubmitting(false);
+    }
+  };
+
   const noCustomer = !customerId;
 
   const showPaymentGateway =
@@ -1376,6 +1564,7 @@ export default function QuotePanel({
   }, [showCreateOrderCta]);
 
   return (
+    <>
     <div ref={panelRef} style={OP_FRANJA_SECTION}>
 
       {orderCreatedId != null && (
@@ -1580,6 +1769,23 @@ export default function QuotePanel({
               >
                 Editar
               </OpFranjaActionButton>
+              {!sentQuote.linkedSalesOrderId && (
+                <OpFranjaActionButton
+                  type="button"
+                  variant="neutral"
+                  style={{ whiteSpace: "nowrap", borderColor: "rgba(251,191,36,0.4)", color: "#fbbf24" }}
+                  title={
+                    readonlyQuoteLines.some((l) => String(l.sku ?? "") === "SVC-DELIVERY")
+                      ? "Cambiar el monto de delivery incluido en la cotización"
+                      : "Agregar delivery como línea a la cotización para que el total coincida con el pago del cliente"
+                  }
+                  onClick={openDeliveryModal}
+                >
+                  {readonlyQuoteLines.some((l) => String(l.sku ?? "") === "SVC-DELIVERY")
+                    ? "Cambiar delivery"
+                    : "Incluir delivery"}
+                </OpFranjaActionButton>
+              )}
             </div>
           </div>
 
@@ -2009,11 +2215,8 @@ export default function QuotePanel({
                     setDeliveryZoneId(v);
                     if (v) {
                       const row = deliveryZones.find((z) => String(z.id) === v);
-                      const p = row?.client_price_bs;
-                      if (p != null && String(p).trim() !== "") {
-                        const n = Number(String(p).replace(",", "."));
-                        if (Number.isFinite(n)) setDeliveryCostBs(String(n));
-                      }
+                      const preBs = row ? resolveZonePriceBs(row, activeRate) : "";
+                      if (preBs) setDeliveryCostBs(preBs);
                     } else {
                       setDeliveryCostBs("");
                     }
@@ -2030,7 +2233,7 @@ export default function QuotePanel({
                   <option value="">Sin carrera</option>
                   {deliveryZones.map((z) => (
                     <option key={z.id} value={String(z.id)}>
-                      {z.zone_name}
+                      {zoneOptionLabel(z, activeRate)}
                     </option>
                   ))}
                 </select>
@@ -2684,6 +2887,165 @@ export default function QuotePanel({
       </div>
       )}
     </div>
+
+    {/* ── Modal: Incluir / Cambiar delivery en cotización ──────────────────── */}
+    {dlvModalOpen && (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Delivery en cotización"
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 1200,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "rgba(0,0,0,0.60)",
+          backdropFilter: "blur(3px)",
+        }}
+        onClick={(e) => { if (e.target === e.currentTarget && !dlvSubmitting) setDlvModalOpen(false); }}
+      >
+        <div
+          style={{
+            width: "min(380px, 92vw)",
+            background: "var(--mu-panel-2, #1a2233)",
+            border: "1px solid rgba(251,191,36,0.35)",
+            borderRadius: 12,
+            padding: "20px 20px 16px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 14,
+          }}
+        >
+          {/* Cabecera */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 800, color: "#fbbf24", letterSpacing: "0.06em" }}>
+                DELIVERY EN COTIZACIÓN
+              </div>
+              <div style={{ fontSize: 10, color: "var(--mu-ink-mute, #8b949e)", marginTop: 2 }}>
+                Agrega el envío como línea; el total cotizado quedará alineado con el pago del cliente.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => { if (!dlvSubmitting) setDlvModalOpen(false); }}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--mu-ink-mute, #8b949e)", fontSize: 18, lineHeight: 1, padding: 4 }}
+              aria-label="Cerrar"
+            >
+              ×
+            </button>
+          </div>
+
+          {/* Zona */}
+          <div>
+            <label style={{ display: "block", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", color: "var(--mu-ink-mute, #8b949e)", marginBottom: 5 }}>
+              ZONA DE DELIVERY
+            </label>
+            {dlvZonesLoading ? (
+              <div style={{ fontSize: 10, color: "var(--mu-ink-mute, #8b949e)" }}>Cargando zonas…</div>
+            ) : (
+              <select
+                className="form-select form-select-sm"
+                value={dlvZoneId}
+                disabled={dlvSubmitting}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setDlvZoneId(v);
+                  if (v) {
+                    const row = dlvZones.find((z) => String(z.id) === v);
+                    const preBs = row ? resolveZonePriceBs(row, activeRate) : "";
+                    setDlvCustomBs(preBs);
+                  } else {
+                    setDlvCustomBs("");
+                  }
+                }}
+                style={{
+                  width: "100%",
+                  fontSize: 12,
+                  background: "var(--mu-panel-3, #232a35)",
+                  border: "1px solid var(--mu-border, rgba(255,255,255,0.12))",
+                  color: "var(--mu-text, #e6edf3)",
+                  borderRadius: 6,
+                  padding: "6px 10px",
+                }}
+              >
+                <option value="">— Seleccioná una zona —</option>
+                {dlvZones.map((z) => (
+                  <option key={z.id} value={String(z.id)}>
+                    {zoneOptionLabel(z, activeRate)}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Monto personalizado */}
+          {dlvZoneId !== "" && (
+            <div>
+              <label style={{ display: "block", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", color: "var(--mu-ink-mute, #8b949e)", marginBottom: 5 }}>
+                MONTO AL CLIENTE (Bs.) — editable
+              </label>
+              <input
+                type="text"
+                inputMode="decimal"
+                className="form-control form-control-sm"
+                value={dlvCustomBs}
+                disabled={dlvSubmitting}
+                onChange={(e) => setDlvCustomBs(e.target.value)}
+                placeholder="Ej. 25,00"
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  background: "var(--mu-panel-3, #232a35)",
+                  border: "1px solid rgba(251,191,36,0.35)",
+                  color: "#fbbf24",
+                  borderRadius: 6,
+                  padding: "6px 10px",
+                  width: "100%",
+                }}
+              />
+              <div style={{ fontSize: 9, color: "var(--mu-ink-mute, #8b949e)", marginTop: 4 }}>
+                El monto se convierte a USD con la tasa del día (BCV) y queda como línea "Servicio de Delivery" en la cotización.
+              </div>
+            </div>
+          )}
+
+          {/* Error */}
+          {dlvError && (
+            <div style={{ fontSize: 10, color: "#fca5a5", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 6, padding: "7px 10px" }}>
+              {dlvError}
+            </div>
+          )}
+
+          {/* Acciones */}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 4 }}>
+            <OpFranjaActionButton
+              type="button"
+              variant="neutral"
+              disabled={dlvSubmitting}
+              onClick={() => setDlvModalOpen(false)}
+            >
+              Cancelar
+            </OpFranjaActionButton>
+            <OpFranjaActionButton
+              type="button"
+              variant="accent"
+              disabled={dlvSubmitting || dlvZoneId === ""}
+              loading={dlvSubmitting}
+              loadingLabel="Agregando…"
+              onClick={() => void confirmDelivery()}
+              style={{ background: "rgba(251,191,36,0.15)", borderColor: "rgba(251,191,36,0.5)", color: "#fbbf24" }}
+            >
+              Agregar delivery
+            </OpFranjaActionButton>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 

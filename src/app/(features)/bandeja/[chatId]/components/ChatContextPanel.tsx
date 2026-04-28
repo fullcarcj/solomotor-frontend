@@ -23,6 +23,7 @@ import {
   opFranjaActionButtonStyle,
 } from "@/app/(features)/bandeja/components/operativeFranjaShared";
 import "@/app/(features)/supervisor/supervisor-theme.scss";
+import SaleFromBandejaModal from "./SaleFromBandejaModal";
 
 type ActionType = "quote" | "pay" | "pos" | "dispatch" | null;
 
@@ -160,7 +161,48 @@ function fmtCurrency(amount: number | null, currency: string | null): string {
 /** Delay antes de fetches de paneles secundarios: deja pasar los fetches críticos (mensajes + contexto) */
 const SECONDARY_FETCH_DELAY_MS = 300;
 
-/** Sub-bloque dentro de «Mercado Libre» (franja única). */
+/** Botón «Ir a Pedido» que abre modal de detalle inline + enlace externo ML. */
+function MlOrderNavLinks({
+  mlOrderId,
+  salesOrderId = null,
+  justify = "flex-end",
+}: {
+  mlOrderId: string | number;
+  /** Si ya está en `chat.order.id` lo pasamos como `so-{id}` para saltear el resolve. */
+  salesOrderId?: string | null;
+  justify?: "flex-end" | "flex-start" | "center";
+}) {
+  const [modalOpen, setModalOpen] = useState(false);
+  const id = String(mlOrderId).trim();
+  if (!id) return null;
+  const orderUrl = `https://www.mercadolibre.com.ve/ventas/${id}/detalle`;
+
+  return (
+    <>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", justifyContent: justify }}>
+        <button
+          type="button"
+          className="mu-ficha-link"
+          style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+          onClick={() => setModalOpen(true)}
+        >
+          Ir a Pedido →
+        </button>
+        <a href={orderUrl} target="_blank" rel="noopener noreferrer" className="mu-ficha-link">
+          VER ORDEN EN ML →
+        </a>
+      </div>
+      {modalOpen && (
+        <SaleFromBandejaModal
+          mlOrderId={id}
+          salesOrderId={salesOrderId}
+          onClose={() => setModalOpen(false)}
+        />
+      )}
+    </>
+  );
+}
+
 function MlEmbeddedWrap({
   label,
   first,
@@ -201,6 +243,8 @@ function MlOrderSection({
   panelTitle,
   embedded,
   embeddedFirst,
+  fallbackMlOrderId,
+  salesOrderId = null,
 }: {
   chatId: string;
   panelTitle?: string | null;
@@ -208,6 +252,10 @@ function MlOrderSection({
   embedded?: boolean;
   /** Primer sub-bloque del padre (sin separador superior). */
   embeddedFirst?: boolean;
+  /** Si falla GET ml-order, permite abrir Pedidos / ML con el id del listado de inbox. */
+  fallbackMlOrderId?: string | null;
+  /** `so-{id}` desde `chat.order.id`; salta el resolve en el modal. */
+  salesOrderId?: string | null;
 }) {
   const [loading, setLoading] = useState(true);
   const [data, setData]       = useState<MlOrderData | null>(null);
@@ -262,7 +310,19 @@ function MlOrderSection({
     );
   }
   if (error) {
-    const inner = <p style={{ fontSize: 11, color: "var(--mu-bad)", margin: 0 }}>{error}</p>;
+    const fb = fallbackMlOrderId != null && String(fallbackMlOrderId).trim() !== ""
+      ? String(fallbackMlOrderId).trim()
+      : "";
+    const inner = (
+      <>
+        {fb ? (
+          <div style={{ marginBottom: 8 }}>
+            <MlOrderNavLinks mlOrderId={fb} salesOrderId={salesOrderId} />
+          </div>
+        ) : null}
+        <p style={{ fontSize: 11, color: "var(--mu-bad)", margin: 0 }}>{error}</p>
+      </>
+    );
     if (embedded) {
       return (
         <MlEmbeddedWrap label={titleBar} first={embeddedFirst}>
@@ -279,6 +339,7 @@ function MlOrderSection({
         subtitleHighlight={false}
         defaultOpen
         resetKey={chatId}
+        titleAside={fb ? <MlOrderNavLinks mlOrderId={fb} salesOrderId={salesOrderId} /> : undefined}
       >
         {inner}
       </OperativeFranjaSection>
@@ -292,6 +353,9 @@ function MlOrderSection({
     if (embedded) {
       return (
         <MlEmbeddedWrap label={`${titleBar} · #${data.ml_order_id}`} first={embeddedFirst}>
+          <div style={{ marginBottom: 8 }}>
+            <MlOrderNavLinks mlOrderId={data.ml_order_id} salesOrderId={salesOrderId} />
+          </div>
           {inner}
         </MlEmbeddedWrap>
       );
@@ -305,13 +369,12 @@ function MlOrderSection({
         subtitleHighlight
         defaultOpen
         resetKey={chatId}
+        titleAside={<MlOrderNavLinks mlOrderId={data.ml_order_id} salesOrderId={salesOrderId} />}
       >
         {inner}
       </OperativeFranjaSection>
     );
   }
-
-  const orderUrl = `https://www.mercadolibre.com.ve/ventas/${data.ml_order_id}/detalle`;
 
   const orderBody = (
     <>
@@ -453,10 +516,8 @@ function MlOrderSection({
   if (embedded) {
     return (
       <MlEmbeddedWrap label={titleBar} first={embeddedFirst}>
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-          <a href={orderUrl} target="_blank" rel="noopener noreferrer" className="mu-ficha-link">
-            VER ORDEN EN ML →
-          </a>
+        <div style={{ marginBottom: 8 }}>
+          <MlOrderNavLinks mlOrderId={data.ml_order_id} salesOrderId={salesOrderId} />
         </div>
         {orderBody}
       </MlEmbeddedWrap>
@@ -472,11 +533,7 @@ function MlOrderSection({
       subtitleHighlight
       defaultOpen
       resetKey={chatId}
-      titleAside={(
-        <a href={orderUrl} target="_blank" rel="noopener noreferrer" className="mu-ficha-link">
-          VER ORDEN EN ML →
-        </a>
-      )}
+      titleAside={<MlOrderNavLinks mlOrderId={data.ml_order_id} salesOrderId={salesOrderId} />}
     >
       {orderBody}
     </OperativeFranjaSection>
@@ -969,6 +1026,17 @@ function MercadoLibreOperativeSection({
   const showOrderMlQuestion = isMlQuestionOrigin && chat.order != null;
   const showLinkCta = canLinkMlOrder;
 
+  const inboxMlOidForFallback =
+    chat?.ml_order_id != null && String(chat.ml_order_id).trim() !== ""
+      ? String(chat.ml_order_id).trim()
+      : null;
+
+  /** `so-{n}` si el chat tiene la FK de sales_orders; evita el round-trip resolve en el modal. */
+  const inboxSalesOrderId =
+    chat?.order?.id != null && Number(chat.order.id) > 0
+      ? `so-${String(chat.order.id)}`
+      : null;
+
   const needsOrderFetch =
     showOuter &&
     (showPublicationMlOrderOnly || showPublicationWaMlOrder || showOrderMlQuestion);
@@ -1239,6 +1307,8 @@ function MercadoLibreOperativeSection({
                 panelTitle="Publicación e ítems de la orden"
                 embedded
                 embeddedFirst={nextFirst()}
+                fallbackMlOrderId={inboxMlOidForFallback}
+                salesOrderId={inboxSalesOrderId}
               />
             )}
             {showPublicationWaMlOrder && (
@@ -1247,6 +1317,8 @@ function MercadoLibreOperativeSection({
                 panelTitle="Publicación"
                 embedded
                 embeddedFirst={nextFirst()}
+                fallbackMlOrderId={inboxMlOidForFallback}
+                salesOrderId={inboxSalesOrderId}
               />
             )}
             {showOrderMlQuestion && (
@@ -1255,6 +1327,8 @@ function MercadoLibreOperativeSection({
                 panelTitle="Orden de MercadoLibre"
                 embedded
                 embeddedFirst={nextFirst()}
+                fallbackMlOrderId={inboxMlOidForFallback}
+                salesOrderId={inboxSalesOrderId}
               />
             )}
           </>
@@ -1919,7 +1993,7 @@ export default function ChatContextPanel({
         title="Cliente"
         subtitle={clienteOperativeSubtitle}
         subtitleHighlight={hasCustomer && !loadingCustomer}
-        defaultOpen
+        defaultOpen={!hasCustomer}
         resetKey={chatId}
         titleAside={
           hasCustomer && customerId ? (
@@ -2139,10 +2213,17 @@ export default function ChatContextPanel({
                 <p style={{ color: "var(--mu-ink-mute)", fontSize: 11, margin: 0 }}>Sin órdenes activas</p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {recentOrders.map(o => (
+                  {recentOrders.map(o => {
+                    const ext = o.external_order_id != null && String(o.external_order_id).trim() !== ""
+                      ? String(o.external_order_id).trim()
+                      : "";
+                    const pedidosRowHref =
+                      `/ventas/pedidos?open_ml_pack=${encodeURIComponent(String(o.id).trim())}` +
+                      (ext ? `&ml_ext=${encodeURIComponent(ext)}` : "");
+                    return (
                     <Link
                       key={String(o.id)}
-                      href="/ventas/pedidos"
+                      href={pedidosRowHref}
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -2169,7 +2250,8 @@ export default function ChatContextPanel({
                         <SaleStatusBadge status={o.status} />
                       </div>
                     </Link>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </OperativeFranjaSection>

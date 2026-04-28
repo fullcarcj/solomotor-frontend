@@ -12,10 +12,29 @@ export function isBandejaBffVerbose(): boolean {
   return v === "1" || v === "true" || v === "yes";
 }
 
-/** Base del webhook-receiver (mismo criterio que `api/bandeja/.../messages`). */
+/**
+ * Base del webhook-receiver (mismo criterio que las rutas BFF hacia `/api/inbox/*`).
+ * Si `BACKEND_URL` no trae esquema, **no** asumir TLS: en local el receptor es HTTP (`:3001`)
+ * y `https://localhost:3001` hace fallar `fetch` → 502 «Error de red» en Next.
+ * En producción definir `BACKEND_URL=https://…` explícito.
+ */
 export function receiverBase(): string {
   const r = BACKEND_URL.trim().replace(/\/+$/, "");
-  return /^https?:\/\//i.test(r) ? r : `https://${r}`;
+  if (/^https?:\/\//i.test(r)) return r;
+  try {
+    const u = new URL(`http://${r}`);
+    const h = u.hostname.toLowerCase();
+    const localOrPrivate =
+      h === "localhost" ||
+      h === "127.0.0.1" ||
+      h === "::1" ||
+      /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h) ||
+      /^192\.168\.\d{1,3}\.\d{1,3}$/.test(h) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(h);
+    return localOrPrivate ? `http://${r}` : `https://${r}`;
+  } catch {
+    return `https://${r}`;
+  }
 }
 
 function adminSecret(): string | undefined {

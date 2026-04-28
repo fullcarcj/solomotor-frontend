@@ -30,6 +30,7 @@ function VentasPedidosPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
+
   const salesOrdersSseNonce = useAppSelector((s) => s.realtime.salesOrdersSseNonce);
   const authRole = useAppSelector((s) => s.auth.role);
 
@@ -98,10 +99,20 @@ function VentasPedidosPageInner() {
       saleLabel: `Venta #${sale.id}${
         sale.external_order_id ? ` · ML ${sale.external_order_id}` : ""
       }`,
+      quotationId:
+        sale.quote_preview != null &&
+        Number(sale.quote_preview.id) > 0
+          ? Number(sale.quote_preview.id)
+          : null,
     });
   }, []);
 
-  /** Query opcional (?open_ml_pack= / ?open_ml_order_id=) p. ej. enlaces guardados. */
+  /**
+   * Query opcional:
+   * - `open_ml_pack` / `ml_ext` → modal mensajería pack ML.
+   * - `open_ml_order_id` → resolve + mismo modal (enlaces que deben abrir mensajería).
+   * - `highlight_ml_order_id` → resolve + filtro de búsqueda en grilla, sin modal (p. ej. «Ir a Pedido» desde bandeja).
+   */
   useEffect(() => {
     const stripKeys = (keys: string[]) => {
       const next = new URLSearchParams(searchParams.toString());
@@ -118,8 +129,40 @@ function VentasPedidosPageInner() {
         saleId,
         externalHint: ext != null && String(ext).trim() !== "" ? String(ext).trim() : null,
       });
-      stripKeys(["open_ml_pack", "ml_ext", "open_ml_order_id"]);
+      stripKeys(["open_ml_pack", "ml_ext", "open_ml_order_id", "highlight_ml_order_id"]);
       return;
+    }
+
+    const rawHighlight = searchParams.get("highlight_ml_order_id");
+    if (rawHighlight != null && String(rawHighlight).trim() !== "") {
+      const oid = String(rawHighlight).trim();
+      let cancelled = false;
+      void (async () => {
+        try {
+          const res = await fetch(
+            `/api/ventas/pedidos/resolve-ml-order?ml_order_id=${encodeURIComponent(oid)}`,
+            { credentials: "include", cache: "no-store" }
+          );
+          const j = (await res.json().catch(() => ({}))) as {
+            data?: { id?: string; external_order_id?: string | null };
+            error?: string;
+            message?: string;
+          };
+          if (cancelled) return;
+          if (res.ok && j.data?.id) {
+            const ext =
+              j.data.external_order_id != null && String(j.data.external_order_id).trim() !== ""
+                ? String(j.data.external_order_id).trim()
+                : "";
+            setSearch(ext !== "" ? ext : oid);
+          }
+        } finally {
+          if (!cancelled) stripKeys(["highlight_ml_order_id"]);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
     }
 
     const rawMlOid = searchParams.get("open_ml_order_id");
@@ -150,7 +193,7 @@ function VentasPedidosPageInner() {
           });
         }
       } finally {
-        if (!cancelled) stripKeys(["open_ml_order_id"]);
+        if (!cancelled) stripKeys(["open_ml_order_id", "highlight_ml_order_id"]);
       }
     })();
 

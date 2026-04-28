@@ -47,7 +47,7 @@ export type BandejaMlQuestionOrderLike = {
   payment_status?: string | null;
 };
 
-/** Datos mínimos para detectar hilo “solo pregunta ML” y aplicar reglas de pipeline / UI. */
+/** Datos mínimos para detectar hilo "solo pregunta ML" y aplicar reglas de pipeline / UI. */
 export type MlQuestionThreadChatInput = {
   source_type?:     string;
   phone?:           string;
@@ -80,7 +80,7 @@ export function isMlQuestionThreadChat(
   return false;
 }
 
-/** Mínimo para decidir si forzar “contacto” en pregunta ML (bandeja / header). */
+/** Minimo para decidir si forzar "contacto" en pregunta ML (bandeja / header). */
 export type BandejaMlQuestionStageInput = MlQuestionThreadChatInput & {
   customer_id?: number | string | null;
   order?:        unknown;
@@ -117,18 +117,36 @@ const ML_QUESTION_GATE_STAGES: ReadonlySet<ChatStage> = new Set([
 ]);
 
 /**
- * Pregunta ML: no mostrar etapas “Con orden” en adelante sin cliente CRM y una
- * `sales_orders` activa (mismo criterio que lista inbox en backend).
+ * Normaliza el stage del pipeline para chats ML según el estado real de la orden.
  *
- * Sin cliente o sin orden en contexto → contacto. Con orden inactiva (cerrada /
- * cancelada / pago rechazado) se dejan `quote` y `closed`; se baja a contacto
- * si el backend marcó `order` | `payment` | `dispatch` sin pedido activo.
+ * - `ml_message` (post-venta): si la orden vinculada está completada o cancelada
+ *   muestra `closed`, evitando la contradicción entre "CONTACTO" en bandeja y
+ *   "CERRADA COMPLETADA" en el modal "Ir a pedido". Orden activa → chat_stage tal cual.
+ *
+ * - `ml_question`: no mostrar etapas "Con orden" en adelante sin cliente CRM y una
+ *   sales_orders activa. Sin cliente o sin orden → contacto. Con orden inactiva
+ *   (cerrada / cancelada / pago rechazado): baja a contacto si el backend marcó
+ *   `order` | `payment` | `dispatch` sin pedido activo.
  */
 export function bandejaMlQuestionPipelineStage(
   raw: string | null | undefined,
   chat: BandejaMlQuestionStageInput | null | undefined
 ): ChatStage | undefined {
-  if (!chat || !isMlQuestionThreadChat(chat)) return normalizeChatStage(raw);
+  if (!chat) return normalizeChatStage(raw);
+
+  // ml_message: sincronizar pipeline con el estado real de la orden ERP vinculada
+  if (String(chat.source_type ?? "").trim() === "ml_message") {
+    const order = asOrderLike(chat.order);
+    if (order != null && !isBandejaSalesOrderActiveForPipeline(order)) {
+      // Orden completada o cancelada → pipeline cerrado en bandeja
+      return normalizeChatStage("closed");
+    }
+    // Orden activa o sin orden → pasar chat_stage del backend sin modificar
+    return normalizeChatStage(raw);
+  }
+
+  // ml_question y demás orígenes
+  if (!isMlQuestionThreadChat(chat)) return normalizeChatStage(raw);
   const cid = chat.customer_id != null ? Number(chat.customer_id) : NaN;
   const sinCliente = !Number.isFinite(cid) || cid <= 0;
   const order = asOrderLike(chat.order);

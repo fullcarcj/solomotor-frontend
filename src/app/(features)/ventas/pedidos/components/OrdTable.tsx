@@ -9,12 +9,19 @@ import {
   type ReactNode,
 } from "react";
 import type { Sale, ItemPreview, QuotePreview } from "@/types/sales";
-import { usePedidosCustomerContact } from "./PedidosCustomerBlock";
+import {
+  usePedidosCustomerContact,
+  PedidosCustomerContactView,
+} from "./PedidosCustomerBlock";
 import {
   paymentOptionsForSale,
   effectivePaymentSelectValue,
   DEFAULT_VES_PAYMENT,
 } from "../paymentMethodCatalog";
+import {
+  saleCanOpenQuoteModal,
+  saleHasActiveQuotePreview,
+} from "@/lib/saleQuoteAccess";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -510,56 +517,129 @@ function ProductsCell({ items, quotePreview, compact = false, footerActions }: P
   const orderItems = items ?? [];
 
   if (hasQuote) {
-    const displayItems = quoteItems.length > 0 ? quoteItems : orderItems;
+    const displayItems = quoteItems.length > 0 ? quoteItems : [];
     const totalStr = quotePreview.total != null ? `$${fmtUsd(quotePreview.total)}` : "";
-    const countExtra =
-      quotePreview.items_count > displayItems.length
-        ? quotePreview.items_count - displayItems.length
+    const hasOrderPreview = orderItems.length > 0;
+    const firstOrder = hasOrderPreview ? orderItems[0] : null;
+    const orderMoreCount = hasOrderPreview ? orderItems.length - 1 : 0;
+    const firstQuote = displayItems.length > 0 ? displayItems[0] : null;
+    const quoteMoreCount =
+      firstQuote != null && quotePreview.items_count > 1
+        ? quotePreview.items_count - 1
         : 0;
 
     return (
-      <div className={`c-products c-products--quote${compact ? " c-products--compact" : ""}`}>
-        <div className="prod-quote-badge">
-          <i className="ti ti-file-check" aria-hidden="true" />
-          <span className="prod-quote-badge__lbl">Cotización</span>
-          {quotePreview.status && (
-            <span className={`prod-quote-badge__status qs-${quotePreview.status}`}>
-              {quotePreview.status}
-            </span>
-          )}
-          {totalStr && <span className="prod-quote-badge__total">{totalStr}</span>}
-        </div>
-
-        <div className="prod-thumbs-row">
-          {displayItems.slice(0, 3).map((item, idx) => (
-            <div key={idx} className="prod-thumb-wrap" title={`${item.name} × ${item.qty}`}>
-              <ProductThumb url={item.image_url} name={item.name} />
-              {item.qty > 1 && (
-                <span className="prod-thumb-qty">×{item.qty}</span>
-              )}
-            </div>
-          ))}
-          {countExtra > 0 && (
-            <div className="prod-thumb-more">+{countExtra}</div>
-          )}
-        </div>
-
-        {!compact && displayItems.length > 0 && (
-          <div className="prod-list">
-            {displayItems.slice(0, 2).map((item, idx) => (
-              <div key={idx} className="prod-item">
-                <span className="qt">×{item.qty}</span>
-                <div className="body">
-                  <div className="n">{item.name || item.sku}</div>
-                  {item.sku && <div className="s">{item.sku}</div>}
+      <div
+        className={`c-products c-products--quote${hasOrderPreview ? " c-products--quote-with-order" : ""}${compact ? " c-products--compact" : ""}`}
+      >
+        {firstOrder ? (
+          <div className="prod-order-stack">
+            <div className="prod-order-hero">
+              <div className="prod-order-hero__thumb">
+                <div className="prod-thumb-wrap prod-thumb-wrap--order prod-thumb-wrap--hero">
+                  <ProductThumb
+                    url={firstOrder.image_url}
+                    name={firstOrder.name}
+                  />
                 </div>
-                {item.unit_price_usd != null && (
-                  <span className="pr">${fmtUsd(item.unit_price_usd)}</span>
-                )}
               </div>
-            ))}
+              <div className="prod-order-hero__body">
+                <div
+                  className="prod-order-hero__title"
+                  title={String(firstOrder.name || firstOrder.sku || "").trim() || undefined}
+                >
+                  {String(firstOrder.name || firstOrder.sku || "—").trim() || "—"}
+                </div>
+                <div className="prod-order-hero__row2">
+                  <div className="prod-order-hero__row2-left">
+                    {orderMoreCount > 0 ? (
+                      <span className="prod-order-hero__more" title="Ítems adicionales en la orden">
+                        +{orderMoreCount}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="prod-order-hero__skuqty">
+                    {firstOrder.sku &&
+                    String(firstOrder.sku).trim() !== "" &&
+                    String(firstOrder.sku).trim() !== String(firstOrder.name ?? "").trim() ? (
+                      <span className="prod-order-hero__sku">{String(firstOrder.sku).trim()}</span>
+                    ) : null}
+                    <span className="prod-order-hero__qty">×{firstOrder.qty}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        )}
+        ) : null}
+
+        <div
+          className="prod-quote-stack"
+          aria-label={[
+            "Cotización",
+            quotePreview.status,
+            totalStr || undefined,
+          ]
+            .filter((x) => x != null && String(x).trim() !== "")
+            .join(" · ")}
+        >
+          {firstQuote ? (
+            <div className="prod-quote-hero">
+              <div className="prod-quote-hero__thumb">
+                <div className="prod-thumb-wrap prod-thumb-wrap--quote prod-thumb-wrap--hero">
+                  <ProductThumb
+                    url={firstQuote.image_url}
+                    name={firstQuote.name}
+                  />
+                </div>
+              </div>
+              <div className="prod-quote-hero__body">
+                <div
+                  className="prod-quote-hero__title"
+                  title={String(firstQuote.name || firstQuote.sku || "").trim() || undefined}
+                >
+                  {String(firstQuote.name || firstQuote.sku || "—").trim() || "—"}
+                </div>
+                <div className="prod-quote-hero__row2">
+                  <div className="prod-quote-hero__row2-left">
+                    {quoteMoreCount > 0 ? (
+                      <span className="prod-quote-hero__more" title="Ítems adicionales en el presupuesto">
+                        +{quoteMoreCount}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="prod-quote-hero__skuqty">
+                    {firstQuote.sku &&
+                    String(firstQuote.sku).trim() !== "" &&
+                    String(firstQuote.sku).trim() !== String(firstQuote.name ?? "").trim() ? (
+                      <span className="prod-quote-hero__sku">{String(firstQuote.sku).trim()}</span>
+                    ) : null}
+                    <span className="prod-quote-hero__qty">×{firstQuote.qty}</span>
+                    {totalStr ? (
+                      <span className="prod-quote-hero__tot">{totalStr}</span>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="prod-quote-hero prod-quote-hero--empty">
+              <div className="prod-quote-hero__body prod-quote-hero__body--no-thumb">
+                <div className="prod-quote-hero__title">
+                  {quotePreview.items_count > 0
+                    ? `${quotePreview.items_count} ítem(es) en cotización`
+                    : "Cotización"}
+                </div>
+                <div className="prod-quote-hero__row2">
+                  <div className="prod-quote-hero__row2-left" />
+                  <div className="prod-quote-hero__skuqty">
+                    {totalStr ? <span className="prod-quote-hero__tot">{totalStr}</span> : null}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
         {footerActions ? <ProductsCellFooter>{footerActions}</ProductsCellFooter> : null}
       </div>
     );
@@ -674,6 +754,15 @@ function isSoOmnichannelId(id: string | number | null | undefined): boolean {
   return /^so-\d+$/i.test(String(id ?? "").trim());
 }
 
+/** Línea de detalle de conciliación: solo valor (sin etiqueta). */
+function ReconValLine({ children }: { children: ReactNode }) {
+  return (
+    <div className="c-pago-recon__ln c-pago-recon__ln--val-only">
+      <span className="c-pago-recon__mono">{children}</span>
+    </div>
+  );
+}
+
 function PedidosPaymentReconcileBlock({
   sale,
   onReconcile,
@@ -693,49 +782,49 @@ function PedidosPaymentReconcileBlock({
   const pa = pr?.payment_attempt;
   const fu = pa?.firebase_url?.trim() ?? "";
 
-  const reconWhenLine =
+  /** Monto + referencia visibles fuera del acordeón (prioridad extracto bancario, luego comprobante WA). */
+  let prominentAmount: string | null = null;
+  let prominentRef: string | null = null;
+  if (linked) {
+    if (b && b.amount != null && String(b.amount).trim() !== "") {
+      prominentAmount = fmtReconMoneyBs(b.amount);
+      if (b.reference_number != null && String(b.reference_number).trim() !== "") {
+        prominentRef = String(b.reference_number).trim();
+      }
+    } else if (pa?.extracted_amount_bs != null && String(pa.extracted_amount_bs).trim() !== "") {
+      prominentAmount = fmtReconMoneyBs(pa.extracted_amount_bs);
+      if (pa.extracted_reference != null && String(pa.extracted_reference).trim() !== "") {
+        prominentRef = String(pa.extracted_reference).trim();
+      }
+    }
+    if (!prominentRef && !pr && sale.reconciled_statement_id != null) {
+      prominentRef = `#${sale.reconciled_statement_id}`;
+    }
+  }
+
+  const reconWhenVal =
     pr?.created_at != null && String(pr.created_at).trim() !== "" ? (
-      <div className="c-pago-recon__ln c-pago-recon__ln--when">
-        <span className="lb">Registro</span>
-        <span className="c-pago-recon__mono" title="Registro en auditoría">
-          {fmtReconDateTime(pr.created_at)}
-        </span>
-      </div>
+      <ReconValLine>{fmtReconDateTime(pr.created_at)}</ReconValLine>
     ) : null;
 
   const reconFallbackExtract =
     !pr && sale.reconciled_statement_id != null ? (
-      <div className="c-pago-recon__ln">
-        <span className="lb">Extracto</span>
-        <span className="c-pago-recon__mono">#{sale.reconciled_statement_id}</span>
-      </div>
+      <ReconValLine>#{sale.reconciled_statement_id}</ReconValLine>
     ) : null;
 
   const reconBankBlock = b ? (
     <div className="c-pago-recon__bank">
       {b.tx_date != null && String(b.tx_date).trim() !== "" ? (
-        <div className="c-pago-recon__ln">
-          <span className="lb">Fecha movimiento</span>
-          <span className="c-pago-recon__mono">
-            {fmtReconDateTime(String(b.tx_date))}
-          </span>
-        </div>
+        <ReconValLine>{fmtReconDateTime(String(b.tx_date))}</ReconValLine>
       ) : null}
-      <div className="c-pago-recon__ln">
-        <span className="lb">Monto</span>
-        <span className="c-pago-recon__mono">{fmtReconMoneyBs(b.amount)}</span>
-      </div>
+      {b.amount != null && String(b.amount).trim() !== "" ? (
+        <ReconValLine>{fmtReconMoneyBs(b.amount)}</ReconValLine>
+      ) : null}
       {b.reference_number != null && String(b.reference_number).trim() !== "" ? (
-        <div className="c-pago-recon__ln">
-          <span className="lb">Referencia</span>
-          <span className="c-pago-recon__mono">{String(b.reference_number)}</span>
-        </div>
+        <ReconValLine>{String(b.reference_number)}</ReconValLine>
       ) : null}
       {b.payment_type != null && String(b.payment_type).trim() !== "" ? (
-        <div className="c-pago-recon__ln">
-          <span className="lb">Tipo</span>
-          <span>{String(b.payment_type)}</span>
-        </div>
+        <ReconValLine>{String(b.payment_type)}</ReconValLine>
       ) : null}
       {b.description != null && String(b.description).trim() !== "" ? (
         <div className="c-pago-recon__desc" title={String(b.description)}>
@@ -754,44 +843,22 @@ function PedidosPaymentReconcileBlock({
       (pa.extracted_date != null && String(pa.extracted_date).trim() !== "") ||
       (pa.extracted_reference != null && String(pa.extracted_reference).trim() !== "")) ? (
       <div className="c-pago-recon__wa">
-        <div className="c-pago-recon__ln">
-          <span className="lb">Comprobante</span>
-        </div>
         {pa.extracted_amount_bs != null ? (
-          <div className="c-pago-recon__ln">
-            <span className="lb">Monto (IA)</span>
-            <span className="c-pago-recon__mono">
-              {fmtReconMoneyBs(pa.extracted_amount_bs)}
-            </span>
-          </div>
+          <ReconValLine>{fmtReconMoneyBs(pa.extracted_amount_bs)}</ReconValLine>
         ) : null}
         {pa.extracted_date != null && String(pa.extracted_date).trim() !== "" ? (
-          <div className="c-pago-recon__ln">
-            <span className="lb">Fecha</span>
-            <span className="c-pago-recon__mono">
-              {fmtReconDateTime(String(pa.extracted_date))}
-            </span>
-          </div>
+          <ReconValLine>{fmtReconDateTime(String(pa.extracted_date))}</ReconValLine>
         ) : null}
         {pa.extracted_reference != null && String(pa.extracted_reference).trim() !== "" ? (
-          <div className="c-pago-recon__ln">
-            <span className="lb">Ref.</span>
-            <span className="c-pago-recon__mono">{String(pa.extracted_reference)}</span>
-          </div>
+          <ReconValLine>{String(pa.extracted_reference)}</ReconValLine>
         ) : null}
         {pa.extracted_bank != null && String(pa.extracted_bank).trim() !== "" ? (
-          <div className="c-pago-recon__ln">
-            <span className="lb">Banco</span>
-            <span>{String(pa.extracted_bank)}</span>
-          </div>
+          <ReconValLine>{String(pa.extracted_bank)}</ReconValLine>
         ) : null}
         {pa.extracted_payment_type != null && String(pa.extracted_payment_type).trim() !== "" ? (
-          <div className="c-pago-recon__ln">
-            <span className="lb">Medio</span>
-            <span>{String(pa.extracted_payment_type)}</span>
-          </div>
+          <ReconValLine>{String(pa.extracted_payment_type)}</ReconValLine>
         ) : null}
-        {fu && auto ? (
+        {fu && linked ? (
           <a
             href={fu}
             target="_blank"
@@ -799,26 +866,27 @@ function PedidosPaymentReconcileBlock({
             className="c-pago-recon__img-a"
             onClick={(e) => e.stopPropagation()}
           >
-            <img src={fu} alt="Comprobante (conciliación automática)" className="c-pago-recon__thumb" />
+            <img
+              src={fu}
+              alt={auto ? "Comprobante (conciliación automática)" : "Comprobante (conciliación manual)"}
+              className="c-pago-recon__thumb"
+            />
           </a>
         ) : null}
       </div>
     ) : null;
 
-  const reconDetailCore = (
+  const reconDetailPanel = (
     <>
+      {reconWhenVal}
       {reconFallbackExtract}
       {reconBankBlock}
       {reconWaBlock}
     </>
   );
 
-  const reconDetailPanelAuto = (
-    <>
-      {reconWhenLine}
-      {reconDetailCore}
-    </>
-  );
+  const detailsCls =
+    `c-pago-recon-details${auto ? " c-pago-recon-details--auto" : " c-pago-recon-details--manual"}`;
 
   return (
     <div
@@ -826,59 +894,58 @@ function PedidosPaymentReconcileBlock({
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      {linked ? (
+      {linked && (prominentAmount != null || prominentRef != null) ? (
         <div
-          className="logi-stock-dispatch-row logi-stock-dispatch-row--forced-row c-pago-recon-statusline"
+          className="c-pago-recon-prominent"
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <span className="logi-stock ok">
-            <span className="d" />
-            Pago vinculado
-          </span>
+          {prominentAmount != null ? (
+            <div className="c-pago-recon-prominent__amt">{prominentAmount}</div>
+          ) : null}
+          {prominentRef != null ? (
+            <div className="c-pago-recon-prominent__ref" title={prominentRef}>
+              {prominentRef}
+            </div>
+          ) : null}
         </div>
       ) : null}
-      {linked && auto ? (
+      {linked ? (
         <details
-          className="c-pago-recon-details"
+          className={detailsCls}
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
         >
           <summary
             className="c-pago-recon-details__summary"
             onClick={(e) => e.stopPropagation()}
+            aria-label={auto ? "Ver más datos de conciliación automática" : "Ver más datos de conciliación manual"}
           >
-            <span className="c-pago-recon-details__sum-lb">Conciliación automática</span>
+            <span className="c-pago-recon-details__sum-lb">
+              {auto ? "Automática" : "Manual"}
+            </span>
             <i className="ti ti-chevron-down c-pago-recon-details__chev" aria-hidden="true" />
           </summary>
-          <div className="c-pago-recon-details__panel">{reconDetailPanelAuto}</div>
+          <div className="c-pago-recon-details__panel">{reconDetailPanel}</div>
         </details>
-      ) : linked ? (
-        <div className="c-pago-recon__summary">
-          <div className="c-pago-recon__head">
-            <span className="c-pago-recon__mode is-manual">Conciliación manual</span>
-            {pr?.created_at ? (
-              <span className="c-pago-recon__when" title="Registro en auditoría">
-                {fmtReconDateTime(pr.created_at)}
-              </span>
-            ) : null}
-          </div>
-          {reconDetailCore}
-        </div>
       ) : null}
       <div className="pd-col-act-row pd-col-act-row--start c-pago-recon__btn-row">
         <button
           type="button"
           className="c-client-edit-btn"
           disabled={!canBankReconcile}
-          aria-label={`Vincular pago para orden #${sale.id}`}
+          aria-label={
+            linked
+              ? `Asociar otro pago o extracto a la orden #${sale.id}`
+              : `Vincular pago para orden #${sale.id}`
+          }
           title={
             !canBankReconcile
               ? !soOmnichannel
                 ? "Solo pedidos omnicanal (so-*)."
                 : "Sin acción de conciliación disponible."
               : linked
-                ? "Pago ya conciliado. Vincular otro extracto."
+                ? "Vincular otro extracto o ajuste de conciliación."
                 : "Vincular pago bancario a esta orden"
           }
           onClick={(e) => {
@@ -888,7 +955,7 @@ function PedidosPaymentReconcileBlock({
           }}
         >
           <i className="ti ti-credit-card" aria-hidden="true" />
-          {linked ? "Conciliado" : "Vincular pago"}
+          {linked ? "Asociar otro" : "Vincular pago"}
         </button>
       </div>
     </div>
@@ -940,6 +1007,83 @@ function TotalUsdEquivLines({
         </div>
       )}
     </div>
+  );
+}
+
+/** ML con cotización: totales de presupuesto (mismo formato que columna Total) dentro de details. */
+function MlQuoteTotalsDetails({
+  saleForEquiv,
+  quoteTotUsdNum,
+  bcvRate,
+  binanceRate,
+  variant = "table",
+}: {
+  saleForEquiv: Sale;
+  quoteTotUsdNum: number;
+  bcvRate: number | null;
+  binanceRate: number | null;
+  variant?: "table" | "card";
+}) {
+  const quoteVes =
+    bcvRate != null && Number(bcvRate) > 0
+      ? quoteTotUsdNum * Number(bcvRate)
+      : 0;
+  const showQuoteVes = quoteVes > 0;
+  const cls =
+    variant === "card"
+      ? "c-total-q-details c-total-q-details--card"
+      : "c-total-q-details";
+  return (
+    <details
+      className={cls}
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      <summary
+        className="c-total-q-details__sum"
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        aria-label="Ver totales de cotización (presupuesto CRM)"
+      >
+        <span className="c-total-q-details__sum-lb">Cotización</span>
+        <i className="ti ti-chevron-down c-total-q-details__chev" aria-hidden="true" />
+      </summary>
+      <div
+        className="c-total-q-details__panel"
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="c-total-q-details__hint small text-muted">Total cotización</div>
+        {quoteTotUsdNum > 0 ? (
+          <div className="total-usd">
+            <span className="c">USD</span>
+            {quoteTotUsdNum.toLocaleString("es-VE", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+          </div>
+        ) : null}
+        <div className="total-ves total-ves--in-quote-details">
+          <span className="c">{showQuoteVes ? "Bs." : "USD"}</span>
+          {showQuoteVes
+            ? quoteVes.toLocaleString("es-VE", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })
+            : quoteTotUsdNum > 0
+              ? quoteTotUsdNum.toLocaleString("es-VE", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })
+              : "—"}
+        </div>
+        <TotalUsdEquivLines
+          sale={saleForEquiv}
+          bcvRate={bcvRate}
+          binanceRate={binanceRate}
+        />
+      </div>
+    </details>
   );
 }
 
@@ -1001,6 +1145,23 @@ function OrdRow({
   const vendorIni = vendor ? initials(vendor) : "—";
   const vendorAv = avColor(vendor || String(sale.id));
 
+  const custLabel =
+    sale.customer_name && sale.customer_name.trim() !== ""
+      ? sale.customer_name.trim()
+      : sale.customer_id != null
+        ? `Cliente #${sale.customer_id}`
+        : "Consumidor final";
+  const custIni = (() => {
+    if (sale.customer_name && sale.customer_name.trim() !== "") {
+      const parts = sale.customer_name.trim().split(/\s+/);
+      return parts.length >= 2
+        ? (parts[0][0] + parts[1][0]).toUpperCase()
+        : parts[0].slice(0, 2).toUpperCase();
+    }
+    return sale.customer_id != null ? `C${String(sale.customer_id).slice(-2)}` : "CF";
+  })();
+  const custAv = avColor(custLabel);
+
   // Totals — distinguir órdenes nativas VES (ML Venezuela) de órdenes en USD
   const isNativeVes = sale.rate_type === "NATIVE_VES";
   const vesAmt = isNativeVes
@@ -1010,6 +1171,28 @@ function OrdRow({
         : 0);
   const usd = isNativeVes ? 0 : (Number(sale.total_usd) || 0);
   const showVes = vesAmt > 0;
+
+  /**
+   * ML + cotización: totales visibles = orden ML (Bs verde grande como antes).
+   * Montos del presupuesto CRM en `MlQuoteTotalsDetails` (expandible).
+   */
+  const useMlQuoteTotals =
+    isMl &&
+    sale.quote_preview != null &&
+    Number(sale.quote_preview.id) > 0 &&
+    sale.quote_preview.total != null &&
+    Number.isFinite(Number(sale.quote_preview.total)) &&
+    Number(sale.quote_preview.total) > 0;
+  const quoteTotUsdNum = useMlQuoteTotals ? Number(sale.quote_preview!.total) : null;
+  const saleForEquivQuote: Sale =
+    useMlQuoteTotals && quoteTotUsdNum != null && bcvRate != null && Number(bcvRate) > 0
+      ? {
+          ...sale,
+          total_amount_bs: quoteTotUsdNum * Number(bcvRate),
+          order_total_amount: quoteTotUsdNum,
+          rate_type: undefined as unknown as Sale["rate_type"],
+        }
+      : sale;
 
   const canSubmitMlSellerFeedback =
     Boolean(onOpenMlSellerFeedback) &&
@@ -1023,9 +1206,8 @@ function OrdRow({
     canSubmitMlSellerFeedback;
 
   const canOpenQuote =
-    Boolean(onOpenQuote) &&
-    (isMl ||
-      (sale.chat_id != null && String(sale.chat_id).trim() !== ""));
+    Boolean(onOpenQuote) && saleCanOpenQuoteModal(sale);
+  const hasActiveQuotePreview = saleHasActiveQuotePreview(sale);
 
   /** Listado omnicanal: ids `so-<n>` editan pago y logística; `pos-*` y otros quedan solo lectura. */
   const canEditFulfillment = isSoOmnichannelId(sale.id);
@@ -1037,7 +1219,7 @@ function OrdRow({
     }
   };
 
-  /** Editar cliente + ML mensajería (antes en col. Cliente; sin enlace “Cliente” a bandeja). */
+  /** Sin botón “Cliente” a bandeja; se mantiene Editar + Mensajería ML. */
   const clientActionsRow =
     custContact.editClientButton != null || (isMl && onOpenMlMessaging) ? (
       <div
@@ -1122,35 +1304,61 @@ function OrdRow({
             items={sale.items_preview}
             quotePreview={sale.quote_preview}
             footerActions={
-              <>
-                {clientActionsRow}
-                {canOpenQuote ? (
-                  <button
-                    type="button"
-                    className="c-client-edit-btn"
-                    aria-label={`Cotización orden #${sale.id}`}
-                    title={
-                      sale.chat_id != null && String(sale.chat_id).trim() !== ""
-                        ? "Abrir cotización CRM (mismo presupuesto que en Bandeja)."
+              canOpenQuote ? (
+                <button
+                  type="button"
+                  className="c-client-edit-btn"
+                  aria-label={
+                    hasActiveQuotePreview
+                      ? `Editar cotización de la orden #${sale.id}`
+                      : `Cotización orden #${sale.id}`
+                  }
+                  title={
+                    sale.chat_id != null && String(sale.chat_id).trim() !== ""
+                      ? hasActiveQuotePreview
+                        ? "Editar el presupuesto en CRM (mismo que en Bandeja)."
+                        : "Abrir cotización CRM (mismo presupuesto que en Bandeja)."
+                      : hasActiveQuotePreview
+                        ? "Editar cotización: se abre el presupuesto vinculado a este pedido."
                         : "Mercado Libre: abrí la cotización. Si falta chat CRM, vinculá la conversación en Bandeja."
-                    }
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenQuote!(sale);
-                    }}
-                  >
-                    <i className="ti ti-file-invoice" aria-hidden="true" />
-                    Cotización
-                  </button>
-                ) : null}
-              </>
+                  }
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenQuote!(sale);
+                  }}
+                >
+                  <i className="ti ti-file-invoice" aria-hidden="true" />
+                  {hasActiveQuotePreview ? "Editar cotización" : "Cotización"}
+                </button>
+              ) : null
             }
           />
         </td>
 
-        {/* Col 3 · Total (sin columna Cliente en listado) */}
+        {/* Col 3 · Cliente */}
+        <td data-label="Cliente" className="ord-col-cliente">
+          <>
+            <PedidosCustomerContactView
+              variant="table"
+              sale={sale}
+              custLabel={custLabel}
+              custIni={custIni}
+              custAv={custAv}
+              phonesBlock={custContact.phonesBlock}
+              clientActions={clientActionsRow}
+            />
+            {custContact.editModal}
+          </>
+        </td>
+
+        {/* Col 4 · Total */}
         <td data-label="Total" style={{ textAlign: "left" }}>
           <div className="c-total">
+            {useMlQuoteTotals ? (
+              <div className="small text-muted mb-1" style={{ fontSize: "0.7rem" }}>
+                Orden ML
+              </div>
+            ) : null}
             {usd > 0 && (
               <div className="total-usd">
                 <span className="c">USD</span>
@@ -1183,6 +1391,15 @@ function OrdRow({
               bcvRate={bcvRate}
               binanceRate={binanceRate}
             />
+            {useMlQuoteTotals && quoteTotUsdNum != null && quoteTotUsdNum > 0 ? (
+              <MlQuoteTotalsDetails
+                saleForEquiv={saleForEquivQuote}
+                quoteTotUsdNum={quoteTotUsdNum}
+                bcvRate={bcvRate}
+                binanceRate={binanceRate}
+                variant="table"
+              />
+            ) : null}
           </div>
         </td>
 
@@ -1311,7 +1528,7 @@ function OrdRow({
         aria-hidden="true"
         onClick={() => onRowClick(sale.id)}
       >
-        <td className="ord-card" colSpan={6}>
+        <td className="ord-card" colSpan={7}>
           <div className="ord-card-inner">
             <div className="ord-card-header">
               <div className="ord-card-source-line">
@@ -1347,45 +1564,82 @@ function OrdRow({
                 quotePreview={sale.quote_preview}
                 compact
                 footerActions={
-                  <>
-                    {clientActionsRow}
-                    {canOpenQuote ? (
-                      <button
-                        type="button"
-                        className="c-client-edit-btn"
-                        aria-label={`Cotización orden #${sale.id}`}
-                        title={
-                          sale.chat_id != null &&
-                          String(sale.chat_id).trim() !== ""
-                            ? "Cotización CRM (Bandeja)."
+                  canOpenQuote ? (
+                    <button
+                      type="button"
+                      className="c-client-edit-btn"
+                      aria-label={
+                        hasActiveQuotePreview
+                          ? `Editar cotización orden #${sale.id}`
+                          : `Cotización orden #${sale.id}`
+                      }
+                      title={
+                        sale.chat_id != null &&
+                        String(sale.chat_id).trim() !== ""
+                          ? hasActiveQuotePreview
+                            ? "Editar presupuesto CRM (Bandeja)."
+                            : "Cotización CRM (Bandeja)."
+                          : hasActiveQuotePreview
+                            ? "Editar cotización vinculada a este pedido."
                             : "Cotización ML — vinculá el chat en Bandeja si falta."
-                        }
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onOpenQuote!(sale);
-                        }}
-                      >
-                        <i className="ti ti-file-invoice" aria-hidden="true" />
-                        Cotiz.
-                      </button>
-                    ) : null}
-                  </>
+                      }
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenQuote!(sale);
+                      }}
+                    >
+                      <i className="ti ti-file-invoice" aria-hidden="true" />
+                      {hasActiveQuotePreview ? "Editar c." : "Cotiz."}
+                    </button>
+                  ) : null
                 }
+              />
+              <PedidosCustomerContactView
+                variant="card"
+                sale={sale}
+                custLabel={custLabel}
+                custIni={custIni}
+                custAv={custAv}
+                phonesBlock={custContact.phonesBlock}
+                clientActions={clientActionsRow}
               />
             </div>
 
             <div className="ord-card-totals" onClick={(e) => e.stopPropagation()}>
               <div className="ord-card-total-stack">
+                {useMlQuoteTotals ? (
+                  <span className="small text-muted d-block mb-1" style={{ fontSize: "0.65rem" }}>
+                    Orden ML
+                  </span>
+                ) : null}
                 <span className="ord-card-ves">
                   {usd > 0
                     ? `$${usd.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                     : "—"}
                 </span>
+                {showVes && (
+                  <span className="ord-card-ves d-block" style={{ fontSize: "0.85rem", marginTop: 4 }}>
+                    Bs.{" "}
+                    {vesAmt.toLocaleString("es-VE", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                )}
                 <TotalUsdEquivLines
                   sale={sale}
                   bcvRate={bcvRate}
                   binanceRate={binanceRate}
                 />
+                {useMlQuoteTotals && quoteTotUsdNum != null && quoteTotUsdNum > 0 ? (
+                  <MlQuoteTotalsDetails
+                    saleForEquiv={saleForEquivQuote}
+                    quoteTotUsdNum={quoteTotUsdNum}
+                    bcvRate={bcvRate}
+                    binanceRate={binanceRate}
+                    variant="card"
+                  />
+                ) : null}
               </div>
             </div>
 
@@ -1470,14 +1724,13 @@ function OrdRow({
           </div>
         </td>
       </tr>
-      {custContact.editModal}
     </>
   );
 }
 
 // ─── Skeleton rows ─────────────────────────────────────────────────────────────
 
-const SK_WIDTHS = [64, 78, 68, 56, 72, 82];
+const SK_WIDTHS = [64, 78, 64, 68, 56, 72, 82];
 
 function SkeletonRow({ idx }: { idx: number }) {
   const offset = idx % 3;
@@ -1489,7 +1742,7 @@ function SkeletonRow({ idx }: { idx: number }) {
             className="pd-skeleton"
             style={{ width: `${w - offset * 5}%`, height: 14 }}
           />
-          {i < 4 && (
+          {i < 5 && (
             <span
               className="pd-skeleton"
               style={{
@@ -1558,6 +1811,7 @@ export default function OrdTable({
             Orden <span className="sort" aria-hidden="true">↕</span>
           </th>
           <th scope="col">Productos</th>
+          <th scope="col">Cliente</th>
           <th scope="col">
             Total <span className="sort" aria-hidden="true">↕</span>
           </th>
@@ -1573,7 +1827,7 @@ export default function OrdTable({
           Array.from({ length: 7 }, (_, i) => <SkeletonRow key={i} idx={i} />)
         ) : sales.length === 0 ? (
           <tr className="ord-row" style={{ cursor: "default" }}>
-            <td colSpan={6} style={{ padding: 0, border: "none" }}>
+            <td colSpan={7} style={{ padding: 0, border: "none" }}>
               <div className="pd-empty" role="status">
                 <div className="pd-empty-icon" aria-hidden="true">
                   📋

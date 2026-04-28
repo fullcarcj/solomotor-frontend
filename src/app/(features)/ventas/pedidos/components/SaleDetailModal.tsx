@@ -7,6 +7,10 @@ import SaleStatusBadge from "./SaleStatusBadge";
 import SaleResolvedCustomerBlock from "./SaleResolvedCustomerBlock";
 import SaleCustomerPanel from "./SaleCustomerPanel";
 import { paymentMethodLabel } from "../paymentMethodCatalog";
+import {
+  saleCanOpenQuoteModal,
+  saleHasActiveQuotePreview,
+} from "@/lib/saleQuoteAccess";
 
 function fmtDate(iso: string): string {
   const d = new Date(iso);
@@ -28,11 +32,6 @@ function fmtNum(v: number | string | null | undefined, prefix = "$"): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
-}
-
-function isMercadoLibreSource(source: string | undefined): boolean {
-  const s = String(source || "").toLowerCase();
-  return s.includes("mercadolibre") || s.startsWith("ml_");
 }
 
 function parseSaleDetail(json: unknown): SaleDetail | null {
@@ -298,24 +297,27 @@ export default function SaleDetailModal({
             ) : null}
           </div>
           <div className="modal-footer">
-            {detail &&
-            onOpenQuote &&
-            (isMercadoLibreSource(detail.source) ||
-              (detail.chat_id != null && String(detail.chat_id).trim() !== "")) ? (
+            {detail && onOpenQuote && saleCanOpenQuoteModal(detail) ? (
               <button
                 type="button"
                 className="btn btn-primary me-auto"
                 title={
                   detail.chat_id != null && String(detail.chat_id).trim() !== ""
-                    ? "Mismo presupuesto que en Bandeja."
-                    : "Sin chat CRM: vinculá la conversación en Bandeja; igual podés revisar el mensaje al abrir."
+                    ? saleHasActiveQuotePreview(detail)
+                      ? "Editar el presupuesto (mismo que en Bandeja)."
+                      : "Mismo presupuesto que en Bandeja."
+                    : saleHasActiveQuotePreview(detail)
+                      ? "Editar cotización vinculada a este pedido."
+                      : "Sin chat CRM: vinculá la conversación en Bandeja; igual podés revisar el mensaje al abrir."
                 }
                 onClick={() => {
                   onOpenQuote(detail);
                 }}
               >
                 <i className="ti ti-file-invoice me-1" aria-hidden="true" />
-                Cotización
+                {saleHasActiveQuotePreview(detail)
+                  ? "Editar cotización"
+                  : "Cotización"}
               </button>
             ) : null}
             <button
