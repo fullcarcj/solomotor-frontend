@@ -191,6 +191,22 @@ export function useInboxRealtime() {
           dispatch(bumpInboxRefetch());
           break;
         }
+        case "chat_discarded": {
+          const chatId = toChatId(d.chat_id);
+          if (chatId !== null) {
+            dispatch(clearUrgent(chatId));
+            dispatch(clearPresence(chatId));
+            dispatch(clearSlaDeadline(chatId));
+          }
+          dispatch(bumpInboxRefetch());
+          break;
+        }
+        case "gap_detected": {
+          // Se perdieron eventos durante una reconexión SSE.
+          // Refrescar la bandeja para recuperar el estado real.
+          dispatch(bumpInboxRefetch());
+          break;
+        }
         case "new_sale": {
           const oidRaw = d.order_id;
           const orderId =

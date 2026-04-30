@@ -20,7 +20,9 @@ const sseAgent = new Agent({
 });
 
 export async function GET(req: NextRequest) {
-  const targetUrl = `${receiverBase()}/api/realtime/stream`;
+  // Reenviar search params del cliente (?lastEventId=...) al receptor.
+  const clientUrl = new URL(req.url);
+  const targetUrl = `${receiverBase()}/api/realtime/stream${clientUrl.search}`;
 
   try {
     const { statusCode, body } = await undiciRequest(targetUrl, {

@@ -68,5 +68,8 @@ export function receiverSseHeaders(req: NextRequest): Record<string, string> {
   if (auth) h.authorization = auth;
   const secret = adminSecret();
   if (secret) h["X-Admin-Secret"] = secret;
+  // Reenviar Last-Event-ID para que el receptor lo reciba en reconexiones automáticas del browser.
+  const lei = req.headers.get("last-event-id");
+  if (lei) h["last-event-id"] = lei;
   return h;
 }
