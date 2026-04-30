@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -491,6 +492,134 @@ function fmtUsd(v: number | null | undefined): string {
   });
 }
 
+/** Cotización con varios ítems: resumen en botón (contraído por defecto) y lista al expandir. */
+function ExpandableQuotePreview({
+  quotePreview,
+  displayItems,
+  totalStr,
+}: {
+  quotePreview: QuotePreview;
+  displayItems: ItemPreview[];
+  totalStr: string;
+}) {
+  const listRegionId = useId();
+  const [open, setOpen] = useState(false);
+  const n = Math.max(
+    quotePreview.items_count > 0 ? quotePreview.items_count : 0,
+    displayItems.length
+  );
+  const firstQuote = displayItems.length > 0 ? displayItems[0] : null;
+  const stackLabel = [
+    "Cotización",
+    quotePreview.status,
+    totalStr || undefined,
+  ]
+    .filter((x) => x != null && String(x).trim() !== "")
+    .join(" · ");
+
+  return (
+    <div className={`prod-quote-expandable${open ? " prod-quote-expandable--open" : ""}`}>
+      <button
+        type="button"
+        className="prod-quote-toggle"
+        aria-expanded={open}
+        aria-controls={listRegionId}
+        title={open ? "Contraer líneas de cotización" : "Ver cotización completa"}
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          setOpen((v) => !v);
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        {firstQuote ? (
+          <>
+            <div className="prod-quote-toggle__hero">
+              <div className="prod-thumb-wrap prod-thumb-wrap--quote prod-thumb-wrap--hero">
+                <ProductThumb url={firstQuote.image_url} name={firstQuote.name} />
+              </div>
+              <div className="prod-quote-toggle__body">
+                <div
+                  className="prod-quote-toggle__title"
+                  title={String(firstQuote.name || firstQuote.sku || "").trim() || undefined}
+                >
+                  {String(firstQuote.name || firstQuote.sku || "—").trim() || "—"}
+                </div>
+                <div className="prod-quote-toggle__meta">
+                  <span className="prod-quote-toggle__count">
+                    {n} {n === 1 ? "ítem" : "ítems"} en cotización
+                  </span>
+                  {totalStr ? (
+                    <span className="prod-quote-toggle__tot">{totalStr}</span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+            <span className="prod-quote-toggle__chev" aria-hidden="true">
+              <i className="ti ti-chevron-down" />
+            </span>
+          </>
+        ) : (
+          <>
+            <div className="prod-quote-toggle__body prod-quote-toggle__body--solo">
+              <div className="prod-quote-toggle__title">
+                {n > 0
+                  ? `${n} ${n === 1 ? "ítem" : "ítems"} en cotización`
+                  : "Cotización"}
+              </div>
+              {totalStr ? (
+                <div className="prod-quote-toggle__meta">
+                  <span className="prod-quote-toggle__tot">{totalStr}</span>
+                </div>
+              ) : null}
+            </div>
+            <span className="prod-quote-toggle__chev" aria-hidden="true">
+              <i className="ti ti-chevron-down" />
+            </span>
+          </>
+        )}
+      </button>
+      {open ? (
+        <div
+          id={listRegionId}
+          className="prod-quote-expand"
+          role="region"
+          aria-label={stackLabel}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          {displayItems.map((it, idx) => (
+            <div key={idx} className="prod-quote-expand-row">
+              <div className="prod-thumb-wrap prod-thumb-wrap--quote prod-thumb-wrap--expand">
+                <ProductThumb url={it.image_url} name={it.name} />
+              </div>
+              <div className="prod-quote-expand-row__main">
+                <div
+                  className="prod-quote-expand-row__title"
+                  title={String(it.name || it.sku || "").trim() || undefined}
+                >
+                  {String(it.name || it.sku || "—").trim() || "—"}
+                </div>
+                <div className="prod-quote-expand-row__meta">
+                  {it.sku &&
+                  String(it.sku).trim() !== "" &&
+                  String(it.sku).trim() !== String(it.name ?? "").trim() ? (
+                    <span className="prod-quote-expand-row__sku">{String(it.sku).trim()}</span>
+                  ) : null}
+                  <span className="prod-quote-expand-row__qty">×{it.qty}</span>
+                  {it.unit_price_usd != null && Number.isFinite(Number(it.unit_price_usd)) ? (
+                    <span className="prod-quote-expand-row__pu">${fmtUsd(it.unit_price_usd)}</span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 interface ProductsCellProps {
   items: ItemPreview[] | null | undefined;
   quotePreview: QuotePreview | null | undefined;
@@ -527,6 +656,9 @@ function ProductsCell({ items, quotePreview, compact = false, footerActions }: P
       firstQuote != null && quotePreview.items_count > 1
         ? quotePreview.items_count - 1
         : 0;
+    const multiQuote =
+      quotePreview.items_count > 1 ||
+      (Array.isArray(quoteItems) && quoteItems.length > 1);
 
     return (
       <div
@@ -582,7 +714,13 @@ function ProductsCell({ items, quotePreview, compact = false, footerActions }: P
             .filter((x) => x != null && String(x).trim() !== "")
             .join(" · ")}
         >
-          {firstQuote ? (
+          {multiQuote ? (
+            <ExpandableQuotePreview
+              quotePreview={quotePreview}
+              displayItems={displayItems}
+              totalStr={totalStr}
+            />
+          ) : firstQuote ? (
             <div className="prod-quote-hero">
               <div className="prod-quote-hero__thumb">
                 <div className="prod-thumb-wrap prod-thumb-wrap--quote prod-thumb-wrap--hero">

@@ -71,6 +71,12 @@ interface MlOrderRefPayload {
   reference_fallback_source?: string | null;
 }
 
+/** Meta opcional de `GET /api/inbox/payment-attempts` (conciliación manual sin comprobante WA). */
+interface PaymentAttemptsMeta {
+  allow_confirm_without_wa_receipt?: boolean;
+  hint_tolerance_bs?: number;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmtBs(raw: string | null): string {
@@ -135,11 +141,22 @@ function fmtDate(raw: string | null): string {
   } catch { return String(raw).slice(0, 10); }
 }
 
-function statusLabel(s: string): { text: string; color: string } {
-  if (s === "pending")       return { text: "Pendiente",     color: "#fcd34d" };
-  if (s === "manual_review") return { text: "Revisión manual", color: "#93c5fd" };
-  if (s === "no_match")      return { text: "Sin match",      color: "#fca5a5" };
+function statusLabel(s: string, needsBankStmt = false): { text: string; color: string } {
+  if (needsBankStmt)         return { text: "Extracto pendiente ⚠", color: "#fb923c" };
+  if (s === "pending")       return { text: "Pendiente",            color: "#fcd34d" };
+  if (s === "manual_review") return { text: "Revisión manual",      color: "#93c5fd" };
+  if (s === "no_match")      return { text: "Sin match",            color: "#fca5a5" };
+  if (s === "matched")       return { text: "Cotización vinculada", color: "#86efac" };
   return { text: s, color: "#8b949e" };
+}
+
+/** Comprobante que requiere vincular al extracto (pending, no_match, manual_review o matched sin banco). */
+function attemptIsPendingBankLink(a: PaymentAttempt): boolean {
+  const s = String(a.reconciliation_status || "").toLowerCase();
+  if (s === "matched") {
+    return a.linked_bank_statement_id == null || Number(a.linked_bank_statement_id) <= 0;
+  }
+  return s !== "rejected";
 }
 
 // ── Estilos ───────────────────────────────────────────────────────────────────
@@ -311,20 +328,38 @@ export default function PaymentLinkPanel({
   const [stmtLinkSaving, setStmtLinkSaving] = useState(false);
   const [stmtLinkError, setStmtLinkError] = useState<string | null>(null);
   const [stmtLinkOkMsg, setStmtLinkOkMsg] = useState<string | null>(null);
+  /** true mientras `load()` corre tras elegir movimiento del extracto (evita mostrar "sin comprobantes" antes de tiempo). */
+  const [targetsLoading, setTargetsLoading] = useState(false);
+  /** Backend: vincular solo extracto ↔ cotización (`POST …/presupuesto/:id/link-bank-statement`). */
+  const [allowStatementOnly, setAllowStatementOnly] = useState(false);
+  /** Tolerancia Bs. del servidor para hints / conciliación manual (p. ej. 100). */
+  const [hintToleranceBs, setHintToleranceBs] = useState<number | null>(null);
 
-  const load = useCallback(() => {
-    if (!chatId && !customerId) return;
+  const load = useCallback((): Promise<PaymentAttempt[]> => {
+    if (!chatId && !customerId) {
+      setAttempts([]);
+      return Promise.resolve([]);
+    }
     setLoading(true);
     const params = new URLSearchParams();
-    if (chatId)     params.set("chat_id",     chatId);
+    if (chatId) params.set("chat_id", chatId);
     if (customerId) params.set("customer_id", String(customerId));
-    fetch(`/api/inbox/payment-attempts?${params}`, { credentials: "include", cache: "no-store" })
+    return fetch(`/api/inbox/payment-attempts?${params}`, { credentials: "include", cache: "no-store" })
       .then((r) => r.json().catch(() => ({})))
       .then((data) => {
+        const meta = (data as { meta?: PaymentAttemptsMeta }).meta;
+        setAllowStatementOnly(Boolean(meta?.allow_confirm_without_wa_receipt));
+        const ht = meta?.hint_tolerance_bs;
+        setHintToleranceBs(typeof ht === "number" && Number.isFinite(ht) && ht > 0 ? ht : null);
         const items = (data as { items?: unknown }).items;
-        if (Array.isArray(items)) setAttempts(items as PaymentAttempt[]);
+        const list = Array.isArray(items) ? (items as PaymentAttempt[]) : [];
+        setAttempts(list);
+        return list;
       })
-      .catch(() => {/* ignore */})
+      .catch(() => {
+        setAttempts([]);
+        return [] as PaymentAttempt[];
+      })
       .finally(() => setLoading(false));
   }, [chatId, customerId]);
 
@@ -339,6 +374,8 @@ export default function PaymentLinkPanel({
     setQuotationLinkErr(null);
     autoQuoteLinkTriedRef.current.clear();
     setMlOrderRef(null);
+    setAllowStatementOnly(false);
+    setHintToleranceBs(null);
     void load();
   }, [chatId, customerId, load]);
 
@@ -401,10 +438,13 @@ export default function PaymentLinkPanel({
 
   // Refresco al expandir
   useEffect(() => {
-    if (isOpen) void load();
+    if (isOpen) void load().catch(() => {});
   }, [isOpen, load]);
 
-  const unlinkedCount = attempts.filter((a) => !linked.has(a.id)).length;
+  /** Comprobantes que aún requieren acción: no vinculados a cotización Y/O sin movimiento de extracto. */
+  const unlinkedCount = attempts.filter(
+    (a) => !linked.has(a.id) && attemptIsPendingBankLink(a)
+  ).length;
 
   const paymentFranjaSubtitleStyle =
     !loading && unlinkedCount > 0 ? OP_FRANJA_SUBTITLE_PROMINENT : OP_FRANJA_SUBTITLE;
@@ -445,6 +485,38 @@ export default function PaymentLinkPanel({
     [attempts, draftAttemptId]
   );
 
+  const canLinkStatementViaPaymentAttempt = useMemo(
+    () =>
+      Boolean(
+        draftStatement &&
+          statementLinkTargets.length > 0 &&
+          draftAttemptId != null &&
+          Number.isFinite(draftAttemptId)
+      ),
+    [draftStatement, statementLinkTargets.length, draftAttemptId]
+  );
+
+  /** Sin comprobante WA: el backend acepta `POST …/presupuesto/:id/link-bank-statement` solo con `bank_statement_id`. */
+  const canConfirmStatementOnly = useMemo(
+    () =>
+      Boolean(
+        allowStatementOnly &&
+          activeQuotationId != null &&
+          draftStatement &&
+          !stmtLinkSaving &&
+          !targetsLoading &&
+          !canLinkStatementViaPaymentAttempt
+      ),
+    [
+      allowStatementOnly,
+      activeQuotationId,
+      draftStatement,
+      stmtLinkSaving,
+      targetsLoading,
+      canLinkStatementViaPaymentAttempt,
+    ]
+  );
+
   const amountAlerts = useMemo(() => {
     if (!draftStatement) return [];
     const stmtBs = parseAmountBs(draftStatement.amount);
@@ -466,35 +538,93 @@ export default function PaymentLinkPanel({
         );
       }
     }
-    if (referenceBs != null && stmtBs != null && Math.abs(stmtBs - referenceBs) > tolReferenceBs(referenceBs)) {
-      if (referenceSource === "ml_order" && mlOrderRef) {
-        lines.push(
-          `El monto del extracto (${fmtBs(String(stmtBs))}) se aleja del total de la orden Mercado Libre en bolívares (${fmtBs(String(referenceBs))}, orden #${String(mlOrderRef.ml_order_id)}) — ver nota de tolerancia (envío ML / motorizado u otros fuera de ML).`
-        );
-      } else {
-        lines.push(
-          `El monto del extracto (${fmtBs(String(stmtBs))}) no coincide con el total de la cotización en bolívares (${fmtBs(String(referenceBs))}).`
-        );
+    if (referenceBs != null && stmtBs != null) {
+      const stmtRefTol =
+        hintToleranceBs != null && referenceSource === "quotation"
+          ? Math.max(tolReferenceBs(referenceBs), hintToleranceBs)
+          : tolReferenceBs(referenceBs);
+      if (Math.abs(stmtBs - referenceBs) > stmtRefTol) {
+        if (referenceSource === "ml_order" && mlOrderRef) {
+          lines.push(
+            `El monto del extracto (${fmtBs(String(stmtBs))}) se aleja del total de la orden Mercado Libre en bolívares (${fmtBs(String(referenceBs))}, orden #${String(mlOrderRef.ml_order_id)}) — ver nota de tolerancia (envío ML / motorizado u otros fuera de ML).`
+          );
+        } else {
+          lines.push(
+            `El monto del extracto (${fmtBs(String(stmtBs))}) no coincide con el total de la cotización en bolívares (${fmtBs(String(referenceBs))}) — tolerancia operativa ±${stmtRefTol.toLocaleString("es-VE", { maximumFractionDigits: 2 })} Bs.`
+          );
+        }
       }
     }
     return lines;
-  }, [draftStatement, draftAttempt, referenceBs, referenceSource, mlOrderRef, tolReferenceBs]);
+  }, [
+    draftStatement,
+    draftAttempt,
+    referenceBs,
+    referenceSource,
+    mlOrderRef,
+    tolReferenceBs,
+    hintToleranceBs,
+  ]);
 
   const clearStatementDraft = () => {
     setDraftStatement(null);
     setDraftAttemptId(null);
     setStmtLinkError(null);
+    setTargetsLoading(false);
   };
 
   const confirmStatementLink = async () => {
-    if (!draftStatement || draftAttemptId == null || !Number.isFinite(draftAttemptId)) {
-      setStmtLinkError("Elegí un comprobante para vincular.");
+    if (!draftStatement) {
+      setStmtLinkError("Elegí un movimiento del extracto.");
+      return;
+    }
+    if (!canLinkStatementViaPaymentAttempt && !canConfirmStatementOnly) {
+      if (statementLinkTargets.length > 0) {
+        setStmtLinkError("Elegí un comprobante en la lista desplegable.");
+      } else if (targetsLoading) {
+        setStmtLinkError("Esperá a que termine la carga de comprobantes.");
+      } else {
+        setStmtLinkError(
+          "No se puede vincular: hace falta comprobante WA o una cotización activa con servidor que permita solo extracto (meta.allow_confirm_without_wa_receipt en payment-attempts)."
+        );
+      }
       return;
     }
     setStmtLinkSaving(true);
     setStmtLinkError(null);
     setStmtLinkOkMsg(null);
     try {
+      if (canConfirmStatementOnly && activeQuotationId != null) {
+        const res = await fetch(
+          `/api/inbox/quotations/presupuesto/${encodeURIComponent(String(activeQuotationId))}/link-bank-statement`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bank_statement_id: Number(draftStatement.id) }),
+          }
+        );
+        const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+        if (!res.ok) {
+          const msg =
+            typeof data.message === "string"
+              ? data.message
+              : typeof data.error === "string"
+                ? data.error
+                : `Error ${res.status}`;
+          throw new Error(msg);
+        }
+        setStmtLinkOkMsg("Cotización conciliada con el extracto (sin comprobante WA).");
+        setDraftStatement(null);
+        setDraftAttemptId(null);
+        setStmtLinkError(null);
+        void load();
+        return;
+      }
+
+      if (!canLinkStatementViaPaymentAttempt || draftAttemptId == null) {
+        throw new Error("Estado inválido para vincular.");
+      }
       const res = await fetch(
         `/api/inbox/payment-attempts/${encodeURIComponent(String(draftAttemptId))}/link-bank-statement`,
         {
@@ -565,7 +695,26 @@ export default function PaymentLinkPanel({
         const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
         if (res.ok) {
           setLinked((prev) => new Set([...prev, attemptId]));
-          void load();
+          const freshList = await load();
+          // El server indica que la vinculación al extracto bancario es obligatoria: abrir el modal.
+          if (data.bank_statement_required && !opts?.auto) {
+            setIsOpen(true);
+            setStmtLinkError(null);
+            setStmtLinkOkMsg(null);
+            setTargetsLoading(true);
+            setPendingStatementsOpen(true);
+            void (async () => {
+              try {
+                const targets = freshList.filter(
+                  (a) => a.linked_bank_statement_id == null || Number(a.linked_bank_statement_id) <= 0
+                );
+                const first = targets.find((t) => t.id === attemptId) ?? targets[0] ?? null;
+                setDraftAttemptId(first != null ? first.id : null);
+              } finally {
+                setTargetsLoading(false);
+              }
+            })();
+          }
         } else {
           const msg =
             (typeof data.message === "string" && data.message.trim()) ||
@@ -726,7 +875,9 @@ export default function PaymentLinkPanel({
             >
               {needsManualStatement
                 ? "Sin conciliación automática · revisá el listado y vinculá al extracto"
-                : "Extracto bancario · usá el listado cuando haya comprobantes"}
+                : allowStatementOnly
+                  ? "Extracto: podés confirmar solo con cotización activa aunque no haya imagen WA"
+                  : "Extracto bancario · usá el listado cuando haya comprobantes"}
             </div>
           </div>
         )}
@@ -792,27 +943,84 @@ export default function PaymentLinkPanel({
 
               <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
                 <div style={{ ...S.label, marginBottom: 6 }}>Comprobante (este chat)</div>
-                <select
-                  className="form-select form-select-sm"
-                  style={{
-                    maxWidth: "100%",
-                    background: "var(--mu-panel-3, #232a35)",
-                    border: "1px solid var(--mu-border, rgba(255,255,255,0.08))",
-                    color: "var(--mu-text, #e6edf3)",
-                    fontSize: 12,
-                    fontWeight: 600,
-                  }}
-                  value={draftAttemptId ?? ""}
-                  onChange={(e) => setDraftAttemptId(Number(e.target.value))}
-                  disabled={stmtLinkSaving}
-                >
-                  {statementLinkTargets.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      #{t.id} · {fmtBs(t.extracted_amount_bs)}
-                      {t.created_at ? ` · ${fmtDate(t.created_at)}` : ""}
-                    </option>
-                  ))}
-                </select>
+                {targetsLoading ? (
+                  <div style={{ padding: "10px 0", fontSize: 12, color: "var(--mu-ink-mute, #8b949e)" }}>
+                    Cargando comprobantes…
+                  </div>
+                ) : statementLinkTargets.length === 0 ? (
+                  canConfirmStatementOnly || (allowStatementOnly && activeQuotationId != null && !targetsLoading) ? (
+                    <div
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: 8,
+                        background: "rgba(52,211,153,0.08)",
+                        border: "1px solid rgba(52,211,153,0.28)",
+                        fontSize: 12,
+                        lineHeight: 1.45,
+                        color: "#86efac",
+                      }}
+                    >
+                      <strong>Conciliación manual (solo extracto).</strong> No hay comprobante de imagen WA para
+                      este hilo: podés confirmar igual si el monto del movimiento está dentro de la tolerancia del
+                      servidor respecto al total de la cotización en bolívares
+                      {hintToleranceBs != null ? ` (±${hintToleranceBs} Bs. por defecto)` : ""}.
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: 8,
+                        background: "rgba(248,113,113,0.08)",
+                        border: "1px solid rgba(248,113,113,0.25)",
+                        fontSize: 12,
+                        lineHeight: 1.45,
+                        color: "#fca5a5",
+                      }}
+                    >
+                      {attempts.length === 0 ? (
+                        <>
+                          El servidor no devolvió comprobantes de pago para este chat
+                          {customerId ? ` ni para el cliente #${customerId}` : ""}. Para vincular solo el extracto
+                          hace falta una <strong>cotización activa</strong> en el panel y un backend con{" "}
+                          <code style={{ fontSize: 10 }}>meta.allow_confirm_without_wa_receipt</code> en{" "}
+                          <code style={{ fontSize: 10 }}>GET /api/inbox/payment-attempts</code>.
+                        </>
+                      ) : (
+                        <>
+                          Hay {attempts.length} comprobante{attempts.length !== 1 ? "s" : ""} en este chat pero
+                          todos ya tienen un movimiento de extracto asignado (
+                          <code style={{ fontSize: 10 }}>linked_bank_statement_id</code> no es NULL). Si el vínculo
+                          fue por error, recargá la página o contactá soporte.
+                        </>
+                      )}
+                    </div>
+                  )
+                ) : (
+                  <select
+                    className="form-select form-select-sm"
+                    style={{
+                      maxWidth: "100%",
+                      background: "var(--mu-panel-3, #232a35)",
+                      border: "1px solid var(--mu-border, rgba(255,255,255,0.08))",
+                      color: "var(--mu-text, #e6edf3)",
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                    value={draftAttemptId != null ? String(draftAttemptId) : ""}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setDraftAttemptId(v === "" ? null : Number(v));
+                    }}
+                    disabled={stmtLinkSaving}
+                  >
+                    {statementLinkTargets.map((t) => (
+                      <option key={t.id} value={String(t.id)}>
+                        #{t.id} · {fmtBs(t.extracted_amount_bs)}
+                        {t.created_at ? ` · ${fmtDate(t.created_at)}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               {referenceBs == null && (
@@ -874,7 +1082,11 @@ export default function PaymentLinkPanel({
                 <OpFranjaActionButton
                   type="button"
                   variant="accent"
-                  disabled={stmtLinkSaving || draftAttemptId == null || statementLinkTargets.length === 0}
+                  disabled={
+                    stmtLinkSaving ||
+                    targetsLoading ||
+                    (!canLinkStatementViaPaymentAttempt && !canConfirmStatementOnly)
+                  }
                   loading={stmtLinkSaving}
                   loadingLabel="Guardando…"
                   onClick={() => void confirmStatementLink()}
@@ -917,10 +1129,26 @@ export default function PaymentLinkPanel({
 
             {!loading && attempts.map((a) => {
               const isLinked = linked.has(a.id);
-              const st = statusLabel(isLinked ? "matched" : a.reconciliation_status);
+              const needsBank = !isLinked && attemptIsPendingBankLink(a) &&
+                String(a.reconciliation_status).toLowerCase() === "matched";
+              const fullyDone = isLinked ||
+                (String(a.reconciliation_status).toLowerCase() === "matched" &&
+                  a.linked_bank_statement_id != null && Number(a.linked_bank_statement_id) > 0);
+              const st = fullyDone
+                ? { text: "✓ Completo", color: "#86efac" }
+                : statusLabel(a.reconciliation_status, needsBank);
               const conf = a.extraction_confidence ? Math.round(parseFloat(a.extraction_confidence) * 100) : null;
               return (
-                <div key={a.id} style={{ ...S.card, opacity: isLinked ? 0.55 : 1 }}>
+                <div
+                  key={a.id}
+                  style={{
+                    ...S.card,
+                    opacity: fullyDone ? 0.55 : 1,
+                    borderColor: needsBank
+                      ? "rgba(251,146,60,0.55)"
+                      : S.card.borderColor ?? "var(--mu-border, rgba(255,255,255,0.08))",
+                  }}
+                >
                   {/* Fila principal */}
                   <div style={S.cardRow}>
                     {/* Thumbnail comprobante */}
@@ -972,11 +1200,15 @@ export default function PaymentLinkPanel({
                         fontFamily: "'JetBrains Mono', monospace",
                         fontSize: 9, fontWeight: 700,
                         padding: "1px 5px", borderRadius: 4,
-                        background: isLinked ? "rgba(52,211,153,0.12)" : "rgba(250,250,250,0.06)",
-                        color: isLinked ? "#86efac" : st.color,
-                        border: `1px solid ${isLinked ? "rgba(52,211,153,0.3)" : "rgba(255,255,255,0.1)"}`,
+                        background: fullyDone
+                          ? "rgba(52,211,153,0.12)"
+                          : needsBank
+                            ? "rgba(251,146,60,0.12)"
+                            : "rgba(250,250,250,0.06)",
+                        color: st.color,
+                        border: `1px solid ${fullyDone ? "rgba(52,211,153,0.3)" : needsBank ? "rgba(251,146,60,0.4)" : "rgba(255,255,255,0.1)"}`,
                       }}>
-                        {isLinked ? "✓ Vinculado" : st.text}
+                        {st.text}
                       </span>
                       {conf != null && !isLinked && (
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: "var(--mu-ink-mute, #6e7681)" }}>
@@ -989,7 +1221,7 @@ export default function PaymentLinkPanel({
                     </div>
 
                     {/* Acciones */}
-                    {!isLinked && (
+                    {!fullyDone && (
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
                         {a.firebase_url && (
                           <OpFranjaActionButton
@@ -1001,7 +1233,37 @@ export default function PaymentLinkPanel({
                             Ver imagen
                           </OpFranjaActionButton>
                         )}
-                        {activeQuotationId && (
+                        {/* Comprobante ya imputado a cotización → OBLIGATORIO vincular extracto */}
+                        {needsBank && (
+                          <OpFranjaActionButton
+                            type="button"
+                            variant="accent"
+                            iconClass="ti ti-building-bank"
+                            onClick={() => {
+                              setStmtLinkError(null);
+                              setStmtLinkOkMsg(null);
+                              setTargetsLoading(true);
+                              setPendingStatementsOpen(true);
+                              void (async () => {
+                                try {
+                                  const list = await load();
+                                  const targets = list.filter(
+                                    (t) => t.linked_bank_statement_id == null || Number(t.linked_bank_statement_id) <= 0
+                                  );
+                                  const picked = targets.find((t) => t.id === a.id) ?? targets[0] ?? null;
+                                  setDraftAttemptId(picked != null ? picked.id : null);
+                                } finally {
+                                  setTargetsLoading(false);
+                                }
+                              })();
+                            }}
+                            title="Obligatorio: vincular este comprobante a un movimiento del extracto bancario"
+                          >
+                            Vincular extracto (obligatorio)
+                          </OpFranjaActionButton>
+                        )}
+                        {/* Comprobante aún sin cotización → mostrar opciones de vinculación a cotización */}
+                        {!needsBank && !isLinked && activeQuotationId && (
                           <OpFranjaActionButton
                             type="button"
                             variant="accent"
@@ -1014,7 +1276,7 @@ export default function PaymentLinkPanel({
                             {`Vincular a ${activeQuotationRef ?? `#${activeQuotationId}`}`}
                           </OpFranjaActionButton>
                         )}
-                        {!activeQuotationId && (
+                        {!needsBank && !isLinked && !activeQuotationId && (
                           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: "var(--mu-ink-mute, #6e7681)" }}>
                             {mlOrderBs != null ? "Sin cotización ERP (referencia: orden ML)" : "Sin cotización activa"}
                           </span>
@@ -1043,8 +1305,20 @@ export default function PaymentLinkPanel({
           setStmtLinkError(null);
           setStmtLinkOkMsg(null);
           setDraftStatement(item);
-          const first = statementLinkTargets[0]?.id ?? null;
-          setDraftAttemptId(first != null && Number.isFinite(first) ? first : null);
+          setDraftAttemptId(null);
+          setTargetsLoading(true);
+          void (async () => {
+            try {
+              const list = await load();
+              const targets = list.filter(
+                (a) => a.linked_bank_statement_id == null || Number(a.linked_bank_statement_id) <= 0
+              );
+              const first = targets[0]?.id ?? null;
+              setDraftAttemptId(first != null && Number.isFinite(first) ? first : null);
+            } finally {
+              setTargetsLoading(false);
+            }
+          })();
         }}
       />
     </>

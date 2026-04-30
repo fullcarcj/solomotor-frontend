@@ -227,7 +227,7 @@ const ThumbBox = ({ idx, size = 38 }: { idx: number; size?: number }) => (
 const S = {
   /**
    * Columna del panel expandido: altura máxima; el scroll va solo en scrollBody
-   * para que el footer (Enviar / Borrador) quede siempre visible.
+   * para que el footer (Guardar borrador / Enviar) quede siempre visible.
    */
   expandedWrap: {
     display: "flex",
@@ -719,6 +719,8 @@ export default function QuotePanel({
   const [success, setSuccess]           = useState(false);
   /** Cotización ya enviada al cliente (muestra tarjeta + botones de aprobación) */
   const [sentQuote, setSentQuote]       = useState<SentQuote | null>(null);
+  /** Presupuesto persistido como borrador (POST /api/ventas/cotizaciones o bootstrap) — permite add-delivery antes de enviar. */
+  const [persistedDraftQuotationId, setPersistedDraftQuotationId] = useState<number | null>(null);
   /** Edición de ítems de la cotización ya enviada (PATCH presupuesto/items). */
   const [quoteEditing, setQuoteEditing] = useState(false);
   /** Pruebas / ajustes rápidos: solo SUPERUSER, con borrador o edición de ítems activa. */
@@ -825,6 +827,7 @@ export default function QuotePanel({
               : null,
         });
         setIsOpen(true);
+        setPersistedDraftQuotationId(null);
         // Cargar piernas de pago de esta cotización
         try {
           const ar = await fetch(
@@ -943,6 +946,7 @@ export default function QuotePanel({
           });
           setLines([]);
           setQuoteEditing(false);
+          setPersistedDraftQuotationId(null);
           setIsOpen(true);
           setError(null);
           await loadActiveQuote();
@@ -959,6 +963,7 @@ export default function QuotePanel({
           setReadonlyQuoteLines([]);
           setQuoteEditing(false);
           setLines(nextLines);
+          setPersistedDraftQuotationId(qid);
           setIsOpen(true);
           setError(null);
         }
@@ -999,6 +1004,7 @@ export default function QuotePanel({
     setCajaUsdSubmitting(false);
     setCajaUsdError(null);
     setCajaUsdOk(null);
+    setPersistedDraftQuotationId(null);
   }, [chatId, salesOrderId, forceOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Notificar al padre la cotización activa
@@ -1133,23 +1139,63 @@ export default function QuotePanel({
   // enviar el mensaje WhatsApp al cliente y actualizar status → 'sent'.
   const submit = async (asDraft?: boolean) => {
     if (!customerId || lines.length === 0 || submitting) return;
+    const chatIdNum =
+      chatId != null && String(chatId).trim() !== "" && Number.isFinite(Number(chatId)) && Number(chatId) > 0
+        ? Number(chatId)
+        : null;
+    const itemsPayload = lines.map((l) => ({
+      producto_id: l.product.id,
+      cantidad: l.cantidad,
+      precio_unitario: hasVesRecalc
+        ? vesAdjustedUsd(l.precio_unitario, binanceNum!, bcvNum!)
+        : l.precio_unitario,
+    }));
+    /** Borrador ya persistido: actualizar líneas en el mismo presupuesto (evita duplicados y vaciado del formulario). */
+    const patchExistingDraft =
+      Boolean(asDraft) &&
+      persistedDraftQuotationId != null &&
+      Number.isFinite(Number(persistedDraftQuotationId)) &&
+      Number(persistedDraftQuotationId) > 0 &&
+      chatIdNum != null;
+
     setSubmitting(true);
     setError(null);
     const d = new Date();
     d.setTime(d.getTime() + 48 * 60 * 60 * 1000);
-    const body = {
-      cliente_id: customerId,
-      chat_id: chatId ? Number(chatId) : undefined,
-      items: lines.map((l) => ({
-        producto_id: l.product.id,
-        cantidad: l.cantidad,
-        precio_unitario: hasVesRecalc
-          ? vesAdjustedUsd(l.precio_unitario, binanceNum!, bcvNum!)
-          : l.precio_unitario,
-      })),
-      fecha_vencimiento: d.toISOString().slice(0, 10),
-    };
     try {
+      if (patchExistingDraft) {
+        const pid = Number(persistedDraftQuotationId);
+        const patchRes = await fetch(
+          `/api/inbox/quotations/presupuesto/${encodeURIComponent(String(pid))}/items`,
+          {
+            method: "PATCH",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: chatIdNum,
+              company_id: 1,
+              items: itemsPayload,
+            }),
+            cache: "no-store",
+          }
+        );
+        const pj = await patchRes.json().catch(() => ({})) as Record<string, unknown>;
+        if (!patchRes.ok) {
+          setError(String(pj.message ?? pj.error ?? "No se pudo guardar el borrador."));
+          return;
+        }
+        setSuccess(true);
+        setTimeout(() => { setSuccess(false); }, 1500);
+        onSuccess?.();
+        return;
+      }
+
+      const body = {
+        cliente_id: customerId,
+        chat_id: chatIdNum ?? undefined,
+        items: itemsPayload,
+        fecha_vencimiento: d.toISOString().slice(0, 10),
+      };
       // 1. Crear la cotización (siempre queda en draft en el backend)
       const createRes = await fetch("/api/ventas/cotizaciones", {
         method: "POST",
@@ -1195,24 +1241,25 @@ export default function QuotePanel({
         }
       }
 
-      // Limpiar el formulario de ítems y mostrar la tarjeta de cotización enviada
-      setLines([]);
-      setSearchQuery("");
-      setResults([]);
       if (!asDraft) {
+        setLines([]);
+        setSearchQuery("");
+        setResults([]);
         const ref = String(
           (created.presupuesto as Record<string, unknown> | undefined)?.reference ??
           `COT-${newId}`
         );
         setSentQuote({ id: newId, reference: ref, status: "sent", total: vesMode ? subtotalVes : subtotal });
+        setPersistedDraftQuotationId(null);
         setSuccess(false);
       } else {
+        if (Number.isFinite(newId) && newId > 0) setPersistedDraftQuotationId(newId);
         setSuccess(true);
         setTimeout(() => { setSuccess(false); }, 1500);
       }
       onSuccess?.();
     } catch {
-      setError("Error de red al crear la cotización.");
+      setError(patchExistingDraft ? "Error de red al guardar el borrador." : "Error de red al crear la cotización.");
     } finally {
       setSubmitting(false);
     }
@@ -1450,11 +1497,35 @@ export default function QuotePanel({
     setDlvSubmitting(false);
     setDlvModalOpen(true);
 
-    const populateZone = (zones: DeliveryZoneRow[]) => {
-      // Si ya hay un item SVC-DELIVERY en la cotización, pre-seleccionar su zona y precio
-      const existingDlv = readonlyQuoteLines.find((l) => String(l.sku ?? "") === "SVC-DELIVERY");
-      if (existingDlv && sentQuote?.delivery_zone_id) {
-        const row = zones.find((z) => String(z.id) === String(sentQuote.delivery_zone_id));
+    const qTarget =
+      sentQuote != null && Number(sentQuote.id) > 0
+        ? Number(sentQuote.id)
+        : persistedDraftQuotationId != null && Number(persistedDraftQuotationId) > 0
+          ? Number(persistedDraftQuotationId)
+          : null;
+
+    const populateZone = async (zones: DeliveryZoneRow[]) => {
+      let zoneId: number | null =
+        sentQuote?.delivery_zone_id != null && String(sentQuote.delivery_zone_id).trim() !== ""
+          ? Number(sentQuote.delivery_zone_id)
+          : null;
+      if (zoneId == null && qTarget != null) {
+        try {
+          const r = await fetch(
+            `/api/inbox/quotations/presupuesto/${encodeURIComponent(String(qTarget))}`,
+            { credentials: "include", cache: "no-store" }
+          );
+          const data = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+          const pres = data.presupuesto as Record<string, unknown> | undefined;
+          if (pres?.delivery_zone_id != null && String(pres.delivery_zone_id).trim() !== "") {
+            zoneId = Number(pres.delivery_zone_id);
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      if (zoneId != null && zoneId > 0) {
+        const row = zones.find((z) => String(z.id) === String(zoneId));
         if (row) {
           setDlvZoneId(String(row.id));
           const preBs = resolveZonePriceBs(row, activeRate);
@@ -1462,22 +1533,34 @@ export default function QuotePanel({
           return;
         }
       }
+      const lineDlv = lines.find((l) => String(l.product?.sku ?? "") === "SVC-DELIVERY");
+      if (
+        lineDlv &&
+        activeRate != null &&
+        Number(activeRate) > 0 &&
+        Number(lineDlv.precio_unitario) > 0
+      ) {
+        const bs = Number(lineDlv.precio_unitario) * Number(activeRate);
+        if (Number.isFinite(bs) && bs > 0) setDlvCustomBs(bs.toFixed(2));
+        setDlvZoneId("");
+        return;
+      }
       setDlvZoneId("");
       setDlvCustomBs("");
     };
 
     if (dlvZones.length > 0) {
-      populateZone(dlvZones);
+      void populateZone(dlvZones);
       return;
     }
     setDlvZonesLoading(true);
     void fetch("/api/delivery/zones", { credentials: "include", cache: "no-store" })
       .then((r) => r.json())
-      .then((j) => {
+      .then(async (j) => {
         const raw = (j as { data?: unknown }).data;
         const zones = Array.isArray(raw) ? (raw as DeliveryZoneRow[]) : [];
         setDlvZones(zones);
-        populateZone(zones);
+        await populateZone(zones);
       })
       .catch(() => setDlvZones([]))
       .finally(() => setDlvZonesLoading(false));
@@ -1485,7 +1568,13 @@ export default function QuotePanel({
 
   /** Envía POST /api/inbox/quotations/:id/add-delivery y recarga la cotización. */
   const confirmDelivery = async () => {
-    if (!sentQuote || dlvSubmitting) return;
+    const qid =
+      sentQuote != null && Number(sentQuote.id) > 0
+        ? Number(sentQuote.id)
+        : persistedDraftQuotationId != null && Number(persistedDraftQuotationId) > 0
+          ? Number(persistedDraftQuotationId)
+          : null;
+    if (qid == null || dlvSubmitting) return;
     const zid = Number(dlvZoneId);
     if (!Number.isFinite(zid) || zid <= 0) {
       setDlvError("Seleccioná una zona de delivery.");
@@ -1498,7 +1587,7 @@ export default function QuotePanel({
       const customBs = parseFloat(String(dlvCustomBs).replace(",", "."));
       if (Number.isFinite(customBs) && customBs > 0) body.delivery_client_price_bs = customBs;
       const res = await fetch(
-        `/api/inbox/quotations/${encodeURIComponent(String(sentQuote.id))}/add-delivery`,
+        `/api/inbox/quotations/${encodeURIComponent(String(qid))}/add-delivery`,
         {
           method: "POST",
           credentials: "include",
@@ -1515,6 +1604,27 @@ export default function QuotePanel({
       setDlvModalOpen(false);
       setDlvZoneId("");
       setDlvCustomBs("");
+      if (!sentQuote) {
+        try {
+          const r2 = await fetch(
+            `/api/inbox/quotations/presupuesto/${encodeURIComponent(String(qid))}`,
+            { credentials: "include", cache: "no-store" }
+          );
+          const data2 = (await r2.json().catch(() => ({}))) as Record<string, unknown>;
+          const rawLines = (data2.lines ?? []) as Record<string, unknown>[];
+          const nextLines: QuoteLine[] = rawLines
+            .map((row, idx) => ({
+              key: `boot-${qid}-${row.id ?? idx}`,
+              product: productStubFromPresupuestoLine(row),
+              cantidad: Number(row.cantidad) > 0 ? Number(row.cantidad) : 1,
+              precio_unitario: Number(row.precio_unitario) >= 0 ? Number(row.precio_unitario) : 0,
+            }))
+            .filter((L) => L.product.id > 0);
+          setLines(nextLines);
+        } catch {
+          /* ignore */
+        }
+      }
       await loadActiveQuote();
     } catch {
       setDlvError("Error de red al agregar el delivery.");
@@ -1524,6 +1634,16 @@ export default function QuotePanel({
   };
 
   const noCustomer = !customerId;
+
+  const deliveryTargetQuotationId =
+    sentQuote != null && Number(sentQuote.id) > 0
+      ? Number(sentQuote.id)
+      : persistedDraftQuotationId != null && Number(persistedDraftQuotationId) > 0
+        ? Number(persistedDraftQuotationId)
+        : null;
+  /** Delivery forma parte del presupuesto: visible con borrador persistido o cotización enviada, sin orden ERP vinculada. */
+  const showDeliveryCta =
+    deliveryTargetQuotationId != null && !Boolean(sentQuote?.linkedSalesOrderId);
 
   const showPaymentGateway =
     Boolean(sentQuote) &&
@@ -1754,6 +1874,7 @@ export default function QuotePanel({
                   setQuoteEditing(false);
                   setReadonlyQuoteLines([]);
                   setSentQuote(null);
+                  setPersistedDraftQuotationId(null);
                   setLines([]);
                 }}
                 title="Crear una cotización nueva para este chat"
@@ -1769,7 +1890,7 @@ export default function QuotePanel({
               >
                 Editar
               </OpFranjaActionButton>
-              {!sentQuote.linkedSalesOrderId && (
+              {showDeliveryCta && (
                 <OpFranjaActionButton
                   type="button"
                   variant="neutral"
@@ -2865,11 +2986,30 @@ export default function QuotePanel({
                 variant="neutral"
                 disabled={submitting || noCustomer}
                 onClick={() => void submit(true)}
-                title="Guardar como borrador"
+                title="Guardar la cotización como borrador en el ERP (no envía el mensaje por WhatsApp al cliente)."
+                aria-label="Guardar borrador sin enviar"
               >
                 <SvgSave />
-                {submitting ? "…" : "Borrador"}
+                {submitting ? "…" : "Guardar"}
               </OpFranjaActionButton>
+              {showDeliveryCta && (
+                <OpFranjaActionButton
+                  type="button"
+                  variant="neutral"
+                  disabled={submitting || dlvSubmitting}
+                  style={{ whiteSpace: "nowrap", borderColor: "rgba(251,191,36,0.4)", color: "#fbbf24" }}
+                  title={
+                    lines.some((l) => String(l.product?.sku ?? "") === "SVC-DELIVERY")
+                      ? "Cambiar el monto de delivery en el presupuesto"
+                      : "Agregar delivery como línea del presupuesto (borrador o enviada)"
+                  }
+                  onClick={openDeliveryModal}
+                >
+                  {lines.some((l) => String(l.product?.sku ?? "") === "SVC-DELIVERY")
+                    ? "Cambiar delivery"
+                    : "Incluir delivery"}
+                </OpFranjaActionButton>
+              )}
               <OpFranjaActionButton
                 type="button"
                 variant="accent"

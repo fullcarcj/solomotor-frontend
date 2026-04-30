@@ -151,6 +151,18 @@
     background:     var(--bd-panel);
     flex-shrink:    0;
   }
+  /** Una fila para el input (ancho completo) y otra para acciones: evita que flex colapse el buscador a píxeles. */
+  .bd-compact-header--stacked {
+    flex-direction: column;
+    align-items:    stretch;
+  }
+  .bd-compact-toolbar-row {
+    display:     flex;
+    flex-wrap:   wrap;
+    align-items: center;
+    gap:         8px;
+    min-width:   0;
+  }
   .bd-compact-search {
     flex:           1;
     min-width:      0;
@@ -162,6 +174,11 @@
     border:         1px solid var(--bd-border);
     border-radius:  9px;
     overflow:       hidden;
+  }
+  .bd-compact-header--stacked .bd-compact-search--full-row {
+    flex:       none;
+    width:      100%;
+    min-width:  0;
   }
   .bd-compact-search-icon {
     width:       13px;
@@ -179,6 +196,10 @@
     font-size:   12px;
     font-family: inherit;
     &::placeholder { color: var(--bd-text-faint); }
+  }
+  .bd-compact-search--full-row .bd-compact-search-input {
+    min-width: 6rem;
+    flex:      1 1 auto;
   }
   .bd-compact-count {
     flex-shrink:    0;

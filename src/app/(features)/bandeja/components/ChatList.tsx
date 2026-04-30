@@ -82,8 +82,8 @@ export default function ChatList({
       )}
 
       {embedded && (
-        <div className="bd-compact-header d-flex align-items-center gap-2 flex-wrap min-w-0">
-          <div className="bd-compact-search flex-grow-1 min-w-0">
+        <div className="bd-compact-header bd-compact-header--stacked min-w-0">
+          <div className="bd-compact-search bd-compact-search--full-row">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" className="bd-compact-search-icon">
               <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
             </svg>
@@ -101,60 +101,62 @@ export default function ChatList({
               </span>
             )}
           </div>
-          <button
-            type="button"
-            className="bd-pipeline-scope-btn"
-            title={
-              filters.pipelineDefault !== false
-                ? "Ver todos los hilos del CRM (sin filtro operativo de pipeline)"
-                : "Volver a la vista por defecto: pipeline de ventas (24 h / 48 h + órdenes activas)"
-            }
-            onClick={() =>
-              setFilters({ pipelineDefault: !(filters.pipelineDefault !== false) })
-            }
-          >
-            {filters.pipelineDefault !== false ? "Todos los hilos" : "Solo ventas"}
-          </button>
-          {embedded && triajeUi && (
+          <div className="bd-compact-toolbar-row">
             <button
               type="button"
-              className={`bd-triaje-filters-trigger${triajeUi.filtersOpen ? " is-open" : ""}`}
-              aria-expanded={triajeUi.filtersOpen}
-              aria-controls="bd-triaje-filters-panel"
+              className="bd-pipeline-scope-btn"
               title={
-                triajeUi.activeTriajeFilterCount > 0
-                  ? `Filtros de triaje (${triajeUi.activeTriajeFilterCount} activos)`
-                  : "Filtros de triaje"
+                filters.pipelineDefault !== false
+                  ? "Ver todos los hilos del CRM (sin filtro operativo de pipeline)"
+                  : "Volver a la vista por defecto: pipeline de ventas (24 h / 48 h + órdenes activas)"
               }
-              onClick={() => triajeUi.setFiltersOpen((o) => !o)}
+              onClick={() =>
+                setFilters({ pipelineDefault: !(filters.pipelineDefault !== false) })
+              }
             >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                aria-hidden="true"
-              >
-                <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
-              </svg>
-              <i className="ti ti-chevron-down" aria-hidden />
-              {triajeUi.activeTriajeFilterCount > 0 && (
-                <span className="bd-triaje-filters-trigger__dot" aria-hidden />
-              )}
+              {filters.pipelineDefault !== false ? "Todos los hilos" : "Solo ventas"}
             </button>
-          )}
-          <InboxCountBadges
-            activeFilter={filters.filter}
-            onFilter={(f) => setFilters({ filter: f })}
-            listFilters={listFiltersForCounts}
-            layout="inline"
-            unreadDerivedCount={unreadDerivedCount}
-            listLoading={filters.filter === "unread" ? loading : false}
-            pipelineDefault={filters.pipelineDefault !== false}
-          />
-          <AiReviewBadge count={pendingCount} onClick={() => setDrawerOpen(true)} />
+            {embedded && triajeUi && (
+              <button
+                type="button"
+                className={`bd-triaje-filters-trigger${triajeUi.filtersOpen ? " is-open" : ""}`}
+                aria-expanded={triajeUi.filtersOpen}
+                aria-controls="bd-triaje-filters-panel"
+                title={
+                  triajeUi.activeTriajeFilterCount > 0
+                    ? `Filtros de triaje (${triajeUi.activeTriajeFilterCount} activos)`
+                    : "Filtros de triaje"
+                }
+                onClick={() => triajeUi.setFiltersOpen((o) => !o)}
+              >
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  aria-hidden="true"
+                >
+                  <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
+                </svg>
+                <i className="ti ti-chevron-down" aria-hidden />
+                {triajeUi.activeTriajeFilterCount > 0 && (
+                  <span className="bd-triaje-filters-trigger__dot" aria-hidden />
+                )}
+              </button>
+            )}
+            <InboxCountBadges
+              activeFilter={filters.filter}
+              onFilter={(f) => setFilters({ filter: f })}
+              listFilters={listFiltersForCounts}
+              layout="inline"
+              unreadDerivedCount={unreadDerivedCount}
+              listLoading={filters.filter === "unread" ? loading : false}
+              pipelineDefault={filters.pipelineDefault !== false}
+            />
+            <AiReviewBadge count={pendingCount} onClick={() => setDrawerOpen(true)} />
+          </div>
         </div>
       )}
 
