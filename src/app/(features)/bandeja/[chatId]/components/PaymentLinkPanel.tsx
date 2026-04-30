@@ -332,7 +332,7 @@ export default function PaymentLinkPanel({
   const [targetsLoading, setTargetsLoading] = useState(false);
   /** Backend: vincular solo extracto ↔ cotización (`POST …/presupuesto/:id/link-bank-statement`). */
   const [allowStatementOnly, setAllowStatementOnly] = useState(false);
-  /** Tolerancia Bs. del servidor para hints / conciliación manual (p. ej. 100). */
+  /** Tolerancia Bs. del servidor para hints / conciliación manual (meta `hint_tolerance_bs`; default 300). */
   const [hintToleranceBs, setHintToleranceBs] = useState<number | null>(null);
 
   const load = useCallback((): Promise<PaymentAttempt[]> => {
