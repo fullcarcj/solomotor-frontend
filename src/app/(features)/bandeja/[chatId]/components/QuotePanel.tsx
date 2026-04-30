@@ -729,6 +729,9 @@ export default function QuotePanel({
   const [readonlyQuoteLines, setReadonlyQuoteLines] = useState<ReadonlyQuoteLine[]>([]);
   const [loadingReadonlyDetail, setLoadingReadonlyDetail] = useState(false);
   const [savingQuoteEdit, setSavingQuoteEdit] = useState(false);
+  /** POST …/resend — reenviar cotización ya enviada por WhatsApp (versión actual en BD). */
+  const [resentingQuote, setResentingQuote] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState(false);
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [orderCreatedId, setOrderCreatedId] = useState<number | null>(null);
   /** Carrera / delivery al crear orden CH-2 desde cotización (opcional). */
@@ -1075,6 +1078,15 @@ export default function QuotePanel({
     : subtotal;
   const total = vesMode ? subtotalVes : subtotal;
 
+  /** Suma líneas enviadas (solo lectura) con la misma lógica VES que el editor. */
+  const sentReadonlyTotalVesRecalcFromLines =
+    readonlyQuoteLines.length > 0 && binanceNum != null && bcvNum != null
+      ? readonlyQuoteLines.reduce(
+          (s, r) => s + r.cantidad * vesAdjustedUsd(r.precio_unitario, binanceNum!, bcvNum!),
+          0
+        )
+      : null;
+
   // Agregar producto
   const addProduct = useCallback((p: Product) => {
     if (p.stock_qty <= 0) {
@@ -1220,7 +1232,7 @@ export default function QuotePanel({
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify({ display_currency: vesMode ? "VES" : "USD" }),
           cache: "no-store",
         });
         if (!sendRes.ok) {
@@ -1295,7 +1307,8 @@ export default function QuotePanel({
       setError("La cotización no tiene líneas para editar.");
       return;
     }
-    setDisplayCurrency("USD");
+    // No forzar USD: si el operador cotiza en VES, la edición debe respetar el mismo switch
+    // y al guardar se envía precio_unitario_bs para persistir coherente con la vista.
     setLines(rows.map((row, idx) => readonlyRowToQuoteLine(row, idx)));
     setQuoteEditing(true);
     setError(null);
@@ -1305,14 +1318,28 @@ export default function QuotePanel({
     if (!sentQuote || !chatId || lines.length === 0 || savingQuoteEdit) return;
     setSavingQuoteEdit(true);
     setError(null);
+    /** En vista VES el backend espera precio_unitario_bs (Bs/unidad) y deriva USD con Binance. */
+    const items = lines.map((l) => {
+      const producto_id = l.product.id;
+      const cantidad = l.cantidad;
+      if (vesMode && hasVesRecalc && binanceNum != null && bcvNum != null) {
+        const unitUsdAdj = vesAdjustedUsd(l.precio_unitario, binanceNum, bcvNum);
+        const precio_unitario_bs = Math.round(unitUsdAdj * bcvNum * 100) / 100;
+        return { producto_id, cantidad, precio_unitario_bs };
+      }
+      if (vesMode && hasBinanceQuote && binanceNum != null) {
+        const lineTotalUsd = l.cantidad * l.precio_unitario;
+        const totalBs = bsFromUsdBinance(lineTotalUsd, binanceNum);
+        const precio_unitario_bs =
+          l.cantidad > 0 ? Math.round((totalBs / l.cantidad) * 100) / 100 : 0;
+        return { producto_id, cantidad, precio_unitario_bs };
+      }
+      return { producto_id, cantidad, precio_unitario: l.precio_unitario };
+    });
     const body = {
       chat_id: Number(chatId),
       company_id: 1,
-      items: lines.map((l) => ({
-        producto_id: l.product.id,
-        cantidad: l.cantidad,
-        precio_unitario: l.precio_unitario,
-      })),
+      items,
     };
     try {
       const res = await fetch(
@@ -1348,7 +1375,52 @@ export default function QuotePanel({
     } finally {
       setSavingQuoteEdit(false);
     }
-  }, [sentQuote, chatId, lines, savingQuoteEdit, loadActiveQuote, onSuccess]);
+  }, [
+    sentQuote,
+    chatId,
+    lines,
+    savingQuoteEdit,
+    loadActiveQuote,
+    onSuccess,
+    vesMode,
+    hasVesRecalc,
+    hasBinanceQuote,
+    binanceNum,
+    bcvNum,
+  ]);
+
+  const resendSentQuote = useCallback(async () => {
+    if (!sentQuote || resentingQuote || sentQuote.paymentFullySettled) return;
+    const st = String(sentQuote.status).toLowerCase();
+    if (st !== "sent" && st !== "approved") return;
+    setResentingQuote(true);
+    setError(null);
+    setResendSuccess(false);
+    try {
+      const res = await fetch(
+        `/api/inbox/quotations/${encodeURIComponent(String(sentQuote.id))}/resend`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ display_currency: vesMode ? "VES" : "USD" }),
+          cache: "no-store",
+        }
+      );
+      const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!res.ok) {
+        setError(String(json.message ?? json.error ?? "No se pudo reenviar la cotización."));
+        return;
+      }
+      setResendSuccess(true);
+      setTimeout(() => setResendSuccess(false), 2500);
+      onSuccess?.();
+    } catch {
+      setError("Error de red al reenviar la cotización.");
+    } finally {
+      setResentingQuote(false);
+    }
+  }, [sentQuote, resentingQuote, onSuccess, vesMode]);
 
   /** Imputar un comprobante a la cotización activa (VES o USD). */
   const submitPaymentAllocation = async () => {
@@ -1859,10 +1931,36 @@ export default function QuotePanel({
                 {sentQuote.reference}
               </div>
               <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: "var(--mu-ink-mute, #6e7681)", marginTop: 2, lineHeight: 1.35 }}>
-                Total · {fmtUSD(sentQuote.total)}
-                {activeRate != null
-                  ? ` · ${fmtVESQuote(sentQuote.total * activeRate)} (BCV · tasa activa)`
-                  : ""}
+                {!vesMode ? (
+                  <>
+                    Total · {fmtUSD(sentQuote.total)}
+                    {activeRate != null
+                      ? ` · ${fmtVESQuote(sentQuote.total * activeRate)} (BCV · tasa activa)`
+                      : ""}
+                  </>
+                ) : hasVesRecalc && sentReadonlyTotalVesRecalcFromLines != null ? (
+                  <>
+                    Total · {fmtUSD(sentReadonlyTotalVesRecalcFromLines)}
+                    {" · "}
+                    {fmtVESQuote(sentReadonlyTotalVesRecalcFromLines * bcvNum!)}
+                    {" "}(BCV · vista VES)
+                  </>
+                ) : hasBinanceQuote ? (
+                  <>
+                    Total ·{" "}
+                    {fmtUSD(usdTieBreakFromBinanceBs(bsFromUsdBinance(sentQuote.total, binanceNum!), binanceNum!))}
+                    {" · "}
+                    {fmtVESQuote(bsFromUsdBinance(sentQuote.total, binanceNum!))}
+                    {" "}(Binance · vista VES)
+                  </>
+                ) : (
+                  <>
+                    Total · {fmtUSD(sentQuote.total)}
+                    {activeRate != null
+                      ? ` · ${fmtVESQuote(sentQuote.total * activeRate)} (BCV)`
+                      : ""}
+                  </>
+                )}
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
@@ -1890,6 +1988,23 @@ export default function QuotePanel({
               >
                 Editar
               </OpFranjaActionButton>
+              {(sentQuote.status === "sent" || sentQuote.status === "approved") &&
+                !sentQuote.paymentFullySettled &&
+                !quoteEditing && (
+                <OpFranjaActionButton
+                  type="button"
+                  variant="neutral"
+                  disabled={resentingQuote}
+                  loading={resentingQuote}
+                  loadingLabel="…"
+                  style={{ whiteSpace: "nowrap", borderColor: "rgba(56,189,248,0.45)", color: "#7dd3fc" }}
+                  title="Vuelve a enviar por WhatsApp la cotización con el total e ítems guardados en el servidor. Guardá antes si editaste la cotización."
+                  onClick={() => void resendSentQuote()}
+                >
+                  <SvgSend />
+                  {resentingQuote ? "…" : "Reenviar"}
+                </OpFranjaActionButton>
+              )}
               {showDeliveryCta && (
                 <OpFranjaActionButton
                   type="button"
@@ -1909,6 +2024,53 @@ export default function QuotePanel({
               )}
             </div>
           </div>
+
+          {!quoteEditing && (
+            <div style={{ marginBottom: 10 }}>
+              <div
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 8,
+                  letterSpacing: "0.12em",
+                  color: "var(--mu-ink-mute, #8b949e)",
+                  textTransform: "uppercase" as const,
+                  fontWeight: 800,
+                  marginBottom: 5,
+                }}
+              >
+                Moneda
+              </div>
+              <div role="group" aria-label="Moneda de visualización de precios" style={segmentedTrack(displayCurrency === "VES")}>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDisplayCurrency("VES");
+                  }}
+                  style={displayCurrency === "VES" ? segmentedBtnAmberOn() : segmentedBtnOff()}
+                >
+                  VES
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDisplayCurrency("USD");
+                  }}
+                  style={displayCurrency === "USD" ? segmentedBtnBlueOn() : segmentedBtnOff()}
+                >
+                  USD
+                </button>
+              </div>
+            </div>
+          )}
+
+          {resendSuccess && (
+            <div style={{ marginBottom: 10, padding: "7px 10px", borderRadius: 7, background: "rgba(56,189,248,0.1)", border: "1px solid rgba(56,189,248,0.35)", fontSize: 11, color: "#7dd3fc", display: "flex", alignItems: "center", gap: 6 }}>
+              <i className="ti ti-send" />
+              Cotización reenviada por WhatsApp.
+            </div>
+          )}
 
           {/* Vista ítems enviada (solo lectura; tonos fríos distintos del armado editable) */}
           {!quoteEditing && (
@@ -1930,7 +2092,21 @@ export default function QuotePanel({
                 <div style={{ display: "flex", flexDirection: "column" as const, gap: 6 }}>
                   {readonlyQuoteLines.map((row) => {
                     const title = row.description?.trim() || row.name || `Producto #${row.producto_id}`;
-                    const bsLine = activeRate != null ? row.subtotal * activeRate : null;
+                    const bsLineUsdOnly = activeRate != null ? row.subtotal * activeRate : null;
+                    const lineVesRecalc =
+                      hasVesRecalc && binanceNum != null && bcvNum != null
+                        ? row.cantidad * vesAdjustedUsd(row.precio_unitario, binanceNum, bcvNum)
+                        : null;
+                    const unitShowUsd = !vesMode
+                      ? row.precio_unitario
+                      : hasVesRecalc && binanceNum != null && bcvNum != null
+                        ? vesAdjustedUsd(row.precio_unitario, binanceNum, bcvNum)
+                        : hasBinanceQuote && binanceNum != null
+                          ? usdTieBreakFromBinanceBs(
+                              bsFromUsdBinance(row.precio_unitario, binanceNum),
+                              binanceNum
+                            )
+                          : row.precio_unitario;
                     return (
                       <div
                         key={row.id}
@@ -1949,17 +2125,50 @@ export default function QuotePanel({
                             {title}
                           </div>
                           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: "#64748b", marginTop: 3 }}>
-                            {row.sku ? `${row.sku} · ` : ""}×{row.cantidad} @ {fmtUSD(row.precio_unitario)}
+                            {row.sku ? `${row.sku} · ` : ""}×{row.cantidad} @ {fmtUSD(unitShowUsd)}
                           </div>
                         </div>
                         <div style={{ textAlign: "right" as const, alignSelf: "center" }}>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 800, color: "#99f6e4" }}>
-                            {fmtUSD(row.subtotal)}
-                          </div>
-                          {bsLine != null && (
-                            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, fontWeight: 600, color: "#7dd3fc", marginTop: 2 }}>
-                              {fmtVESQuote(bsLine)}
-                            </div>
+                          {!vesMode ? (
+                            <>
+                              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 800, color: "#99f6e4" }}>
+                                {fmtUSD(row.subtotal)}
+                              </div>
+                              {bsLineUsdOnly != null && (
+                                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, fontWeight: 600, color: "#7dd3fc", marginTop: 2 }}>
+                                  {fmtVESQuote(bsLineUsdOnly)}
+                                </div>
+                              )}
+                            </>
+                          ) : hasVesRecalc && lineVesRecalc != null && bcvNum != null ? (
+                            <>
+                              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 800, color: "#99f6e4" }}>
+                                {fmtUSD(lineVesRecalc)}
+                              </div>
+                              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, fontWeight: 600, color: "#7dd3fc", marginTop: 2 }}>
+                                {fmtVESQuote(lineVesRecalc * bcvNum)}
+                              </div>
+                            </>
+                          ) : hasBinanceQuote && binanceNum != null ? (
+                            <>
+                              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 800, color: "#99f6e4" }}>
+                                {fmtUSD(usdTieBreakFromBinanceBs(bsFromUsdBinance(row.subtotal, binanceNum), binanceNum))}
+                              </div>
+                              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, fontWeight: 600, color: "#7dd3fc", marginTop: 2 }}>
+                                {fmtVESQuote(bsFromUsdBinance(row.subtotal, binanceNum))}
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 800, color: "#99f6e4" }}>
+                                {fmtUSD(row.subtotal)}
+                              </div>
+                              {bsLineUsdOnly != null && (
+                                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, fontWeight: 600, color: "#7dd3fc", marginTop: 2 }}>
+                                  {fmtVESQuote(bsLineUsdOnly)}
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>
@@ -1978,11 +2187,40 @@ export default function QuotePanel({
                   }}>
                     <span>Total</span>
                     <span style={{ textAlign: "right" as const }}>
-                      <span style={{ display: "block" }}>{fmtUSD(sentQuote.total)}</span>
-                      {activeRate != null && (
-                        <span style={{ display: "block", fontSize: 9, fontWeight: 700, color: "#7dd3fc", marginTop: 2 }}>
-                          {fmtVESQuote(sentQuote.total * activeRate)}
-                        </span>
+                      {!vesMode ? (
+                        <>
+                          <span style={{ display: "block" }}>{fmtUSD(sentQuote.total)}</span>
+                          {activeRate != null && (
+                            <span style={{ display: "block", fontSize: 9, fontWeight: 700, color: "#7dd3fc", marginTop: 2 }}>
+                              {fmtVESQuote(sentQuote.total * activeRate)}
+                            </span>
+                          )}
+                        </>
+                      ) : hasVesRecalc && sentReadonlyTotalVesRecalcFromLines != null && bcvNum != null ? (
+                        <>
+                          <span style={{ display: "block" }}>{fmtUSD(sentReadonlyTotalVesRecalcFromLines)}</span>
+                          <span style={{ display: "block", fontSize: 9, fontWeight: 700, color: "#7dd3fc", marginTop: 2 }}>
+                            {fmtVESQuote(sentReadonlyTotalVesRecalcFromLines * bcvNum)}
+                          </span>
+                        </>
+                      ) : hasBinanceQuote && binanceNum != null ? (
+                        <>
+                          <span style={{ display: "block" }}>
+                            {fmtUSD(usdTieBreakFromBinanceBs(bsFromUsdBinance(sentQuote.total, binanceNum), binanceNum))}
+                          </span>
+                          <span style={{ display: "block", fontSize: 9, fontWeight: 700, color: "#7dd3fc", marginTop: 2 }}>
+                            {fmtVESQuote(bsFromUsdBinance(sentQuote.total, binanceNum))}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span style={{ display: "block" }}>{fmtUSD(sentQuote.total)}</span>
+                          {activeRate != null && (
+                            <span style={{ display: "block", fontSize: 9, fontWeight: 700, color: "#7dd3fc", marginTop: 2 }}>
+                              {fmtVESQuote(sentQuote.total * activeRate)}
+                            </span>
+                          )}
+                        </>
                       )}
                     </span>
                   </div>
@@ -2810,7 +3048,7 @@ export default function QuotePanel({
                                 );
                               }}
                               onClick={(e) => e.stopPropagation()}
-                              title="Precio unitario USD de la línea (prueba · SUPERUSER). Con vista VES los totales usan la fórmula del panel sobre este valor."
+                              title="Precio unitario en catálogo (USD). Con vista VES, al guardar se envía Bs/unidad (Binance) para alinear con el total mostrado."
                               style={{
                                 width: 80,
                                 boxSizing: "border-box",
@@ -2974,7 +3212,7 @@ export default function QuotePanel({
                 loading={savingQuoteEdit}
                 loadingLabel="…"
                 onClick={() => void saveQuoteEdit()}
-                title="Guardar cambios en la cotización enviada"
+                title="Guardar cambios en la cotización enviada. Después usá «Reenviar» (arriba, junto a Editar) para mandar la versión actualizada por WhatsApp."
               >
                 Guardar
               </OpFranjaActionButton>
