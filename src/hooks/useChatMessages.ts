@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "@/types/inbox";
+import { inboxStream } from "@/lib/realtime/inboxStream";
 
 function errMsg(e: unknown) { return e instanceof Error ? e.message : "Error inesperado."; }
 
@@ -157,6 +158,10 @@ export function useChatMessages(chatId: string | number | null) {
       const latestNew = newMsgs[newMsgs.length - 1].id;
       if (latestNew === latestIdRef.current) return;
       setMessages(prev => {
+        // Guard: si el chat cambió mientras el fetch estaba en vuelo, descartar.
+        // El ref se lee aquí (momento de ejecución del callback) para evitar
+        // que un poll de chat A pise el estado de chat B tras un cambio rápido.
+        if (String(prevChatIdRef.current) !== String(id)) return prev;
         const existingIds = new Set(prev.map(m => String(m.id)));
         const toAdd = newMsgs.filter(m => !existingIds.has(String(m.id)));
         latestIdRef.current = latestNew;
@@ -195,7 +200,6 @@ export function useChatMessages(chatId: string | number | null) {
     void load(chatId, undefined, switched ? { silent: true, forChatSwitch: true } : undefined).finally(() => {
       setMessagesBootstrapping(false);
     });
-    intervalRef.current = setInterval(() => void poll(chatId), 15_000);
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -203,6 +207,60 @@ export function useChatMessages(chatId: string | number | null) {
       }
     };
   }, [chatId, load, poll]);
+
+  // Suscripción SSE + poll fallback condicional.
+  // Separado del useEffect de carga para que el ciclo de vida sea independiente.
+  useEffect(() => {
+    if (!chatId) return;
+
+    // Flags de coalescing scoped al ciclo de vida de este chatId.
+    // Mueren con el closure al cambiar de chat — sin estado residual.
+    let pollInFlight = false;
+    let pollPending = false;
+
+    const triggerPoll = async () => {
+      if (pollInFlight) {
+        pollPending = true;
+        return;
+      }
+      pollInFlight = true;
+      try {
+        await poll(chatId);
+      } finally {
+        pollInFlight = false;
+        if (pollPending) {
+          pollPending = false;
+          void triggerPoll();
+        }
+      }
+    };
+
+    // SSE: new_message del chat abierto → merge inmediato sin esperar 15s.
+    // gap_detected → mismo path (reconexión tras deploy/corte).
+    const unsub = inboxStream.subscribe((event, data) => {
+      if (event === "new_message") {
+        const d = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+        if (String(d.chat_id) === String(chatId)) void triggerPoll();
+      }
+      if (event === "gap_detected") void triggerPoll();
+    });
+
+    // Poll fallback: solo dispara si SSE no está OPEN.
+    // Cuando SSE está sano, los mensajes llegan por la suscripción de arriba.
+    intervalRef.current = setInterval(() => {
+      if (inboxStream.getReadyState() !== EventSource.OPEN) {
+        void triggerPoll();
+      }
+    }, 15_000);
+
+    return () => {
+      unsub();
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [chatId, poll]);
 
   const loadMore = useCallback(() => {
     if (!chatId || messages.length === 0 || loadingMore || !hasMore) return;

@@ -122,6 +122,11 @@ class InboxStream {
     }
   }
 
+  /** Retorna el readyState del EventSource activo (0=CONNECTING, 1=OPEN, 2=CLOSED). */
+  getReadyState(): number {
+    return this.es?.readyState ?? EventSource.CLOSED;
+  }
+
   subscribe(fn: Listener) {
     this.listeners.add(fn);
     return () => {
